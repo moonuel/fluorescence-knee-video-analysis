@@ -1,0 +1,12 @@
+*.avi
+*.workspace
+*.xlsx
+*.tif
+*.png
+
+data/*
+output/*
+progress_meeting_slides/*
+trash/*
+workspace/*
+__pycache__/*
