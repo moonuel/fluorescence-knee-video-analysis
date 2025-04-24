@@ -143,7 +143,10 @@ def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41) -> Tuple[
         blurred_frame = cv2.GaussianBlur(frame_gray, (blur_strength, blur_strength), 0)
 
     # Apply automatic thresholding to create a binary mask
-    _, binary_mask = cv2.threshold(blurred_frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    thresh_val, _ = cv2.threshold(blurred_frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    thresh_val = int(0.8*thresh_val)
+    _, binary_mask = cv2.threshold(blurred_frame, thresh_val, 255, cv2.THRESH_BINARY)
+
 
     # Compute the centroid of the binary mask
     M = cv2.moments(binary_mask)
