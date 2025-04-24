@@ -10,3 +10,4 @@ progress_meeting_slides/*
 trash/*
 workspace/*
 __pycache__/*
+*.pyc
