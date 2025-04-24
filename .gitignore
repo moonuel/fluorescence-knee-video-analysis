@@ -6,8 +6,9 @@
 
 data/*
 output/*
-progress_meeting_slides/*
+/progress_meeting_slides/
 trash/*
-workspace/*
+/workspace/
 __pycache__/*
 *.pyc
+/figures/
