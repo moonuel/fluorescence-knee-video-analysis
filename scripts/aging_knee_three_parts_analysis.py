@@ -8,8 +8,6 @@ import pandas as pd
 import cv2
 import tifffile as tiff
 import utils
-import numpy as np
-import pandas as pd
 
 DATA_IDX = 2
 MODIFY_DATA = True 
@@ -167,7 +165,7 @@ def process_video(video: np.ndarray, coords: np.ndarray, knee_name: str):
 
             knee_intensities_normalized[0, curr_idx] = np.sum(left_knee) / left_knee_nonzero # left intensity
             knee_intensities_normalized[1, curr_idx] = np.sum(middle_knee) / middle_knee_nonzero # middle intensity
-            knee_intensities_normalized[2, curr_idx] = np.sum(right_knee) /right_knee_nonzero # right intensity    
+            knee_intensities_normalized[2, curr_idx] = np.sum(right_knee) / right_knee_nonzero # right intensity    
 
             knee_total_areas[0, curr_idx] = np.sum(left_knee_nonzero) # left mask sum
             knee_total_areas[1, curr_idx] = np.sum(middle_knee_nonzero) # middle mask sum
