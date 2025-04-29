@@ -16,15 +16,17 @@ MODIFY_DATA = True
 GENERATE_FIGURES = False
 LOOP = False
 
-def load_coords(data_idx:int):
+def load_coords(knee_idx:int):
+    print("load_coords() called!")
     # Import knee coordinates
     coords_file = pd.read_excel("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", engine='openpyxl', sheet_name=None) # More updated Excel import
     # coords_file = pd.read_excel("../data/xy coordinates for knee-aging three cycles 250303.xlsx", engine='openpyxl', sheet_name=None) # More updated Excel import
     # coords_file = pd.read_excel("../data/adjusted xy coordinates for knee-aging 250403.xlsx", engine='openpyxl', sheet_name=None) # More updated Excel import
 
     # Select data set
-    cf_keys = ['aging-1', 'aging-2', 'aging-3']
-    coords_sheet = coords_file[cf_keys[data_idx]] # Set index = {0,1,2} to choose different data set
+    knee_opts = ['aging-1', 'aging-2', 'aging-3']
+    knee_name = knee_opts[knee_idx]
+    coords_sheet = coords_file[knee_name] # Set index = {0,1,2} to choose different data set
 
     # Clean data
     coords_sheet.drop(columns=['Unnamed: 0', 'Unnamed: 5'], axis=1, inplace=True) # No information
@@ -45,16 +47,21 @@ def load_coords(data_idx:int):
     coords.set_index("Frame Number", inplace=True)
     coords.index = coords.index.to_series().fillna(method="ffill").astype(int)
 
-    return coords
+    # print(coords)
+    return coords, knee_name, flx_to_ext
 
 def load_video():
+    print("load_video() called!")
     # Read image stack
     video = tiff.imread("../data/1 aging_00000221.tif") # Imports image stack as np.ndarray (3 dimensions)
     _, h, w = video.shape # Dimensions of video stack
     video = np.concatenate( (np.zeros((1,h,w), dtype=np.uint8),video), axis=0) # Prepend blank frame -> 1-based indexing
+    
     return video
 
-def process_video(video: np.ndarray, coords: np.ndarray):
+def process_video(video: np.ndarray, coords: np.ndarray, knee_name: str):
+    
+    print("process_video() called!")
 
     # Get unique frames
     unique_frames = coords.index.unique()
@@ -68,6 +75,7 @@ def process_video(video: np.ndarray, coords: np.ndarray):
     knee_intensities = np.zeros((3, unique_frames.shape[0]))
     knee_intensities_normalized = np.zeros((3, unique_frames.shape[0]))
     knee_total_areas = np.zeros((3, unique_frames.shape[0])) # Save total area of each mask 
+    frames_out = []
     while curr_frame <= last_frame:
 
         # Get frame
@@ -130,7 +138,7 @@ def process_video(video: np.ndarray, coords: np.ndarray):
         left_knee_mask = otsu_mask & left_right_mask & ~middle_mask #& left_mask
         right_knee_mask = otsu_mask & ~left_right_mask & ~middle_mask #& right_mask
 
-        # Crop frame to square region [TODO: do this before the other operations?]
+        # Crop frame to square region
         frame = utils.crop_square_frame(frame, 350) # For ease of viewing
 
         # Resize frame for easier viewing
@@ -180,7 +188,7 @@ def process_video(video: np.ndarray, coords: np.ndarray):
         cv2.putText(knee_mask, str(curr_frame), pos, 
                     fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, 
                     color = (255,255,255), thickness = 2, lineType = cv2.LINE_AA)
-        cv2.imshow(f"knee_mask, frames {first_frame} to {last_frame}", knee_mask) # Display knee_mask
+        # cv2.imshow(f"knee_mask, frames {first_frame} to {last_frame}", knee_mask) # Display knee_mask
 
         # Write coordinates in top-left corner 
         pos1 = (int(3*w//4), 15)
@@ -202,39 +210,23 @@ def process_video(video: np.ndarray, coords: np.ndarray):
                 color = (255,255,255), thickness = 1, lineType = cv2.LINE_AA)
 
 
-        # Show other masks, for correctness
-        check_frame = left_knee_mask & middle_knee_mask # Check for intersections of different masks (should be empty)
-        # cv2.imshow("left_knee_mask", left_knee_mask)
-        # cv2.imshow("middle_knee_mask", middle_knee_mask)
-        # cv2.imshow("right_knee_mask", right_knee_mask)
-        # cv2.imshow("check_frame", check_frame)
-        # cv2.imshow("whole_mask", np.maximum.reduce([left_knee_mask, middle_knee_mask, right_knee_mask]))
-
-        # Show frame
-        cv2.imshow(f"aging knee frames {first_frame} - {last_frame}", frame)
-
-        # Display enlarged frame
-        enlarged_frame = frame.copy()
-        pixel_scale = 10.1119 # pixels / mm
-        enlarged_frame, _ = utils.rescale_frame(frame, pixel_scale, 1.5)
-    #     cv2.imshow("enlarged frame", enlarged_frame)
-
-
         'Miscellaneous technical things'
 
-        # TEMPORARY: knee_video frames for Dr. Liang to check correctness
+        # Nice display
         frame_out = cv2.hconcat([knee_mask, left_knee_mask, middle_knee_mask, right_knee_mask])
-        cv2.imshow(f"{cf_keys[knee_idx]} knee (frames {first_frame}-{last_frame})", frame_out)
+        # cv2.imshow(f"{knee_name} knee (frames {first_frame}-{last_frame})", frame_out)
 
-        # === Optionally generate figures ===
+        frames_out.append(frame_out)
+
+
         if GENERATE_FIGURES:
-            fn = f"../figures/labeled {cf_keys[knee_idx]} frames/{cf_keys[knee_idx]}_{curr_frame:04d}.png"
+            fn = f"../figures/labeled {knee_name} frames/{knee_name}_{curr_frame:04d}.png"
             os.makedirs(os.path.dirname(fn), exist_ok=True)
             cv2.imwrite(fn, frame_out) 
 
 
         # Increment frame index
-        curr_frame = curr_frame +1
+        curr_frame += 1
 
         # Press 'q' to quit
         if cv2.waitKey(1) == ord('q'):
@@ -244,14 +236,18 @@ def process_video(video: np.ndarray, coords: np.ndarray):
         if LOOP and curr_frame > last_frame: 
             curr_frame = first_frame
 
-        cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
+    frames_out = np.array(frames_out)
+    return frames_out
 
 
 def main():
-    print("Main called")
-    coords = load_coords(2)
-    # video = load_video()
-    # process_video(video, coords)
+    print("main() called!")
+    knee_idx = 2
+    video = load_video()
+    coords, knee_name, flx_to_ext = load_coords(knee_idx)
+    process_video(video, coords, knee_name)
+
 
 if __name__ == "__main__":
     main()
