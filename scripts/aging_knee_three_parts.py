@@ -8,7 +8,7 @@ import pandas as pd
 import cv2
 import tifffile as tiff
 import utils
-from typing import Tuple
+from typing import Tuple, Dict
 
 DATA_IDX = 2
 MODIFY_DATA = True 
@@ -296,6 +296,11 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
 
     return coords_ctrd
 
+def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Dict[str, np.ndarray]:
+
+
+    return None
+
 # Intended code execution path:
 # > Load video
 # > Load coords 
@@ -308,11 +313,16 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
 def main():
     if VERBOSE: print("main() called!")
 
+    # Load data and metadata
     video = load_tif("../data/1 aging_00000221.tif")
-    coords, knee_name, flx_to_ext = load_xlsx_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", 2)
+    coords, knee_name, flx_to_ext = load_xlsx_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", 2) # TODO: load all data at once and wrap metadata in dictionary? 
 
+    # Pre-process data (centroid stabilization)
     video_ctrd, translation_mxs = pre_process_video(video)
     coords_ctrd = translate_coords(translation_mxs, coords)
+
+    # Get masks
+    masks = get_three_masks(video_ctrd, coords_ctrd) # TODO. Returns a dict of masks
 
     print(video.shape)
     print(video_ctrd.shape)
