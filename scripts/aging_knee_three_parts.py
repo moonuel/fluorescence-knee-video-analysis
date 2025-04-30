@@ -364,16 +364,16 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
         r_region.append(r_reg)
         otsu_region.append(otsu_reg)
 
-    # Cast to numpy array
+    # Cast to numpy arrays
     l_masks = np.array(l_masks)
     m_masks = np.array(m_masks)
     r_masks = np.array(r_masks)
-
     l_region = np.array(l_region)
     m_region = np.array(m_region)
     r_region = np.array(r_region)
     otsu_region = np.array(otsu_reg)
 
+    # Store in dict
     masks = {"l": l_masks, "m": m_masks, "r": r_masks, "otsu": otsu_masks}
     regions = {"l": l_region, "m": m_region, "r": r_region, "otsu": otsu_region}
     
@@ -395,9 +395,8 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
     if VERBOSE: print("measure_region_intensities() called!")
 
     if normalized:
-        mask_intensities = {}
-
         if VERBOSE: print(" > normalized!")
+        mask_intensities = {}
         for k in keys:
             mask_intensities[k] = _measure_region_intensity(masks[k])
 
@@ -410,6 +409,11 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
         print(region_intensities[k])
     
     return region_intensities
+
+def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict):
+
+
+    return None
 
 # Intended code execution path:
 # > Load video
@@ -440,7 +444,9 @@ def main():
     raw_intensities = measure_region_intensities(regions, masks, keys) # Returns a dict
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
-    
+    # Plot intensities
+    plot_intensities(raw_intensities)
+    # plot_intensities(normalized_intensities)
 
 if __name__ == "__main__":
     main()
