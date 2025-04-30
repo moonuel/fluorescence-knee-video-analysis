@@ -394,9 +394,19 @@ def _measure_region_intensity(region: np.ndarray) -> np.ndarray:
 def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray]:
     if VERBOSE: print("measure_region_intensities() called!")
 
+    if normalized:
+        mask_intensities = {}
+
+        if VERBOSE: print(" > normalized!")
+        for k in keys:
+            mask_intensities[k] = _measure_region_intensity(masks[k])
+
     region_intensities = {}
     for k in keys:
         region_intensities[k] = _measure_region_intensity(regions[k])
+        
+        if normalized:
+            region_intensities[k] = region_intensities[k] / mask_intensities[k]
         print(region_intensities[k])
     
     return region_intensities
@@ -407,7 +417,7 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
 # > Centre video 
 # > Centre coords
 # > Get masks
-# x Process data
+# > Process data
 # x Plot data 
 
 def main():
@@ -427,9 +437,10 @@ def main():
 
     # Get intensity data
     keys = ["l", "m", "r"]
-    raw_intensities = measure_region_intensities(regions, masks, keys) # TODO: Returns a dict of intensity measurements 
-    # normalized_intensities = measure_region_intensities(masks, keys, normalized=True)
+    raw_intensities = measure_region_intensities(regions, masks, keys) # Returns a dict
+    normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
+    
 
 if __name__ == "__main__":
     main()
