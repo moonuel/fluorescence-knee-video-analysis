@@ -59,8 +59,9 @@ def load_knee_coords(filename:str, sheet_sel:int) -> Tuple[pd.DataFrame, Dict[st
     # Set frame number as index
     coords.set_index("Frame Number", inplace=True)
     coords.index = coords.index.to_series().fillna(method="ffill").astype(int)
+    uqf = coords.index.unique()
 
-    metadata = {"knee_name": knee_name, "flx/ext_pt": flx_ext_pt}
+    metadata = {"knee_name": knee_name, "flx/ext_pt": flx_ext_pt, "f0": uqf[0], "fN": uqf[-1]}
     return coords, metadata
 
 def load_tif(filename):
@@ -284,8 +285,8 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
     if VERBOSE: print("translate_coords() called!")
 
     coords_ctrd = pd.DataFrame(np.nan, index=coords.index, columns=coords.columns) # empty dataframe
-    uniq_f = coords.index.unique()
-    for cf in uniq_f:
+    uqf = coords.index.unique()
+    for cf in uqf:
         
         # Apply translations to coords
         tr_mx = translation_mxs[cf]
