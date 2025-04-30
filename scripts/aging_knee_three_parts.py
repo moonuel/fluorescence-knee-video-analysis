@@ -15,13 +15,16 @@ MODIFY_DATA = True
 GENERATE_FIGURES = False
 LOOP = False
 
-def load_xlsx_coords(filename, knee_idx:int) -> Tuple[pd.DataFrame, str, int]:
+def load_xlsx_coords(filename:str, knee_idx:int) -> Tuple[pd.DataFrame, str, int]:
     """
     Inputs:
         filename (str) - path to the .xlsx coordinates file to be loaded
+        knee_idx (int) - index of the Excel sheet to be used 
 
     Outputs:
-    
+        coords (pd.DataFrame) - contains the pairs of coordinates provided by Huizhu @ Fudan University
+        knee_name (str) - the name of the selected Excel sheet    
+        flx_to_ext (int) - the midpoint of the flexion/extension cycle
     """
 
 
@@ -257,12 +260,29 @@ def process_video(video: np.ndarray, coords: np.ndarray, knee_name: str):
 def pre_process_video(video):
     print("pre_process_video() called!")
 
+    video_ctrd = []
+    translation_mxs = []
     for idx, frame in enumerate(video):
-        pass
-        
-    
-    return None, None
 
+        # Process frame
+        frame, tr_mx = utils.centroid_stabilization(frame)
+
+        # Store data
+        video_ctrd.append(frame)
+        translation_mxs.append(tr_mx)
+
+    video_ctrd = np.array(video_ctrd)
+    translation_mxs = np.array(translation_mxs)
+    return video_ctrd, translation_mxs
+
+# Intended code execution path:
+# > Load video
+# > Load coords 
+# x Centre video 
+# x Centre coords
+# x Get masks
+# x Process data
+# x Plot data 
 
 def main():
     print("main() called!")
@@ -275,7 +295,6 @@ def main():
     print(video.shape)
     print(coords.shape)
     # print(coords)
-
 
 
 if __name__ == "__main__":
