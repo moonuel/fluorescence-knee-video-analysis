@@ -16,19 +16,19 @@ GENERATE_FIGURES = False
 LOOP = False
 VERBOSE = True
 
-def load_xlsx_coords(filename:str, knee_idx:int) -> Tuple[pd.DataFrame, str, int]:
+def load_knee_coords(filename:str, sheet_sel:int) -> Tuple[pd.DataFrame, Dict[str, int]]:
     """
     Inputs:
         filename (str) - path to the .xlsx coordinates file to be loaded
-        knee_idx (int) - index of the Excel sheet to be used 
+        sheet_sel (int) - index of the Excel sheet to be used 
 
     Outputs:
         coords (pd.DataFrame) - contains the pairs of coordinates provided by Huizhu @ Fudan University
         knee_name (str) - the name of the selected Excel sheet    
-        flx_to_ext (int) - the midpoint of the flexion/extension cycle
+        flx_ext_pt (int) - the midpoint of the flexion/extension cycle
     """
     
-    if VERBOSE: print("load_xlsx_coords() called!")
+    if VERBOSE: print("load_knee_coords() called!")
 
     # Import knee coordinates
     coords_file = pd.read_excel(filename, engine='openpyxl', sheet_name=None) # More updated Excel import
@@ -37,7 +37,7 @@ def load_xlsx_coords(filename:str, knee_idx:int) -> Tuple[pd.DataFrame, str, int
 
     # Select data set
     knee_opts = ['aging-1', 'aging-2', 'aging-3']
-    knee_name = knee_opts[knee_idx]
+    knee_name = knee_opts[sheet_sel]
     coords_sheet = coords_file[knee_name] # Set index = {0,1,2} to choose different data set
 
     # Clean data
@@ -49,18 +49,19 @@ def load_xlsx_coords(filename:str, knee_idx:int) -> Tuple[pd.DataFrame, str, int
     coords_1 = coords_sheet[['Frame Number', 'X', 'Y']].loc[~na_coords_1]
     coords_2 = coords_sheet[['Frame Number.1', 'X.1', 'Y.1']].loc[~na_coords_2]
 
-    flx_to_ext = int(coords_2.iloc[0]['Frame Number.1']) # For later: get flexion/extension boundary
+    # Record metadata
+    flx_ext_pt = int(coords_2.iloc[0]['Frame Number.1']) # flexion/extension boundary for plotting
 
     # Reformat data
     coords_2.rename(columns={'Frame Number.1': 'Frame Number', 'X.1': 'X', 'Y.1': 'Y'}, inplace=True) 
     coords = pd.concat([coords_1, coords_2], axis=0)
 
-    # Set new index for easier iterations
+    # Set frame number as index
     coords.set_index("Frame Number", inplace=True)
     coords.index = coords.index.to_series().fillna(method="ffill").astype(int)
 
-    # print(coords)
-    return coords, knee_name, flx_to_ext
+    metadata = {"knee_name": knee_name, "flx/ext_pt": flx_ext_pt}
+    return coords, metadata
 
 def load_tif(filename):
     """
@@ -369,14 +370,16 @@ def main():
 
     # Load data and metadata
     video = load_tif("../data/1 aging_00000221.tif")
-    coords, knee_name, flx_to_ext = load_xlsx_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", 2) # TODO: load all data at once and wrap metadata in dictionary? 
+    coords, metadata = load_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", 2) # TODO: load all data at once and wrap metadata in dictionary? 
 
     # Pre-process data (centroid stabilization)
     video_ctrd, translation_mxs = pre_process_video(video)
     coords_ctrd = translate_coords(translation_mxs, coords)
 
     # Get masks
-    masks = get_three_masks(video_ctrd, coords_ctrd) # TODO. Returns a dict of masks
+    masks = get_three_masks(video_ctrd, coords_ctrd) 
+
+    # 
 
     print(video.shape)
     print(video_ctrd.shape)
