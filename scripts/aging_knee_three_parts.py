@@ -297,7 +297,7 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
 
     return coords_ctrd
 
-def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Dict[str, np.ndarray]:
+def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
     if VERBOSE: print("get_three_masks() called!")
 
     video = video.copy()
@@ -354,7 +354,7 @@ def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Dict[str, np.ndarr
 
     masks = {"l": l_masks, "m": m_masks, "r": r_masks, "otsu": otsu_masks}
     
-    return masks
+    return None, masks
 
 def measure_mask_intensities(masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray]:
 
@@ -382,18 +382,12 @@ def main():
     coords_ctrd = translate_coords(translation_mxs, coords)
 
     # Get masks
-    masks = get_three_masks(video_ctrd, coords_ctrd) # Returns a dict of masks
+    regions, masks = get_three_masks(video_ctrd, coords_ctrd) # Returns a dict of masks
 
     # Get intensity data
-    keys = ["l", "m", "r"]
-    raw_intensities = measure_mask_intensities(masks, keys) # TODO: Returns a dict of intensity measurements 
-    normalized_intensities = measure_mask_intensities(masks, keys, normalized=True)
-
-    print(video.shape)
-    print(video_ctrd.shape)
-    print(coords.shape)
-    print(coords_ctrd.shape)
-    # print(coords)
+    # keys = ["l", "m", "r"]
+    # raw_intensities = measure_mask_intensities(masks, keys) # TODO: Returns a dict of intensity measurements 
+    # normalized_intensities = measure_mask_intensities(masks, keys, normalized=True)
 
 
 if __name__ == "__main__":
