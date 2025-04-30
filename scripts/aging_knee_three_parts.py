@@ -6,9 +6,9 @@ if module_path not in sys.path: # Add to sys.path if not already present
 import numpy as np
 import pandas as pd
 import cv2
-import tifffile as tiff
+from tifffile import imread as tif_imread
 import utils
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 
 DATA_IDX = 2
 MODIFY_DATA = True 
@@ -74,7 +74,7 @@ def load_tif(filename):
 
     if VERBOSE: print("load_tif() called!")
 
-    video = tiff.imread(filename) # Imports image stack as np.ndarray (3 dimensions)
+    video = tif_imread(filename) # Imports image stack as np.ndarray (3 dimensions)
     _, h, w = video.shape # Dimensions of video stack
     video = np.concatenate( (np.zeros((1,h,w), dtype=np.uint8),video), axis=0) # Prepend blank frame -> 1-based indexing
     
@@ -302,7 +302,7 @@ def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Dict[str, np.ndarr
 
     video = video.copy()
 
-    otsu_masks = []
+    otsu_masks = [] # TODO: abstract this to another function?
     for cf, frame in enumerate(video):
         
         # Get otsu mask
@@ -356,6 +356,10 @@ def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Dict[str, np.ndarr
     
     return masks
 
+def measure_mask_intensities(masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray]:
+
+    return None
+
 # Intended code execution path:
 # > Load video
 # > Load coords 
@@ -370,16 +374,20 @@ def main():
 
     # Load data and metadata
     video = load_tif("../data/1 aging_00000221.tif")
-    coords, metadata = load_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", 2) # TODO: load all data at once and wrap metadata in dictionary? 
+    sheet_sel = 2
+    coords, metadata = load_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", sheet_sel) # TODO: load all data at once and pass coords as a dict?
 
     # Pre-process data (centroid stabilization)
     video_ctrd, translation_mxs = pre_process_video(video)
     coords_ctrd = translate_coords(translation_mxs, coords)
 
     # Get masks
-    masks = get_three_masks(video_ctrd, coords_ctrd) 
+    masks = get_three_masks(video_ctrd, coords_ctrd) # Returns a dict of masks
 
-    # 
+    # Get intensity data
+    keys = ["l", "m", "r"]
+    raw_intensities = measure_mask_intensities(masks, keys) # TODO: Returns a dict of intensity measurements 
+    normalized_intensities = measure_mask_intensities(masks, keys, normalized=True)
 
     print(video.shape)
     print(video_ctrd.shape)
