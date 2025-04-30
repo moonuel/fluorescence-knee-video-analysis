@@ -12,3 +12,4 @@ trash/*
 __pycache__/*
 *.pyc
 /figures/
+notebooks/workshop.ipynb
