@@ -9,6 +9,7 @@ import cv2
 from tifffile import imread as tif_imread
 import utils
 from typing import Tuple, Dict, List
+import matplotlib.pyplot as plt
 
 DATA_IDX = 2
 MODIFY_DATA = True 
@@ -308,7 +309,7 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
         
         # Get otsu mask
         thresh_val, _ = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        thresh_val = int(thresh_val*0.8) # TODO: parameterize hardcoded 20% decrease 
+        thresh_val = int(thresh_val*0.8) # TODO: parameterize hardcoded 20% decrease?
         _, otsu_mask = cv2.threshold(frame, thresh_val, 255, cv2.THRESH_BINARY)
         
         # Store otsu mask
@@ -372,7 +373,7 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
     l_region = np.array(l_region)
     m_region = np.array(m_region)
     r_region = np.array(r_region)
-    otsu_region = np.array(otsu_reg)
+    otsu_region = np.array(otsu_region)
 
     # Store in dict
     masks = {"l": l_masks, "m": m_masks, "r": r_masks, "otsu": otsu_masks}
@@ -407,12 +408,35 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
         
         if normalized:
             region_intensities[k] = region_intensities[k] / mask_intensities[k]
-        print(region_intensities[k])
     
     return region_intensities
 
-def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict):
+def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normalized=False, save_figs=False):
+    if VERBOSE: print("plot_intensities() called!")
 
+    plt.style.use('default')
+    plt.tight_layout()
+
+
+    keys = intensities.keys()
+
+    fig, axes = plt.subplots(1, len(keys))
+
+    title = "Sum of pixel intensities "
+    if normalized:
+        title += "(Normalized)"
+    else:
+        title += "(Raw)"
+
+    i = 0
+    for k in keys:
+        axes[i].plot(intensities[k])
+        axes[i].set_label(k + " knee intensities")
+
+        i+=1
+
+    plt.legend()
+    plt.show()
 
     return None
 
@@ -446,8 +470,8 @@ def main():
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    plot_intensities(raw_intensities)
-    # plot_intensities(normalized_intensities)
+    plot_intensities(raw_intensities, metadata)
+    # plot_intensities(normalized_intensities, metadata, normalized=True)
 
 if __name__ == "__main__":
     main()
