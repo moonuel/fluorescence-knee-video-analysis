@@ -328,17 +328,17 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
         frame = video[cf]        
         cf_coords = coords.loc[cf].to_numpy().astype(int)
 
-        # Get bisection mask
+        # Get rough bisection mask
         mp0 = (cf_coords[0]+cf_coords[2])//2 # top 
         mp1 = (cf_coords[1]+cf_coords[3])//2 # top 
         lr_mask = utils.pixels_left_of_line(frame, mp1, mp0)
 
-        # Get middle mask
+        # Get rough middle mask
         _m_mask_l = utils.pixels_left_of_line(frame, cf_coords[0], cf_coords[1])
         _m_mask_r = utils.pixels_left_of_line(frame, cf_coords[3], cf_coords[2])
         m_mask = _m_mask_l & _m_mask_r
 
-        # Get left and right masks
+        # Get rough left and right masks
         l_mask = lr_mask & ~m_mask
         r_mask = ~lr_mask & ~m_mask
 
@@ -379,9 +379,27 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
     
     return regions, masks
 
-def measure_mask_intensities(masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray]:
+def _measure_region_intensity(region: np.ndarray) -> np.ndarray:
+    if VERBOSE: print("_measure_region_intensity() called!")
 
-    return None
+    intensities = []
+    for cf, frame in enumerate(region):
+        intsty = np.sum(frame)
+        intensities.append(intsty)
+
+    intensities = np.array(intensities)
+
+    return intensities
+
+def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray]:
+    if VERBOSE: print("measure_region_intensities() called!")
+
+    region_intensities = {}
+    for k in keys:
+        region_intensities[k] = _measure_region_intensity(regions[k])
+        print(region_intensities[k])
+    
+    return region_intensities
 
 # Intended code execution path:
 # > Load video
@@ -408,9 +426,9 @@ def main():
     regions, masks = get_three_segments(video_ctrd, coords_ctrd) # Returns dicts
 
     # Get intensity data
-    # keys = ["l", "m", "r"]
-    # raw_intensities = measure_mask_intensities(masks, keys) # TODO: Returns a dict of intensity measurements 
-    # normalized_intensities = measure_mask_intensities(masks, keys, normalized=True)
+    keys = ["l", "m", "r"]
+    raw_intensities = measure_region_intensities(regions, masks, keys) # TODO: Returns a dict of intensity measurements 
+    # normalized_intensities = measure_region_intensities(masks, keys, normalized=True)
 
 
 if __name__ == "__main__":
