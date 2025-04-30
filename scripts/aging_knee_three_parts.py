@@ -297,8 +297,8 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
 
     return coords_ctrd
 
-def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
-    if VERBOSE: print("get_three_masks() called!")
+def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    if VERBOSE: print("get_three_segments() called!")
 
     video = video.copy()
 
@@ -319,6 +319,10 @@ def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str, np
     l_masks = []
     m_masks = []
     r_masks = []
+    l_region = []
+    m_region = []
+    r_region = []
+    otsu_region = []
     for cf in coords.index.unique():
 
         frame = video[cf]        
@@ -339,22 +343,41 @@ def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str, np
         r_mask = ~lr_mask & ~m_mask
 
         # Get final masks
-        l_mask = l_mask & otsu_masks[cf]
-        m_mask = m_mask & otsu_masks[cf]
-        r_mask = r_mask & otsu_masks[cf]
+        otsu_mask = otsu_masks[cf]
+        l_mask = l_mask & otsu_mask
+        m_mask = m_mask & otsu_mask
+        r_mask = r_mask & otsu_mask
+
+        # Get l/m/r/Otsu regions
+        l_reg = l_mask & frame
+        m_reg = m_mask & frame
+        r_reg = r_mask & frame
+        otsu_reg = otsu_mask & frame
 
         # Store vals
         l_masks.append(l_mask)
         m_masks.append(m_mask)
         r_masks.append(r_mask)
 
+        l_region.append(l_reg)
+        m_region.append(m_reg)
+        r_region.append(r_reg)
+        otsu_region.append(otsu_reg)
+
+    # Cast to numpy array
     l_masks = np.array(l_masks)
     m_masks = np.array(m_masks)
     r_masks = np.array(r_masks)
 
+    l_region = np.array(l_region)
+    m_region = np.array(m_region)
+    r_region = np.array(r_region)
+    otsu_region = np.array(otsu_reg)
+
     masks = {"l": l_masks, "m": m_masks, "r": r_masks, "otsu": otsu_masks}
+    regions = {"l": l_region, "m": m_region, "r": r_region, "otsu": otsu_region}
     
-    return None, masks
+    return regions, masks
 
 def measure_mask_intensities(masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray]:
 
@@ -382,7 +405,7 @@ def main():
     coords_ctrd = translate_coords(translation_mxs, coords)
 
     # Get masks
-    regions, masks = get_three_masks(video_ctrd, coords_ctrd) # Returns a dict of masks
+    regions, masks = get_three_segments(video_ctrd, coords_ctrd) # Returns dicts
 
     # Get intensity data
     # keys = ["l", "m", "r"]
