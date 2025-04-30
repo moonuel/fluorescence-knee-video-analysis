@@ -297,16 +297,70 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
     return coords_ctrd
 
 def get_three_masks(video: np.ndarray, coords: np.ndarray) -> Dict[str, np.ndarray]:
+    if VERBOSE: print("get_three_masks() called!")
+
+    video = video.copy()
+
+    otsu_masks = []
+    for cf, frame in enumerate(video):
+        
+        # Get otsu mask
+        thresh_val, _ = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        thresh_val = int(thresh_val*0.8) # TODO: parameterize hardcoded 20% decrease 
+        _, otsu_mask = cv2.threshold(frame, thresh_val, 255, cv2.THRESH_BINARY)
+        
+        # Store otsu mask
+        otsu_masks.append(otsu_mask)
+        
+    otsu_masks = np.array(otsu_masks)
 
 
-    return None
+    l_masks = []
+    m_masks = []
+    r_masks = []
+    for cf in coords.index.unique():
+
+        frame = video[cf]        
+        cf_coords = coords.loc[cf].to_numpy().astype(int)
+
+        # Get bisection mask
+        mp0 = (cf_coords[0]+cf_coords[2])//2 # top 
+        mp1 = (cf_coords[1]+cf_coords[3])//2 # top 
+        lr_mask = utils.pixels_left_of_line(frame, mp1, mp0)
+
+        # Get middle mask
+        _m_mask_l = utils.pixels_left_of_line(frame, cf_coords[0], cf_coords[1])
+        _m_mask_r = utils.pixels_left_of_line(frame, cf_coords[3], cf_coords[2])
+        m_mask = _m_mask_l & _m_mask_r
+
+        # Get left and right masks
+        l_mask = lr_mask & ~m_mask
+        r_mask = ~lr_mask & ~m_mask
+
+        # Get final masks
+        l_mask = l_mask & otsu_masks[cf]
+        m_mask = m_mask & otsu_masks[cf]
+        r_mask = r_mask & otsu_masks[cf]
+
+        # Store vals
+        l_masks.append(l_mask)
+        m_masks.append(m_mask)
+        r_masks.append(r_mask)
+
+    l_masks = np.array(l_masks)
+    m_masks = np.array(m_masks)
+    r_masks = np.array(r_masks)
+
+    masks = {"l": l_masks, "m": m_masks, "r": r_masks, "otsu": otsu_masks}
+    
+    return masks
 
 # Intended code execution path:
 # > Load video
 # > Load coords 
 # > Centre video 
 # > Centre coords
-# x Get masks
+# > Get masks
 # x Process data
 # x Plot data 
 
