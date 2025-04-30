@@ -14,6 +14,7 @@ DATA_IDX = 2
 MODIFY_DATA = True 
 GENERATE_FIGURES = False
 LOOP = False
+VERBOSE = True
 
 def load_xlsx_coords(filename:str, knee_idx:int) -> Tuple[pd.DataFrame, str, int]:
     """
@@ -26,7 +27,8 @@ def load_xlsx_coords(filename:str, knee_idx:int) -> Tuple[pd.DataFrame, str, int
         knee_name (str) - the name of the selected Excel sheet    
         flx_to_ext (int) - the midpoint of the flexion/extension cycle
     """
-
+    
+    if VERBOSE: print("load_xlsx_coords() called!")
 
     # Import knee coordinates
     coords_file = pd.read_excel(filename, engine='openpyxl', sheet_name=None) # More updated Excel import
@@ -69,6 +71,8 @@ def load_tif(filename):
         video (np.ndarray) - 3-dim array (nframes, h, w) containing the video information.
     """
 
+    if VERBOSE: print("load_tif() called!")
+
     video = tiff.imread(filename) # Imports image stack as np.ndarray (3 dimensions)
     _, h, w = video.shape # Dimensions of video stack
     video = np.concatenate( (np.zeros((1,h,w), dtype=np.uint8),video), axis=0) # Prepend blank frame -> 1-based indexing
@@ -77,7 +81,7 @@ def load_tif(filename):
 
 def process_video(video: np.ndarray, coords: np.ndarray, knee_name: str):
     
-    print("process_video() called!")
+    if VERBOSE: print("process_video() called!")
 
     # Get unique frames
     unique_frames = coords.index.unique()
@@ -258,7 +262,7 @@ def process_video(video: np.ndarray, coords: np.ndarray, knee_name: str):
 
 
 def pre_process_video(video):
-    print("pre_process_video() called!")
+    if VERBOSE: print("pre_process_video() called!")
 
     video_ctrd = []
     translation_mxs = []
@@ -275,25 +279,45 @@ def pre_process_video(video):
     translation_mxs = np.array(translation_mxs)
     return video_ctrd, translation_mxs
 
+def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.DataFrame:
+    if VERBOSE: print("translate_coords() called!")
+
+    coords_ctrd = pd.DataFrame(np.nan, index=coords.index, columns=coords.columns) # empty dataframe
+    uniq_f = coords.index.unique()
+    for cf in uniq_f:
+        
+        # Apply translations to coords
+        tr_mx = translation_mxs[cf]
+        xp = np.row_stack([coords.loc[cf].to_numpy().T, np.ones(4)])
+        coord_ctrd = tr_mx @ xp
+
+        # Store result
+        coords_ctrd.loc[cf] = coord_ctrd.T
+
+    return coords_ctrd
+
 # Intended code execution path:
 # > Load video
 # > Load coords 
-# x Centre video 
-# x Centre coords
+# > Centre video 
+# > Centre coords
 # x Get masks
 # x Process data
 # x Plot data 
 
 def main():
-    print("main() called!")
+    if VERBOSE: print("main() called!")
 
     video = load_tif("../data/1 aging_00000221.tif")
     coords, knee_name, flx_to_ext = load_xlsx_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", 2)
 
     video_ctrd, translation_mxs = pre_process_video(video)
+    coords_ctrd = translate_coords(translation_mxs, coords)
 
     print(video.shape)
+    print(video_ctrd.shape)
     print(coords.shape)
+    print(coords_ctrd.shape)
     # print(coords)
 
 
