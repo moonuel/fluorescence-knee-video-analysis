@@ -382,7 +382,7 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
     return regions, masks
 
 def _measure_region_intensity(region: np.ndarray) -> np.ndarray:
-    if VERBOSE: print("_measure_region_intensity() called!")
+    # if VERBOSE: print("_measure_region_intensity() called!")
 
     intensities = []
     for cf, frame in enumerate(region):
@@ -426,7 +426,7 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normali
     if normalized: sv_fl_pfx = "normalized"
     else: sv_fl_pfx = "raw"
 
-    # Plot three (or more) figs
+    # Plot three (or more) figs separately
     fig, axes = plt.subplots(1, len(keys), figsize=(20,7))
     i = 0
     for k in keys:
@@ -438,18 +438,33 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normali
         # Formatting
         axes[i].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
         axes[i].axvline(metadata["flx_ext_pt"], color="k", linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
-
-
         axes[i].legend()
+
         i+=1
 
-    # plt.legend()
-    plt.tight_layout()
     if save_figs:
         fn = f"../figures/intensity_plots/{sv_fl_pfx}_separate_{metadata['knee_name']}.png"
         os.makedirs(os.path.dirname(fn), exist_ok=True)
+        plt.tight_layout()
+        plt.savefig(fn, dpi=300, bbox_inches="tight")
+    # plt.show()
+
+
+    # Plot three (or more) figs combined
+    plt.figure(figsize=(15,8))
+    for k in keys:
+        plt.plot(fns, intensities[k], color=clrs[k], label=ttl_pfx[k] + " knee")
+    plt.axvline(metadata["flx_ext_pt"], color='k', linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
+    plt.title("Combined knee pixel intensities " + ttl_sfx)
+
+    plt.legend()
+    if save_figs:
+        fn = f"../figures/intensity_plots/{sv_fl_pfx}_combined_{metadata['knee_name']}.png"
+        os.makedirs(os.path.dirname(fn), exist_ok=True)
+        plt.tight_layout()
         plt.savefig(fn, dpi=300, bbox_inches="tight")
     plt.show()
+
 
     return None
 
