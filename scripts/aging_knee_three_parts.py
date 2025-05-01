@@ -418,15 +418,13 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normali
 
     keys = ["l", "m", "r"]
 
-    # Prepare formatting things
-    if normalized:
-        ttl_sfx = "(Normalized)"
-    else:
-        ttl_sfx = "(Raw)"
-    
+    # Prepare formatting strings
+    if normalized: ttl_sfx = "(Normalized " + metadata["knee_name"] + ")"
+    else: ttl_sfx = "(Raw " + metadata["knee_name"] + ")"    
     ttl_pfx = {"l": "Left", "m": "Middle", "r": "Right", "otsu": "Whole"}
-
     clrs = {"l": "r", "m": "g", "r": "b", "otsu": NotImplemented}
+    if normalized: sv_fl_pfx = "normalized"
+    else: sv_fl_pfx = "raw"
 
     # Plot three (or more) figs
     fig, axes = plt.subplots(1, len(keys), figsize=(20,7))
@@ -447,6 +445,10 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normali
 
     # plt.legend()
     plt.tight_layout()
+    if save_figs:
+        fn = f"../figures/intensity_plots/{sv_fl_pfx}_separate_{metadata['knee_name']}.png"
+        os.makedirs(os.path.dirname(fn), exist_ok=True)
+        plt.savefig(fn, dpi=300, bbox_inches="tight")
     plt.show()
 
     return None
@@ -481,8 +483,8 @@ def main():
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    plot_intensities(raw_intensities, metadata)
-    # plot_intensities(normalized_intensities, metadata, normalized=True)
+    plot_intensities(raw_intensities, metadata, save_figs=True)
+    plot_intensities(normalized_intensities, metadata, normalized=True, save_figs=True)
 
 if __name__ == "__main__":
     main()
