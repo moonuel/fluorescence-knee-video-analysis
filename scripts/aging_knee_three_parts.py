@@ -11,7 +11,7 @@ import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 
-VERBOSE = True
+VERBOSE = False
 
 def load_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:
     """
@@ -223,14 +223,16 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
         if normalized:
             region_intensities[k] = region_intensities[k] / mask_intensities[k]
     
+    region_intensities["normalized"] = normalized # Store some metadata
+
     return region_intensities
 
-def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normalized=False, show_figs=True, save_figs=False) -> None:
+def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, show_figs=True, save_figs=False) -> None:
     if VERBOSE: print("plot_intensities() called!")
 
+    normalized = intensities["normalized"] # Get intensity metadata
+    keys = ["l", "m", "r"] # Hardcoded 
     plt.style.use('default')
-
-    keys = ["l", "m", "r"]
 
     # Prepare formatting strings
     if normalized: ttl_sfx = "(Normalized " + metadata["knee_name"] + ")"
@@ -289,13 +291,11 @@ def main():
 
     # Load data and metadata
     video = load_tif("../data/1 aging_00000221.tif")
+    video_ctrd, translation_mxs = pre_process_video(video) # Processes *all* frames
 
     # TODO: wrap coords-dependent code in a loop to process all data sets at once?
     knee_name = "aging-3"
     coords, metadata = load_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
-
-    # Pre-process data (centroid stabilization)
-    video_ctrd, translation_mxs = pre_process_video(video) # Processes *all* frames
     coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
 
     # Get masks
@@ -308,7 +308,7 @@ def main():
 
     # Plot intensities
     plot_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    plot_intensities(normalized_intensities, metadata, normalized=True, save_figs=True, show_figs=False)
+    plot_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
 
 if __name__ == "__main__":
     main()
