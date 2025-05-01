@@ -111,13 +111,14 @@ def draw_reference_lines(frame, horizontal_line_placement=0.5, vertical_line_pla
     cv2.line(frame, (round(w*vertical_line_placement), 0), (round(w*vertical_line_placement), h), (255, 255, 255), 1)  # Vertical line
     return frame
 
-def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41, thresh_scale=0.8) -> Tuple[np.ndarray, np.ndarray]:
+def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
     """
     Stabilizes a frame by centering the non-zero region in a binary mask.
 
     Parameters:
         frame (np.ndarray): Input grayscale frame.
         blur_strength (int): Gaussian blur kernel size (must be an odd number).
+        thresh_scale (int): To rescale the Otsu threshold value
 
     Returns:
         centered_frame (np.ndarray): Translated frame with the centroid aligned to the center.
@@ -127,7 +128,7 @@ def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41, thresh_sc
 
     # Validate blur strength
     if blur_strength % 2 == 0 and blur_strength > 0:
-        # print("error: blur_strength must be an odd number. adding 1 and proceeding")
+        blur_strength = abs(blur_strength)
         blur_strength = blur_strength + 1
 
     # Convert BGR to grayscale if needed

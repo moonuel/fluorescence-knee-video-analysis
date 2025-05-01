@@ -130,11 +130,12 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
 
     return coords_ctrd
 
-def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+def get_three_segments(video: np.ndarray, coords: np.ndarray, thresh_scale:int=0.8) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
     """
     Inputs: 
         video (np.ndarray) - video to be manually segmented
         coords (np.ndarray) - coordinates to use for three part segmentation
+        thresh_scale(int) - to rescale the Otsu threshold mask 
     Outputs:
         regions (Dict[str, np.ndarray]) - segmented regions obtained 
         masks (Dict[str, np.ndarray]) - segmented masks obtained
@@ -143,12 +144,12 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
 
     video = video.copy()
 
-    otsu_masks = [] # TODO: abstract this to another function?
+    otsu_masks = []
     for cf, frame in enumerate(video):
         
         # Get otsu mask
         thresh_val, _ = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        thresh_val = int(thresh_val*0.8) # TODO: parameterize hardcoded 20% decrease?
+        thresh_val = int(thresh_val*thresh_scale)
         _, otsu_mask = cv2.threshold(frame, thresh_val, 255, cv2.THRESH_BINARY)
         
         # Store otsu mask

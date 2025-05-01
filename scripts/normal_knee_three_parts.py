@@ -65,10 +65,17 @@ def main():
     coords = aktp.translate_coords(translation_mxs, coords)
 
     # Segment video
-    regions, masks = aktp.get_three_segments(video, coords)
+    regions, masks = aktp.get_three_segments(video, coords, thresh_scale=0.65)
+
+    keys = ['l','m','r']
+    # for k in keys:
+    #     for idx, frame in enumerate(regions[k]):
+    #         cv2.imshow("",frame)
+    #         if cv2.waitKey(10) == ord('q'): break
+    # cv2.destroyAllWindows()
 
     # Plot intensities
-    raw_intensities = aktp.measure_region_intensities(regions, masks, ['l','m','r'])
+    raw_intensities = aktp.measure_region_intensities(regions, masks, keys)
     aktp.plot_three_intensities(raw_intensities, metadata)
 
 
