@@ -62,7 +62,7 @@ def load_knee_coords(filename:str, sheet_sel:int) -> Tuple[pd.DataFrame, Dict[st
     coords.index = coords.index.to_series().fillna(method="ffill").astype(int)
     uqf = coords.index.unique()
 
-    metadata = {"knee_name": knee_name, "flx/ext_pt": flx_ext_pt, "f0": uqf[0], "fN": uqf[-1]}
+    metadata = {"knee_name": knee_name, "flx_ext_pt": flx_ext_pt, "f0": uqf[0], "fN": uqf[-1]}
     return coords, metadata
 
 def load_tif(filename):
@@ -415,27 +415,38 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normali
     if VERBOSE: print("plot_intensities() called!")
 
     plt.style.use('default')
-    plt.tight_layout()
 
+    keys = ["l", "m", "r"]
 
-    keys = intensities.keys()
-
-    fig, axes = plt.subplots(1, len(keys))
-
-    title = "Sum of pixel intensities "
+    # Prepare formatting things
     if normalized:
-        title += "(Normalized)"
+        ttl_sfx = "(Normalized)"
     else:
-        title += "(Raw)"
+        ttl_sfx = "(Raw)"
+    
+    ttl_pfx = {"l": "Left", "m": "Middle", "r": "Right", "otsu": "Whole"}
 
+    clrs = {"l": "r", "m": "g", "r": "b", "otsu": NotImplemented}
+
+    # Plot three (or more) figs
+    fig, axes = plt.subplots(1, len(keys), figsize=(20,7))
     i = 0
     for k in keys:
-        axes[i].plot(intensities[k])
-        axes[i].set_label(k + " knee intensities")
 
+        # Plot intensities
+        fns = np.arange(metadata["f0"], metadata["f0"] + len(intensities[k]))
+        axes[i].plot(fns, intensities[k], color=clrs[k])
+
+        # Formatting
+        axes[i].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
+        axes[i].axvline(metadata["flx_ext_pt"], color="k", linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
+
+
+        axes[i].legend()
         i+=1
 
-    plt.legend()
+    # plt.legend()
+    plt.tight_layout()
     plt.show()
 
     return None
