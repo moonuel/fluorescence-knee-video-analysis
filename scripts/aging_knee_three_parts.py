@@ -11,7 +11,7 @@ import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 
-VERBOSE = False
+VERBOSE = True
 
 def load_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:
     """
@@ -286,6 +286,18 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, show_fi
 
     return
 
+
+def get_local_derivs(intensities: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    if VERBOSE: print("get_local_derivs() called!")
+
+    keys = ['l','m','r']
+    derivs = {}
+    for k in keys:
+        deriv = pd.Series(intensities[k].astype(np.int64)).diff() # Cast from uint32 
+        derivs[k] = deriv
+    return derivs
+
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -307,8 +319,12 @@ def main():
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    plot_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    plot_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+    # plot_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
+    # plot_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+
+    # Get per-region rate of change
+    raw_deriv = get_local_derivs(raw_intensities)
+    # print(raw_deriv)
 
 if __name__ == "__main__":
     main()
