@@ -111,9 +111,9 @@ def draw_reference_lines(frame, horizontal_line_placement=0.5, vertical_line_pla
     cv2.line(frame, (round(w*vertical_line_placement), 0), (round(w*vertical_line_placement), h), (255, 255, 255), 1)  # Vertical line
     return frame
 
-def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41) -> Tuple[np.ndarray, np.ndarray]:
+def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41, thresh_scale=0.8) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Stabilizes a frame by centering the bright region in a binary mask.
+    Stabilizes a frame by centering the non-zero region in a binary mask.
 
     Parameters:
         frame (np.ndarray): Input grayscale frame.
@@ -144,7 +144,7 @@ def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41) -> Tuple[
 
     # Apply automatic thresholding to create a binary mask
     thresh_val, _ = cv2.threshold(blurred_frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    thresh_val = int(0.8*thresh_val)
+    thresh_val = int(thresh_scale*thresh_val) # manually adjust the threshold value to lower it if needed
     _, binary_mask = cv2.threshold(blurred_frame, thresh_val, 255, cv2.THRESH_BINARY)
 
 
