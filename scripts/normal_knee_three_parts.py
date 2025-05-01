@@ -34,18 +34,18 @@ def load_avi(fn) -> np.ndarray:
 def load_normal_knee_coords(fn:str, sheet_num:int) -> pd.DataFrame:
     if VERBOSE: print("load_normal_knee_coords() called!")
 
-    coords = pd.read_excel(fn, engine="openpyxl", usecols="B,D,E")
+    sheet_names=["8.29 re-measure", "8.29 2nd", "8.29 3rd", "8.6"]
+    coords = pd.read_excel(fn, engine="openpyxl", sheet_name=sheet_num, usecols="B,D,E")
 
     coords["Frame Number"].ffill(inplace=True)    
-    coords.set_index("Frame Number")
-    coords.drop("Frame Number", axis=1, inplace=True)
+    coords.set_index("Frame Number", inplace=True)
 
     assert coords.isnull().values.any() == 0
 
     flx_ext_pts = [117, 299, 630, 117]
     uqf = coords.index.unique()
 
-    metadata = {"knee_name": NotImplemented, "flx_xt_pt": flx_ext_pts[sheet_num], "f0": uqf[0], "fN": uqf[-1]}
+    metadata = {"knee_name": sheet_names[sheet_num], "flx_ext_pt": flx_ext_pts[sheet_num], "f0": uqf[0], "fN": uqf[-1]}
 
     return coords, metadata
 
@@ -58,8 +58,18 @@ def main():
     # Load coords
     coords, metadata = load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 3)
 
-    
+    # Preprocess video
+    video, translation_mxs = aktp.pre_process_video(video)
 
+    # Transform coords
+    coords = aktp.translate_coords(translation_mxs, coords)
+
+    # Segment video
+    regions, masks = aktp.get_three_segments(video, coords)
+
+    # Plot intensities
+    raw_intensities = aktp.measure_region_intensities(regions, masks, ['l','m','r'])
+    aktp.plot_three_intensities(raw_intensities, metadata)
 
 
 

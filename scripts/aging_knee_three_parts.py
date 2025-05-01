@@ -12,6 +12,7 @@ from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 
 VERBOSE = True
+DEBUG = True
 
 def load_aging_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:
     """
@@ -57,10 +58,12 @@ def load_aging_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, D
     coords.index = coords.index.to_series().fillna(method="ffill").astype(int)
     uqf = coords.index.unique()
 
+    assert coords.shape[1] == 2 # only want cols X,Y
+
     metadata = {"knee_name": knee_name, "flx_ext_pt": flx_ext_pt, "f0": uqf[0], "fN": uqf[-1]}
     return coords, metadata
 
-def load_tif(filename):
+def load_tif(filename) -> np.ndarray:
     """
     Inputs:
         filename (str) - path to the grayscale .tif multi-image file to be loaded. 
@@ -77,13 +80,14 @@ def load_tif(filename):
     
     return video
 
-def pre_process_video(video):
+def pre_process_video(video: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Inputs:
         video (np.ndarray) - video to be pre-processed. Dimensions (nframes, height, width)
 
     Outputs:
         video (np.ndarray) - processed video. Dimensions (nframes, height, width)
+        translation_mxs (np.ndarray) - translation matrices used to centre each frame
     """
     if VERBOSE: print("pre_process_video() called!")
 
@@ -357,6 +361,9 @@ def main():
     knee_name = "aging-3"
     coords, metadata = load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
     coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
+    print(coords_ctrd.head())
+    print(coords_ctrd.info())
+    exit(420)
 
     # Get masks
     regions, masks = get_three_segments(video_ctrd, coords_ctrd)  
