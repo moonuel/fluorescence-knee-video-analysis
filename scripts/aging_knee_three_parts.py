@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 VERBOSE = True
 
-def load_knee_coords(filename:str, sheet_sel:int) -> Tuple[pd.DataFrame, Dict[str, int]]:
+def load_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:
     """
     Inputs:
         filename (str) - path to the .xlsx coordinates file to be loaded
@@ -33,8 +33,8 @@ def load_knee_coords(filename:str, sheet_sel:int) -> Tuple[pd.DataFrame, Dict[st
     # coords_file = pd.read_excel("../data/adjusted xy coordinates for knee-aging 250403.xlsx", engine='openpyxl', sheet_name=None) # More updated Excel import
 
     # Select data set
-    knee_opts = ['aging-1', 'aging-2', 'aging-3']
-    knee_name = knee_opts[sheet_sel]
+    # knee_opts = ['aging-1', 'aging-2', 'aging-3']
+    # knee_name = knee_opts[sheet_sel]
     coords_sheet = coords_file[knee_name] # Set index = {0,1,2} to choose different data set
 
     # Clean data
@@ -225,7 +225,7 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
     
     return region_intensities
 
-def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normalized=False, save_figs=False) -> None:
+def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normalized=False, show_figs=True, save_figs=False) -> None:
     if VERBOSE: print("plot_intensities() called!")
 
     plt.style.use('default')
@@ -269,15 +269,18 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normali
     for k in keys:
         plt.plot(fns, intensities[k], color=clrs[k], label=ttl_pfx[k] + " knee")
     plt.axvline(metadata["flx_ext_pt"], color='k', linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
-    plt.title("Combined knee pixel intensities " + ttl_sfx)
-
+    plt.title("Knee pixel intensities " + ttl_sfx)
     plt.legend()
+
     if save_figs:
         fn = f"../figures/intensity_plots/{sv_fl_pfx}_combined_{metadata['knee_name']}.png"
         os.makedirs(os.path.dirname(fn), exist_ok=True)
         plt.tight_layout()
         plt.savefig(fn, dpi=300, bbox_inches="tight")
-    plt.show()
+
+    if show_figs:
+        plt.tight_layout()
+        plt.show()
 
     return
 
@@ -286,15 +289,17 @@ def main():
 
     # Load data and metadata
     video = load_tif("../data/1 aging_00000221.tif")
-    sheet_sel = 2
-    coords, metadata = load_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", sheet_sel) # TODO: load all data at once and pass coords as a dict?
+
+    # TODO: wrap coords-dependent code in a loop to process all data sets at once?
+    knee_name = "aging-3"
+    coords, metadata = load_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
 
     # Pre-process data (centroid stabilization)
-    video_ctrd, translation_mxs = pre_process_video(video)
-    coords_ctrd = translate_coords(translation_mxs, coords)
+    video_ctrd, translation_mxs = pre_process_video(video) # Processes *all* frames
+    coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
 
     # Get masks
-    regions, masks = get_three_segments(video_ctrd, coords_ctrd) # Returns dicts
+    regions, masks = get_three_segments(video_ctrd, coords_ctrd)  
 
     # Get intensity data
     keys = ["l", "m", "r"]
@@ -302,8 +307,8 @@ def main():
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    plot_intensities(raw_intensities, metadata, save_figs=True)
-    plot_intensities(normalized_intensities, metadata, normalized=True, save_figs=True)
+    plot_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
+    plot_intensities(normalized_intensities, metadata, normalized=True, save_figs=True, show_figs=False)
 
 if __name__ == "__main__":
     main()
