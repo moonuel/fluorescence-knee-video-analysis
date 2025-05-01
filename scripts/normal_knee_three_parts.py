@@ -37,7 +37,7 @@ def load_normal_knee_coords(fn:str, sheet_num:int) -> pd.DataFrame:
     sheet_names=["8.29 re-measure", "8.29 2nd", "8.29 3rd", "8.6"]
     coords = pd.read_excel(fn, engine="openpyxl", sheet_name=sheet_num, usecols="B,D,E")
 
-    coords["Frame Number"].ffill(inplace=True)    
+    coords["Frame Number"] = coords["Frame Number"].ffill().astype(int)
     coords.set_index("Frame Number", inplace=True)
 
     assert coords.isnull().values.any() == 0
@@ -68,15 +68,17 @@ def main():
     regions, masks = aktp.get_three_segments(video, coords, thresh_scale=0.65)
 
     keys = ['l','m','r']
-    # for k in keys:
-    #     for idx, frame in enumerate(regions[k]):
-    #         cv2.imshow("",frame)
-    #         if cv2.waitKey(10) == ord('q'): break
-    # cv2.destroyAllWindows()
+    for k in keys:
+        for idx, frame in enumerate(regions[k]):
+            cv2.imshow("",frame)
+            if cv2.waitKey(10) == ord('q'): break
+    cv2.destroyAllWindows()
 
     # Plot intensities
     raw_intensities = aktp.measure_region_intensities(regions, masks, keys)
-    aktp.plot_three_intensities(raw_intensities, metadata)
+    normalized_intensities = aktp.measure_region_intensities(regions, masks, keys, normalized=True)
+    aktp.plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
+    aktp.plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
 
 
 
