@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 VERBOSE = True
 
-def load_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:
+def load_aging_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:
     """
     Inputs:
         filename (str) - path to the .xlsx coordinates file to be loaded
@@ -24,7 +24,7 @@ def load_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[st
         metadata (Dict) - contains information mostly relevant for plotting. See keys for info.
     """
     
-    if VERBOSE: print("load_knee_coords() called!")
+    if VERBOSE: print("load_aging_knee_coords() called!")
 
     # Import knee coordinates
     coords_file = pd.read_excel(filename, engine='openpyxl', sheet_name=None) # More updated Excel import
@@ -232,7 +232,7 @@ def _measure_region_intensity(region: np.ndarray) -> np.ndarray:
     return intensities
 
 # TODO: refine return type hint. TypedDict? 
-def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray, bool]: 
+def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict: 
     """
     Inputs: 
         regions (Dict[str, np.ndarray]) - segmented regions for which brightness is to be measured
@@ -261,11 +261,11 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
 
     return region_intensities
 
-def plot_three_intensities(intensities: Dict[str, np.ndarray, bool], metadata: Dict[str, str, int], show_figs=True, save_figs=False) -> None:
+def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, save_figs=False) -> None:
     """
     Inputs:
         intensities (Dict[str, np.ndarray, bool]) - region intensity values to be plotted 
-        metadata (Dict[str, str, int]) - plotting metadata from load_knee_coords()
+        metadata (Dict[str, str, int]) - plotting metadata from load_aging_knee_coords()
         show_figs (bool) - show or hide figs. Default is True
         save_figs (bool) - save or don't safe figs to standard "figures/" directory. Default is False
     """
@@ -329,7 +329,7 @@ def plot_three_intensities(intensities: Dict[str, np.ndarray, bool], metadata: D
 
 
 # TODO: try different derivative approximations? i.e. second order central fin diff + second order bkwd/fwd diff?
-def get_three_local_derivs(intensities: Dict[str, np.ndarray, bool]) -> Dict[str, np.ndarray]:
+def get_three_local_derivs(intensities: Dict) -> Dict[str, np.ndarray]:
     """
     Inputs:
         intensities (Dict[str, np.ndarray, bool]) - region intensities for which derivatives are to be obtained
@@ -355,7 +355,7 @@ def main():
 
     # TODO: wrap coords-dependent code in a loop to process all data sets at once?
     knee_name = "aging-3"
-    coords, metadata = load_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
+    coords, metadata = load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
     coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
 
     # Get masks
@@ -382,3 +382,4 @@ def main():
 if __name__ == "__main__":
     main()
 
+# TODO: refine Dict[] type hints where there are multiple return types? consider making an object class hmmmm 
