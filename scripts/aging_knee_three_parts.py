@@ -11,10 +11,6 @@ import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 
-DATA_IDX = 2
-MODIFY_DATA = True 
-GENERATE_FIGURES = False
-LOOP = False
 VERBOSE = True
 
 def load_knee_coords(filename:str, sheet_sel:int) -> Tuple[pd.DataFrame, Dict[str, int]]:
@@ -229,7 +225,7 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
     
     return region_intensities
 
-def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normalized=False, save_figs=False):
+def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normalized=False, save_figs=False) -> None:
     if VERBOSE: print("plot_intensities() called!")
 
     plt.style.use('default')
@@ -283,17 +279,7 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, normali
         plt.savefig(fn, dpi=300, bbox_inches="tight")
     plt.show()
 
-
-    return None
-
-# Intended code execution path:
-# > Load video
-# > Load coords 
-# > Centre video 
-# > Centre coords
-# > Get masks
-# > Process data
-# > Plot data 
+    return
 
 def main():
     if VERBOSE: print("main() called!")
