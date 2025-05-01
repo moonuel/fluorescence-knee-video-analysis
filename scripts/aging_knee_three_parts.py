@@ -21,8 +21,7 @@ def load_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[st
 
     Outputs:
         coords (pd.DataFrame) - contains the pairs of coordinates provided by Huizhu @ Fudan University
-        knee_name (str) - the name of the selected Excel sheet    
-        flx_ext_pt (int) - the midpoint of the flexion/extension cycle
+        metadata (Dict) - contains information mostly relevant for plotting. See keys for info.
     """
     
     if VERBOSE: print("load_knee_coords() called!")
@@ -79,6 +78,13 @@ def load_tif(filename):
     return video
 
 def pre_process_video(video):
+    """
+    Inputs:
+        video (np.ndarray) - video to be pre-processed. Dimensions (nframes, height, width)
+
+    Outputs:
+        video (np.ndarray) - processed video. Dimensions (nframes, height, width)
+    """
     if VERBOSE: print("pre_process_video() called!")
 
     video_ctrd = []
@@ -97,6 +103,13 @@ def pre_process_video(video):
     return video_ctrd, translation_mxs
 
 def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.DataFrame:
+    """
+    Inputs: 
+        translation_mxs (np.ndarray) - 2x3 translation matrices
+        coords (pd.DataFrame) - df of coordinates to be transformed. Expected format: coords.index := frame number; four points per frame
+    Outputs: 
+        coords_ctrd (pd.DataFrame) - df of transformed coordinates
+    """
     if VERBOSE: print("translate_coords() called!")
 
     coords_ctrd = pd.DataFrame(np.nan, index=coords.index, columns=coords.columns) # empty dataframe
@@ -114,6 +127,14 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
     return coords_ctrd
 
 def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    """
+    Inputs: 
+        video (np.ndarray) - video to be manually segmented
+        coords (np.ndarray) - coordinates to use for three part segmentation
+    Outputs:
+        regions (Dict[str, np.ndarray]) - segmented regions obtained 
+        masks (Dict[str, np.ndarray]) - segmented masks obtained
+    """
     if VERBOSE: print("get_three_segments() called!")
 
     video = video.copy()
@@ -196,6 +217,9 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray) -> Tuple[Dict[str,
     return regions, masks
 
 def _measure_region_intensity(region: np.ndarray) -> np.ndarray:
+    """
+        Helper function. Returns sum of pixel intensities for every frame
+    """
     # if VERBOSE: print("_measure_region_intensity() called!")
 
     intensities = []
@@ -207,7 +231,17 @@ def _measure_region_intensity(region: np.ndarray) -> np.ndarray:
 
     return intensities
 
-def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray]:
+# TODO: refine return type hint. TypedDict? 
+def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, np.ndarray], keys: List[str], normalized=False) -> Dict[str, np.ndarray, bool]: 
+    """
+    Inputs: 
+        regions (Dict[str, np.ndarray]) - segmented regions for which brightness is to be measured
+        masks (Dict[str, np.ndarray]) - corresponding segmented masks used for normalization
+        keys (List[str]) - specifies which regions are to be measured
+        normalized (bool) - flag to normalize data
+    Outputs:
+        region_intensities (Dict[str, np.ndarray, bool]) - Dict of region intensity readings (np.ndarray); and also a normalized (bool) flag
+    """
     if VERBOSE: print("measure_region_intensities() called!")
 
     if normalized:
@@ -227,8 +261,15 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
 
     return region_intensities
 
-def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, show_figs=True, save_figs=False) -> None:
-    if VERBOSE: print("plot_intensities() called!")
+def plot_three_intensities(intensities: Dict[str, np.ndarray, bool], metadata: Dict[str, str, int], show_figs=True, save_figs=False) -> None:
+    """
+    Inputs:
+        intensities (Dict[str, np.ndarray, bool]) - region intensity values to be plotted 
+        metadata (Dict[str, str, int]) - plotting metadata from load_knee_coords()
+        show_figs (bool) - show or hide figs. Default is True
+        save_figs (bool) - save or don't safe figs to standard "figures/" directory. Default is False
+    """
+    if VERBOSE: print("plot_three_intensities() called!")
 
     normalized = intensities["normalized"] # Get intensity metadata
     keys = ["l", "m", "r"] # Hardcoded 
@@ -287,8 +328,15 @@ def plot_intensities(intensities: Dict[str, np.ndarray], metadata: Dict, show_fi
     return
 
 
-def get_local_derivs(intensities: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    if VERBOSE: print("get_local_derivs() called!")
+# TODO: try different derivative approximations? i.e. second order central fin diff + second order bkwd/fwd diff?
+def get_three_local_derivs(intensities: Dict[str, np.ndarray, bool]) -> Dict[str, np.ndarray]:
+    """
+    Inputs:
+        intensities (Dict[str, np.ndarray, bool]) - region intensities for which derivatives are to be obtained
+    Outputs:
+        derivs (Dict[np.ndarray]) - derivatives obtained
+    """
+    if VERBOSE: print("get_three_local_derivs() called!")
 
     keys = ['l','m','r']
     derivs = {}
@@ -319,12 +367,17 @@ def main():
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    # plot_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    # plot_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+    # plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
+    # plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
 
     # Get per-region rate of change
-    raw_deriv = get_local_derivs(raw_intensities)
+    raw_deriv = get_three_local_derivs(raw_intensities)
     # print(raw_deriv)
+
+    for k in keys:
+        plt.plot(raw_deriv[k], label=f"{k} knee")
+    plt.legend()
+    plt.show()
 
 if __name__ == "__main__":
     main()
