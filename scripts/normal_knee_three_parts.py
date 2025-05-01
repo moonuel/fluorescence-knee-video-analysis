@@ -41,7 +41,13 @@ def load_normal_knee_coords(fn:str, sheet_num:int) -> pd.DataFrame:
     coords.drop("Frame Number", axis=1, inplace=True)
 
     assert coords.isnull().values.any() == 0
-    return coords
+
+    flx_ext_pts = [117, 299, 630, 117]
+    uqf = coords.index.unique()
+
+    metadata = {"knee_name": NotImplemented, "flx_xt_pt": flx_ext_pts[sheet_num], "f0": uqf[0], "fN": uqf[-1]}
+
+    return coords, metadata
 
 def main():
     if VERBOSE: print("main() called!")
@@ -50,10 +56,11 @@ def main():
     video = load_avi("../data/video_1.avi")
 
     # Load coords
-    coords = load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 3)
-    coords.info()
+    coords, metadata = load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 3)
 
     
+
+
 
 
 if __name__ == "__main__":
