@@ -3,34 +3,34 @@ import numpy as np
 import os
 from tifffile import imread as tif_imread
 from src.config import VERBOSE
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Union
 
 
-def load_aging_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:
+def load_aging_knee_coords(filename:str, knee_id:Union[str, int]) -> Tuple[pd.DataFrame, Dict[str, int]]:
     """
     Inputs:
         filename (str) - path to the .xlsx coordinates file to be loaded
-        sheet_sel (int) - index of the Excel sheet to be used 
+        knee_id (str|int) - name or index of the Excel sheet to be used 
 
     Outputs:
         coords (pd.DataFrame) - contains the pairs of coordinates provided by Huizhu @ Fudan University
         metadata (Dict) - contains information mostly relevant for plotting. See keys for info.
     """
-    
     if VERBOSE: print("load_aging_knee_coords() called!")
 
+    # Implement function overload with knee_id as int
+    if isinstance(knee_id, int): 
+        if VERBOSE: print(" > overloaded func!")
+        with pd.ExcelFile(filename, engine="openpyxl") as xl:
+            sheet_names = xl.sheet_names
+        knee_id = sheet_names[knee_id]
+    
     # Import knee coordinates
-    coords_file = pd.read_excel(filename, engine='openpyxl', sheet_name=None) # More updated Excel import
-    # coords_file = pd.read_excel("../data/xy coordinates for knee-aging three cycles 250303.xlsx", engine='openpyxl', sheet_name=None) # More updated Excel import
-    # coords_file = pd.read_excel("../data/adjusted xy coordinates for knee-aging 250403.xlsx", engine='openpyxl', sheet_name=None) # More updated Excel import
-
-    # Select data set
-    # knee_opts = ['aging-1', 'aging-2', 'aging-3']
-    # knee_name = knee_opts[sheet_sel]
-    coords_sheet = coords_file[knee_name] # Set index = {0,1,2} to choose different data set
+    coords_sheet = pd.read_excel(filename, engine='openpyxl', sheet_name=knee_id) # More updated Excel import
+    # coords_sheet = coords_sheet[knee_id]
 
     # Clean data
-    coords_sheet.drop(columns=['Unnamed: 0', 'Unnamed: 5'], axis=1, inplace=True) # No information
+    coords_sheet.drop(columns=['Unnamed: 0', 'Unnamed: 5'], axis=1, inplace=True)
 
     na_coords_1 = coords_sheet['Frame Number'].isna() & coords_sheet['X'].isna() & coords_sheet['Y'].isna() # What was I cooking
     na_coords_2 = coords_sheet['Frame Number.1'].isna() & coords_sheet['X.1'].isna() & coords_sheet['Y.1'].isna()
@@ -52,7 +52,7 @@ def load_aging_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, D
 
     assert coords.shape[1] == 2 # only want cols X,Y
 
-    metadata = {"knee_name": knee_name, "flx_ext_pt": flx_ext_pt, "f0": uqf[0], "fN": uqf[-1]}
+    metadata = {"knee_id": knee_id, "flx_ext_pt": flx_ext_pt, "f0": uqf[0], "fN": uqf[-1]}
     return coords, metadata
 
 def load_tif(filename) -> np.ndarray:
