@@ -128,6 +128,7 @@ def centroid_stabilization(frame: np.ndarray, blur_strength: int = 41, thresh_sc
 
     # Validate blur strength
     if blur_strength % 2 == 0 and blur_strength > 0:
+        print(f"centroid_stabilization(): blur_strength={blur_strength} must be a positive int")
         blur_strength = abs(blur_strength)
         blur_strength = blur_strength + 1
 
