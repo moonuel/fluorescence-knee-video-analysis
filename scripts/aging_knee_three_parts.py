@@ -394,33 +394,62 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame) -> None:
     cv2.destroyAllWindows()    
     return
 
+def smooth_coords(coords:pd.DataFrame, window_size:int) -> pd.DataFrame:
+    """Implements a moving average filter over the coordinate data."""
+    if VERBOSE: print("smooth_coords() called!")
+
+    assert coords.shape[0]%4 == 0
+    nrows=coords.shape[0]//4
+
+    p1 = coords.iloc[0::4, :].copy()
+    p2 = coords.iloc[1::4, :].copy()
+    p3 = coords.iloc[2::4, :].copy()
+    p4 = coords.iloc[3::4, :].copy()
+
+    ps = [p1, p2, p3, p4]
+    for p in ps:
+        p["X"] = p["X"].rolling(window_size, min_periods=1, center=True).mean()
+        p["Y"] = p["Y"].rolling(window_size, min_periods=1, center=True).mean()
+    
+    coords_smtd = []
+    for r in range(nrows):
+        for p in ps:
+            coords_smtd.append(p.iloc[r])
+    coords_smtd = pd.DataFrame(coords_smtd)
+
+    return coords_smtd
+
 def main():
     if VERBOSE: print("main() called!")
 
-    # Load data and metadata
+    # Process the video data
     video = load_tif("../data/1 aging_00000221.tif")
-    video_ctrd, translation_mxs = pre_process_video(video) # Processes *all* frames
+    video_ctrd, translation_mxs = pre_process_video(video) # Centers *all* frames
 
-    # TODO: wrap coords-dependent code in a loop to process all data sets at once?
-    knee_name = "aging-3"
+    # Process the coord data. TODO: wrap coords-dependent code in a loop to process all data sets at once?
+    knee_name = "aging-3" 
     coords, metadata = load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
     coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
+    coords_smtd = smooth_coords(coords_ctrd, 5) # smooth the noise in the coord data
+
+    plot_coords(video_ctrd, coords_ctrd) # Validate smoothing
+    plot_coords(video_ctrd, coords_smtd)
 
     # Get masks
     regions, masks = get_three_segments(video_ctrd, coords_ctrd)  
     keys = ["l", "m", "r"]
 
+    display_regions(regions, keys) # Validate regions
 
-    display_regions(regions, keys)
-
-    exit(420)
     # Get intensity data
     raw_intensities = measure_region_intensities(regions, masks, keys) # Returns a dict
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+    save_figs = True
+    show_figs = True
+    plot_three_intensities(raw_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
+    plot_three_intensities(normalized_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
 
     # Get per-region rate of change
     raw_deriv = get_three_local_derivs(raw_intensities)
