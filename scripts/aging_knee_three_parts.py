@@ -80,6 +80,27 @@ def load_tif(filename) -> np.ndarray:
     
     return video
 
+def save_nparray(array:np.ndarray, filepath:str) -> None:
+    """Saves numpy array as .npy file"""
+    if VERBOSE: print("save_nparray() called!")
+
+    if not isinstance(array, np.ndarray):
+        raise TypeError("save_nparray(): video must be a numpy array")
+
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    np.save(filepath, array)
+    return
+
+def load_nparray(filepath:str) -> np.ndarray:
+    """Loads numpy array from .npy file"""
+    if VERBOSE: print("load_nparray() called!")
+
+    if not os.path.exists(os.path.dirname(filepath)):
+        raise FileNotFoundError("load_nparray(): specified file not found")
+    array = np.load(filepath)
+
+    return array
+
 def pre_process_video(video: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Inputs:
@@ -333,15 +354,15 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, sa
     return
 
 
-# TODO: try different derivative approximations? i.e. second order central fin diff + second order bkwd/fwd diff?
-def get_three_local_derivs(intensities: Dict) -> Dict[str, np.ndarray]:
+def get_intensity_diffs(intensities: Dict) -> Dict[str, np.ndarray]:
     """
+    Returns the difference in intensity values between every frame (backward difference). 
     Inputs:
         intensities (Dict[str, np.ndarray, bool]) - region intensities for which derivatives are to be obtained
     Outputs:
         derivs (Dict[np.ndarray]) - derivatives obtained
     """
-    if VERBOSE: print("get_three_local_derivs() called!")
+    if VERBOSE: print("get_intensity_diffs() called!")
 
     keys = ['l','m','r']
     derivs = {}
@@ -435,18 +456,30 @@ def get_intensity_derivs(intensities:Dict[str,np.ndarray]) -> Dict[str,np.ndarra
         derivs[k] = np.gradient(intensities[k], edge_order=2)
     return derivs
 
+def view_frames(video:np.ndarray) -> None:
+    """Shows all frames. Press any button to advance, or 'q' to exit"""
+    if VERBOSE: print("view_frames() called!")
+
+    for cf, frame in enumerate(video):
+        cv2.imshow("view_frames()", frame)
+        if cv2.waitKey(0) == ord('q'): break
+    cv2.destroyAllWindows()
+
+    return
+
+
 def main():
     if VERBOSE: print("main() called!")
 
-    # Process the video data
-    video = load_tif("../data/1 aging_00000221.tif")
+    # Process the video data 
+    video = load_tif("../data/1 aging_00000221.tif") # TODO: for performance gains: write the centered video data to file, but first check if it exists
     video_ctrd, translation_mxs = pre_process_video(video) # Centers *all* frames
 
     # Process the coord data. TODO: wrap coords-dependent code in a loop to process all data sets at once?
     knee_name = "aging-3" 
     coords, metadata = load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
     coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
-    coords_ctrd = smooth_coords(coords_ctrd, 5) # smooth the noise in the coord data
+    coords_ctrd = smooth_coords(coords_ctrd, 5)
 
     plot_coords(video_ctrd, coords_ctrd) # Validate smoothing
 
@@ -461,14 +494,16 @@ def main():
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
+    show_figs = True
     save_figs = False
-    show_figs = False
-    # plot_three_intensities(raw_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
-    # plot_three_intensities(normalized_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
+    plot_three_intensities(raw_intensities, metadata, show_figs, save_figs)
+    plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs)
+
+    exit(0)
 
     # Get per-region rate of change
-    # raw_deriv = get_three_local_derivs(raw_intensities)
-    raw_deriv = get_intensity_derivs(raw_intensities)
+    # raw_deriv = get_intensity_diffs(raw_intensities)
+    raw_deriv = get_intensity_derivs(raw_intensities) 
 
     plt.close('all')
     for k in keys:
