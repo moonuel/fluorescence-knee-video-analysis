@@ -419,6 +419,22 @@ def smooth_coords(coords:pd.DataFrame, window_size:int) -> pd.DataFrame:
 
     return coords_smtd
 
+def get_intensity_derivs(intensities:Dict[str,np.ndarray]) -> Dict[str,np.ndarray]:
+    """
+    Implements a second-order finite difference approximation for the first derivative of the intensity data
+    Inputs:
+        intensities (Dict[str, np.ndarray, bool]) - region intensities for which derivatives are to be obtained
+    Outputs:
+        derivs (Dict[np.ndarray]) - derivatives obtained
+    """
+    if VERBOSE: print("get_intensity_derivs() called!")
+
+    keys = ['l','m','r']
+    derivs = {}
+    for k in keys:
+        derivs[k] = np.gradient(intensities[k], edge_order=2)
+    return derivs
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -430,29 +446,29 @@ def main():
     knee_name = "aging-3" 
     coords, metadata = load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
     coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
-    coords_smtd = smooth_coords(coords_ctrd, 5) # smooth the noise in the coord data
+    coords_ctrd = smooth_coords(coords_ctrd, 5) # smooth the noise in the coord data
 
     plot_coords(video_ctrd, coords_ctrd) # Validate smoothing
-    plot_coords(video_ctrd, coords_smtd)
 
     # Get masks
     regions, masks = get_three_segments(video_ctrd, coords_ctrd)  
     keys = ["l", "m", "r"]
 
     display_regions(regions, keys) # Validate regions
-
+    
     # Get intensity data
     raw_intensities = measure_region_intensities(regions, masks, keys) # Returns a dict
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    save_figs = True
-    show_figs = True
-    plot_three_intensities(raw_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
-    plot_three_intensities(normalized_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
+    save_figs = False
+    show_figs = False
+    # plot_three_intensities(raw_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
+    # plot_three_intensities(normalized_intensities, metadata, save_figs=save_figs, show_figs=show_figs)
 
     # Get per-region rate of change
-    raw_deriv = get_three_local_derivs(raw_intensities)
+    # raw_deriv = get_three_local_derivs(raw_intensities)
+    raw_deriv = get_intensity_derivs(raw_intensities)
 
     plt.close('all')
     for k in keys:
