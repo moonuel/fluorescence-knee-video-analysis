@@ -1,15 +1,12 @@
 import os
 import sys
-module_path = os.path.abspath(os.path.join('..', 'utils')) # Build an absolute path from this notebook's parent directory
-if module_path not in sys.path: # Add to sys.path if not already present
-    sys.path.append(module_path)
 import numpy as np
 import pandas as pd
 import cv2
 import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
-import aging_knee_three_parts as aktp
+import src.core.knee_segmentation as ks
 
 VERBOSE = True
 
@@ -59,13 +56,13 @@ def main():
     coords, metadata = load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 3)
 
     # Preprocess video
-    video, translation_mxs = aktp.pre_process_video(video)
+    video, translation_mxs = ks.pre_process_video(video)
 
     # Transform coords
-    coords = aktp.translate_coords(translation_mxs, coords)
+    coords = ks.translate_coords(translation_mxs, coords)
 
     # Segment video
-    regions, masks = aktp.get_three_segments(video, coords, thresh_scale=0.65)
+    regions, masks = ks.get_three_segments(video, coords, thresh_scale=0.65)
 
     keys = ['l','m','r']
     for k in keys:
@@ -75,10 +72,10 @@ def main():
     cv2.destroyAllWindows()
 
     # Plot intensities
-    raw_intensities = aktp.measure_region_intensities(regions, masks, keys)
-    normalized_intensities = aktp.measure_region_intensities(regions, masks, keys, normalized=True)
-    aktp.plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    aktp.plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+    raw_intensities = ks.measure_region_intensities(regions, masks, keys)
+    normalized_intensities = ks.measure_region_intensities(regions, masks, keys, normalized=True)
+    ks.plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
+    ks.plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
 
 
 

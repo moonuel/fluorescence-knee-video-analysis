@@ -7,10 +7,12 @@
 data/*
 output/*
 /_progress_meeting_slides_/
-trash/*
+temp/*
 /workspace/
 __pycache__/*
 *.pyc
 /figures/
 notebooks/workshop.ipynb
 notebooks/old knee three parts analysis.ipynb
+docs/meetings/
+61.0

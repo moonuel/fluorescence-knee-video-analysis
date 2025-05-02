@@ -1,13 +1,10 @@
 import os
 import sys
-module_path = os.path.abspath(os.path.join('..', 'utils')) # Build an absolute path from this notebook's parent directory
-if module_path not in sys.path: # Add to sys.path if not already present
-    sys.path.append(module_path)
 import numpy as np
 import pandas as pd
 import cv2
 from tifffile import imread as tif_imread
-import utils
+from src.utils import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 
@@ -466,53 +463,3 @@ def view_frames(video:np.ndarray) -> None:
     cv2.destroyAllWindows()
 
     return
-
-
-def main():
-    if VERBOSE: print("main() called!")
-
-    # Process the video data 
-    video = load_tif("../data/1 aging_00000221.tif") # TODO: for performance gains: write the centered video data to file, but first check if it exists
-    video_ctrd, translation_mxs = pre_process_video(video) # Centers *all* frames
-
-    # Process the coord data. TODO: wrap coords-dependent code in a loop to process all data sets at once?
-    knee_name = "aging-3" 
-    coords, metadata = load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
-    coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
-    coords_ctrd = smooth_coords(coords_ctrd, 5)
-
-    plot_coords(video_ctrd, coords_ctrd) # Validate smoothing
-
-    # Get masks
-    regions, masks = get_three_segments(video_ctrd, coords_ctrd)  
-    keys = ["l", "m", "r"]
-
-    display_regions(regions, keys) # Validate regions
-    
-    # Get intensity data
-    raw_intensities = measure_region_intensities(regions, masks, keys) # Returns a dict
-    normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
-
-    # Plot intensities
-    show_figs = True
-    save_figs = False
-    plot_three_intensities(raw_intensities, metadata, show_figs, save_figs)
-    plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs)
-
-    exit(0)
-
-    # Get per-region rate of change
-    # raw_deriv = get_intensity_diffs(raw_intensities)
-    raw_deriv = get_intensity_derivs(raw_intensities) 
-
-    plt.close('all')
-    for k in keys:
-        plt.plot(raw_deriv[k], label=f"{k} knee")
-    plt.legend()
-    plt.show()
-    
-
-if __name__ == "__main__":
-    main()
-
-# TODO: refine Dict[] type hints where there are multiple return types? consider making an object class hmmmm 
