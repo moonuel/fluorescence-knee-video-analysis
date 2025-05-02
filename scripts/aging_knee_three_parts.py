@@ -361,6 +361,15 @@ def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
         if cv2.waitKey(0) == ord('q'): break
     cv2.destroyAllWindows()
 
+def smooth_coords(coords:pd.DataFrame, window_size:int) -> pd.DataFrame:
+    """Implements a moving average filter over the coordinate data."""
+    if VERBOSE: print("smooth_coords() called!")
+
+    coords_smtd = coords.copy()
+    coords_smtd['X'] = coords_smtd["X"].rolling(window_size, min_periods=1).mean()
+    coords_smtd['Y'] = coords_smtd["Y"].rolling(window_size, min_periods=1).mean()
+    
+    return coords_smtd
 
 def main():
     if VERBOSE: print("main() called!")
