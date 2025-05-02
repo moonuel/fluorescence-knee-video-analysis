@@ -371,6 +371,29 @@ def smooth_coords(coords:pd.DataFrame, window_size:int) -> pd.DataFrame:
     
     return coords_smtd
 
+def plot_coords(video:np.ndarray, coords:pd.DataFrame) -> None:
+    if VERBOSE: print("plot_coords() called!")
+
+    video = video.copy()
+    uqf = coords.index.unique()
+    for cf in uqf:
+
+        frame = video[cf]
+        pts = coords.loc[cf].to_numpy().astype(int)
+
+        for x,y in pts:
+            cv2.circle(frame, (x,y), 3, (255,255,255))
+
+        cv2.line(frame, tuple(pts[0]), tuple(pts[1]), (255,255,255), 1)
+        cv2.line(frame, tuple(pts[2]), tuple(pts[3]), (255,255,255), 1)
+
+        cv2.imshow("plot_coords()", frame)
+
+        if cv2.waitKey(0) == ord('q'): break
+
+    cv2.destroyAllWindows()    
+    return
+
 def main():
     if VERBOSE: print("main() called!")
 
