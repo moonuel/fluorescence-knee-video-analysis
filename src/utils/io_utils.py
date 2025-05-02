@@ -3,6 +3,7 @@ import numpy as np
 import os
 from tifffile import imread as tif_imread
 from src.config import VERBOSE
+from typing import Tuple, Dict
 
 
 def load_aging_knee_coords(filename:str, knee_name:str) -> Tuple[pd.DataFrame, Dict[str, int]]:

@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 import cv2
-import utils
+from src.utils import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 import src.core.knee_segmentation as ks
