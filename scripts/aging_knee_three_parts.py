@@ -376,13 +376,13 @@ def main():
 
     # Get masks
     regions, masks = get_three_segments(video_ctrd, coords_ctrd)  
+    keys = ["l", "m", "r"]
 
 
-    display_regions(regions)
+    display_regions(regions, keys)
 
     exit(420)
     # Get intensity data
-    keys = ["l", "m", "r"]
     raw_intensities = measure_region_intensities(regions, masks, keys) # Returns a dict
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
