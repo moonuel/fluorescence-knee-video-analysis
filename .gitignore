@@ -13,3 +13,4 @@ __pycache__/*
 *.pyc
 /figures/
 notebooks/workshop.ipynb
+notebooks/old knee three parts analysis.ipynb
