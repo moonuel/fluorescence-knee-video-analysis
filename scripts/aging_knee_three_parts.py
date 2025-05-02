@@ -351,6 +351,17 @@ def get_three_local_derivs(intensities: Dict) -> Dict[str, np.ndarray]:
     return derivs
 
 
+def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
+    if VERBOSE: print("display_regions() called!")
+
+    n_frames = regions[keys[0]].shape[0] # Assume each np.ndarray in regions[] has the same dimensions
+    for cf in np.arange(n_frames):
+        f_stack = np.hstack(tuple([utils.crop_square_frame(regions[k][cf], n=350) for k in keys]))
+        cv2.imshow(f"display_regions()", f_stack)
+        if cv2.waitKey(0) == ord('q'): break
+    cv2.destroyAllWindows()
+
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -362,30 +373,32 @@ def main():
     knee_name = "aging-3"
     coords, metadata = load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
     coords_ctrd = translate_coords(translation_mxs, coords) # Processes *some* frames
-    print(coords_ctrd.head())
-    print(coords_ctrd.info())
-    exit(420)
 
     # Get masks
     regions, masks = get_three_segments(video_ctrd, coords_ctrd)  
 
+
+    display_regions(regions)
+
+    exit(420)
     # Get intensity data
     keys = ["l", "m", "r"]
     raw_intensities = measure_region_intensities(regions, masks, keys) # Returns a dict
     normalized_intensities = measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    # plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    # plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+    plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
+    plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
 
     # Get per-region rate of change
     raw_deriv = get_three_local_derivs(raw_intensities)
-    # print(raw_deriv)
 
+    plt.close('all')
     for k in keys:
         plt.plot(raw_deriv[k], label=f"{k} knee")
     plt.legend()
     plt.show()
+    
 
 if __name__ == "__main__":
     main()
