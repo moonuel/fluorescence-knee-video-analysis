@@ -117,3 +117,20 @@ def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
         cv2.imshow(f"display_regions()", f_stack)
         if cv2.waitKey(0) == ord('q'): break
     cv2.destroyAllWindows()
+
+def draw_middle_lines(video:np.ndarray, show_video:bool=False, hplace:float=0.5, vplace:float=0.5) -> np.ndarray:
+    """Draws lines through the middle of the frame. Lines can be offset by optional params"""
+    if VERBOSE: print("draw_middle_lines() called!")
+
+    if not 0 <= hplace <= 1 and not 0 <= vplace <= 1:
+        raise ValueError("draw_middle_lines(): optional params need to be in [0,1]")
+
+    video = video.copy()
+    h, w = video.shape[1:]  
+    for cf, frame in enumerate(video):
+        cv2.line(frame, (0, round(h*hplace)), (w, round(h*hplace)), (255, 255, 255), 1)  # Horizontal line
+        cv2.line(frame, (round(w*vplace), 0), (round(w*vplace), h), (255, 255, 255), 1)  # Vertical line
+    
+    if show_video: view_frames(video)
+
+    return video

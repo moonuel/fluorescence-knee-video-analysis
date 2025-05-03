@@ -333,8 +333,6 @@ def crop_video_square(video:np.ndarray, h:int, w:int=None) -> np.ndarray:
         f_c = crop_frame_square(frame, h, w)
         vid_c.append(f_c)
     vid_c = np.array(vid_c)
-    print(video.shape)
-    print(vid_c.shape)
     return vid_c
 
 def pixels_left_of_line(frame, p1, p2):
@@ -420,3 +418,21 @@ def morph_open(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
     video_o = np.array(video_o)
 
     return video_o
+
+def rotate_video(video:np.ndarray, angle:int, center:Tuple[int,int]=None) -> np.ndarray:
+    "Rotates (cw) an entire video (nframes,hgt,wth) around the center by a given angle. Optionally specify the center of rotation"
+    if VERBOSE: print("rotate_video() called!")
+
+    h,w = video.shape[1:]
+    if center is None:
+        center = (w//2, h//2) # Default to frame center
+
+    rot_mx = cv2.getRotationMatrix2D(center, -angle, 1)
+    video_r = []
+    for _, frame in enumerate(video):
+        frame = cv2.warpAffine(frame, rot_mx, (w,h))
+        video_r.append(frame)
+    video_r = np.array(video_r)
+
+    return video_r
+
