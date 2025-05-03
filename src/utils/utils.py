@@ -407,3 +407,16 @@ def mask_adaptive(video:np.ndarray, block_size:int, adj_value:int) -> np.ndarray
     masks = np.array(masks)
     
     return masks
+
+def morph_open(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
+    "Implements a morphological opening operation over a grayscale video with dimensions (nframes,hgt,wth)"
+    if VERBOSE: print("morph_open() called!")
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size)
+    video_o = []
+    for _, frame in enumerate(video):
+        frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, kernel)
+        video_o.append(frame)
+    video_o = np.array(video_o)
+
+    return video_o

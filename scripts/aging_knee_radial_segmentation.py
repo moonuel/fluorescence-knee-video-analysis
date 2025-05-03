@@ -23,6 +23,9 @@ def main():
 
     # Get adaptive mean mask
     mask = utils.mask_adaptive(video, 71, -2)
+    mask = utils.morph_open(mask, (15,15)) # clean small artifacts
+
+    views.draw_middle_lines(mask)
 
     views.view_frames(mask)
 
