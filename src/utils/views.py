@@ -35,7 +35,12 @@ def view_frames(video:np.ndarray) -> None:
     """Shows all frames. Press any button to advance, or 'q' to exit"""
     if VERBOSE: print("view_frames() called!")
 
+    h,w = video.shape[1:]
+    btm_l_pos = (10, h - 10)
+
     for cf, frame in enumerate(video):
+        cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+                    fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
         cv2.imshow("view_frames()", frame)
         if cv2.waitKey(0) == ord('q'): break
     cv2.destroyAllWindows()
