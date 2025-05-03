@@ -4,11 +4,12 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from src.config import VERBOSE
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from src.utils import utils
 
 
 def plot_coords(video:np.ndarray, coords:pd.DataFrame) -> None:
+    """Plots the set of coordinates for the three part segmentation"""
     if VERBOSE: print("plot_coords() called!")
 
     video = video.copy()
@@ -35,6 +36,7 @@ def view_frames(video:np.ndarray) -> None:
     """Shows all frames. Press any button to advance, or 'q' to exit"""
     if VERBOSE: print("view_frames() called!")
 
+    video = video.copy() # don't modify original
     h,w = video.shape[1:]
     btm_l_pos = (10, h - 10)
 
@@ -116,6 +118,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, sa
 def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
     if VERBOSE: print("display_regions() called!")
 
+    regions = regions.copy()
     n_frames = regions[keys[0]].shape[0] # Assume each np.ndarray in regions[] has the same dimensions
     for cf in np.arange(n_frames):
         f_stack = np.hstack(tuple([utils.crop_square_frame(regions[k][cf], n=350) for k in keys]))
@@ -136,6 +139,18 @@ def draw_middle_lines(video:np.ndarray, show_video:bool=False, hplace:float=0.5,
         cv2.line(frame, (0, round(h*hplace)), (w, round(h*hplace)), (255, 255, 255), 1)  # Horizontal line
         cv2.line(frame, (round(w*vplace), 0), (round(w*vplace), h), (255, 255, 255), 1)  # Vertical line
     
+    if show_video: view_frames(video)
+
+    return video
+
+def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=False) -> np.ndarray:
+    """Draws a point (x,y) on the frame and displays it"""
+    if VERBOSE: print("draw_point() called!")
+
+    video = video.copy()
+    for cf, frame in enumerate(video):
+        cv2.circle(frame, pt[cf], 3, (255,255,255), -1)
+
     if show_video: view_frames(video)
 
     return video
