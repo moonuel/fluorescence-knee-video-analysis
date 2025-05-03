@@ -9,7 +9,6 @@ import src.core.knee_segmentation as ks
 from src.utils import io, views, utils
 from src.config import VERBOSE
 
-
 def main():
     if VERBOSE: print("main() called!")
 
@@ -21,10 +20,11 @@ def main():
     video = utils.crop_video_square(video, 350)
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.blur_video(video, (31,31), 0)
-    # video = cv2.GaussianBlur(video, (31,31), 0)
 
-    views.view_frames(video)
+    # Get adaptive mean mask
+    mask = utils.mask_adaptive(video, 71, -2)
 
+    views.view_frames(mask)
 
 if __name__ == "__main__":
     main()
