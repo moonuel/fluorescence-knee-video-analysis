@@ -245,47 +245,6 @@ def rescale_frame(frame, pixel_scale, scale_factor=1):
 
     return resized_frame, rescale_factor
 
-
-import numpy as np
-
-def find_closest_point(mask: np.ndarray, axis: int = 0):
-    """
-    Finds the closest point in a binary mask to one side of the frame.
-
-    Parameters:
-        mask (np.ndarray): A binary image mask.
-        axis (int): The side of the frame we want the point closest to.
-            axis = 0   -> closest to bottom (max y) (Default)
-            axis = 1   -> closest to left (min x)
-            axis = 2   -> closest to top (min y)
-            axis = 3   -> closest to right (max x)
-
-    Returns:
-        (int, int): A tuple (x, y) returning the coordinates of the desired point.
-    """
-
-    y, x = np.nonzero(mask)
-    if y.size == 0:
-        return None  # No points found
-
-    # Normalize axis to be in range {0, 1, 2, 3}
-    axis %= 4  
-
-    # Dictionary mapping axis values to corresponding functions
-    index_selector = {
-        0: np.argmax(y),  # Bottom (max y)
-        1: np.argmin(x),  # Left (min x)
-        2: np.argmin(y),  # Top (min y)
-        3: np.argmax(x)   # Right (max x)
-    }
-
-    idx = index_selector[axis]
-    return x[idx], y[idx]
-
-import numpy as np
-
-import numpy as np
-
 def crop_frame_square(frame: np.ndarray, h: int, w: int = None) -> np.ndarray:
     """
     Crops the input frame into a square or rectangular shape around the center.
@@ -348,39 +307,7 @@ def pixels_left_of_line(frame, p1, p2):
     # Classification: left side is positive, right side is negative
     return ((cross > 0) * 255).astype(np.uint8)  # Boolean mask: True if left, False if right
 
-from typing import List, Tuple
-import numpy as np
 
-def get_N_points_on_circle(ctr_pt: Tuple[int, int], ref_pt: Tuple[int, int], N: int) -> List[Tuple[int, int]]:
-    """Returns a list of N equally spaced points on a circle, arranged clockwise.
-    
-    The circle is defined by:
-    - Center point `ctr_pt`
-    - Radius = distance between `ctr_pt` and `ref_pt`
-    - First point is `ref_pt`, followed by the remaining points in clockwise order.
-
-    Args:
-        ctr_pt: (x, y) center of the circle.
-        ref_pt: (x, y) reference point on the circle (first point in the output).
-        N: Number of points to generate. If N=1, returns [ref_pt].
-
-    Returns:
-        List of (x, y) tuples representing the N points on the circle.
-    """
-
-    cx, cy = ctr_pt
-    rx, ry = ref_pt
-    radius = math.hypot(rx - cx, ry - cy)
-    start_angle = math.atan2(ry - cy, rx - cx)  # Angle of ref_pt
-    
-    points = []
-    for i in range(N):
-        angle = start_angle - 2 * math.pi * i / N  # Clockwise
-        x = cx + radius * math.cos(angle)
-        y = cy + radius * math.sin(angle)
-        points.append((round(x), round(y)))
-    
-    return points
 
 def blur_video(video:np.ndarray, kernel_dims:Tuple[int,int], sigma:int=0) -> np.ndarray:
     """Implements a Gaussian blur over a grayscale video with dimensions (nframes,hgt,wth)"""
