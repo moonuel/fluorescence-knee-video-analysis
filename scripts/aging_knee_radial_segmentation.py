@@ -78,6 +78,20 @@ def get_N_points_on_circle(circle_ctr:Tuple[int,int], first_pt:Tuple[int,int], N
     
     return points
 
+def smooth_points(points:List[Tuple[int,int]], window_size:int) -> List[Tuple[int,int]]:
+    """Smooths a set of points using a moving average filter"""
+    if VERBOSE: print("smooth_points() called!")
+
+    # Compute rolling mean using pandas
+    points = pd.DataFrame(points)
+    points[0] = points[0].rolling(window_size, min_periods=1, center=True).mean().astype(int)
+    points[1] = points[1].rolling(window_size, min_periods=1, center=True).mean().astype(int)
+
+    # Cast back to list of tuples    
+    points = list(points.itertuples(index=False, name=None))
+
+    return points
+
 def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], List[Tuple[int,int]] ]:
     """Estimates the position of the femur based on an adaptive mean mask. Assumes femur is pointing to the left of the screen.
     
@@ -107,11 +121,20 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], Lis
         pt[1] = pt[1] + int(h*split) 
         btml_pts.append(tuple(pt))
 
-    views.draw_line(mask, topl_pts, btml_pts) # Validate drawn line
+    # views.draw_line(mask, topl_pts, btml_pts) # Validate drawn line
 
-    # Get midpoint of line 
-    
+    # Get midpoint of left line 
+    midl_pts = [None]
+    for cf in range(1, len(mask)):
+        topl_pt = np.array(topl_pts[cf])
+        btml_pt = np.array(btml_pts[cf])
+        midl_pt = (topl_pt + btml_pt)//2
+        midl_pts.append(tuple(midl_pt))
 
+    # Smooth midpoints
+    midl_pts[1:] = smooth_points(midl_pts[1:], 5)
+
+    views.draw_point(mask, midl_pts)
     
 
     return NotImplemented, NotImplemented
@@ -128,7 +151,7 @@ def main():
     video = utils.crop_video_square(video, int(350*np.sqrt(2))) 
 
     # Slight rotation
-    angle = -26
+    angle = -29
     video = utils.rotate_video(video, angle)
     video = utils.crop_video_square(video, 350) # crop out black borders
     # views.draw_middle_lines(mask, show_video=True) # Validate rotation
@@ -139,7 +162,7 @@ def main():
     mask = utils.morph_open(mask, (15,15)) # clean small artifacts
 
     # > TODO: Get the leftmost points
-    # x TODO: Get the basic femur estimation
+    # > TODO: Get the basic femur estimation
     # x TODO: Brainstorm femur endpoint estimation improvements
     # x TODO: Get points on the interior of the mask region
     # x TODO: Fit least-squares line through all points 
