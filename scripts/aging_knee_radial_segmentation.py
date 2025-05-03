@@ -78,6 +78,44 @@ def get_N_points_on_circle(circle_ctr:Tuple[int,int], first_pt:Tuple[int,int], N
     
     return points
 
+def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], List[Tuple[int,int]] ]:
+    """Estimates the position of the femur based on an adaptive mean mask. Assumes femur is pointing to the left of the screen.
+    
+    Returns (femur_endpts, femur_midpts), 
+        where femur_endpts is the position of the femur inside the knee, 
+        and femur_midpts is a set of points somewhere along the femur 
+    """
+    if VERBOSE: print("estimate_femur_position() called!")
+
+    # Split frame along the middle. TODO: Parameterize the split line?
+    split = 0.5
+    h,w = mask.shape[1:]
+    mask_top = mask[:,0:int(h*split),:]
+    mask_btm = mask[:,int(h*split):,:]
+
+    # Get left-most points on top/bottom halves
+    topl_pts = get_closest_pts_to_edge(mask_top, "l")
+    btml_pts_ = get_closest_pts_to_edge(mask_btm, "l")
+
+    # views.draw_point(mask_top, topl_pts, True) # Validate left-most points
+    # views.draw_point(mask_btm, btml_pts_, True)
+
+    # Convert bottom-left coords to the whole mask
+    btml_pts = [None] # to maintain 1-indexing 
+    for pt in btml_pts_[1:]:
+        pt = list(pt) # for mutability
+        pt[1] = pt[1] + int(h*split) 
+        btml_pts.append(tuple(pt))
+
+    views.draw_line(mask, topl_pts, btml_pts) # Validate drawn line
+
+    # Get midpoint of line 
+    
+
+    
+
+    return NotImplemented, NotImplemented
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -93,6 +131,7 @@ def main():
     angle = -26
     video = utils.rotate_video(video, angle)
     video = utils.crop_video_square(video, 350) # crop out black borders
+    # views.draw_middle_lines(mask, show_video=True) # Validate rotation
 
     # Get adaptive mean mask
     video_blr = utils.blur_video(video, (31,31), 0)
@@ -105,23 +144,17 @@ def main():
     # x TODO: Get points on the interior of the mask region
     # x TODO: Fit least-squares line through all points 
 
-    # Split frame along the middle
-    h,w = mask.shape[1:]
-    mask_top = mask[:,0:h//2,:]
-    mask_btm = mask[:,h//2:,:]
+    
 
-    # Get left-most points
-    tl_pts = get_closest_pts_to_edge(mask_top, "l")
-    bl_pts = get_closest_pts_to_edge(mask_btm, "l")
+    femur_endpts, femur_midpts = estimate_femur_position(mask)
+    
+    exit(420)
 
-    views.draw_point(mask_top, tl_pts, True)
-    views.draw_point(mask_btm, bl_pts, True)
 
     views.view_frames(mask_top)
     views.view_frames(mask_btm)
 
 
-    # views.draw_middle_lines(mask, show_video=True)
     # views.draw_middle_lines(video, show_video=True)
     # views.view_frames(video)
 

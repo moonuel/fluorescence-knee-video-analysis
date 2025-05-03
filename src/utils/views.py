@@ -126,7 +126,7 @@ def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
         if cv2.waitKey(0) == ord('q'): break
     cv2.destroyAllWindows()
 
-def draw_middle_lines(video:np.ndarray, show_video:bool=False, hplace:float=0.5, vplace:float=0.5) -> np.ndarray:
+def draw_middle_lines(video:np.ndarray, show_video:bool=True, hplace:float=0.5, vplace:float=0.5) -> np.ndarray:
     """Draws lines through the middle of the frame. Lines can be offset by optional params"""
     if VERBOSE: print("draw_middle_lines() called!")
 
@@ -143,7 +143,7 @@ def draw_middle_lines(video:np.ndarray, show_video:bool=False, hplace:float=0.5,
 
     return video
 
-def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=False) -> np.ndarray:
+def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=True) -> np.ndarray:
     """Draws a point (x,y) on the frame and displays it"""
     if VERBOSE: print("draw_point() called!")
 
@@ -153,4 +153,16 @@ def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=False) -> np
 
     if show_video: view_frames(video)
 
+    return video
+
+def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int]], show_video:bool=True) -> np.ndarray:
+    """Draws a line on a video between two points"""
+    if VERBOSE: print("draw_line() called!")
+
+    video = video.copy()
+    for cf, frame in enumerate(video):
+        cv2.line(frame, pt1[cf], pt2[cf], (255,255,255), 1)
+    
+    if show_video: view_frames(video)
+    
     return video
