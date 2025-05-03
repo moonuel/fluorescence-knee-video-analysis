@@ -103,7 +103,7 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], Lis
 
     # Split frame along the middle. TODO: Parameterize the split line?
     split = 0.5
-    h,w = mask.shape[1:]
+    nframes,h,w = mask.shape
     mask_top = mask[:,0:int(h*split),:]
     mask_btm = mask[:,int(h*split):,:]
 
@@ -134,10 +134,17 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], Lis
     # Smooth midpoints
     midl_pts[1:] = smooth_points(midl_pts[1:], 5)
 
-    views.draw_point(mask, midl_pts)
+    views.draw_point(mask, midl_pts) # Validate midpoint
+
+    frame_ctr = [(w//2,h//2)]*nframes
+    views.draw_line(mask, midl_pts, frame_ctr) # Validate basic femur estimation
+
     
 
-    return NotImplemented, NotImplemented
+    femur_endpts = frame_ctr
+    femur_midpts = midl_pts
+
+    return femur_endpts, femur_midpts
 
 def main():
     if VERBOSE: print("main() called!")
@@ -159,7 +166,8 @@ def main():
     # Get adaptive mean mask
     video_blr = utils.blur_video(video, (31,31), 0)
     mask = utils.mask_adaptive(video_blr, 71, -2)
-    mask = utils.morph_open(mask, (15,15)) # clean small artifacts
+    mask = utils.morph_open(mask, (15,15)) # clean small 
+    views.view_frames(mask) # Validate mask
 
     # > TODO: Get the leftmost points
     # > TODO: Get the basic femur estimation
@@ -171,6 +179,7 @@ def main():
 
     femur_endpts, femur_midpts = estimate_femur_position(mask)
     
+    views.draw_line(video, femur_endpts, femur_midpts)
     exit(420)
 
 
