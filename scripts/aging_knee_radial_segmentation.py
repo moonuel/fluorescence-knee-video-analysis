@@ -18,20 +18,22 @@ def main():
 
     # Pre-process video
     video = np.rot90(video, k=-1, axes=(1,2))
-    video = utils.crop_video_square(video, 350, 600)
-    video = utils.blur_video(video, (31,31), 0)
-
-    # Get adaptive mean mask
-    mask = utils.mask_adaptive(video, 71, -2)
-    mask = utils.morph_open(mask, (15,15)) # clean small artifacts
+    video = utils.crop_video_square(video, int(350*np.sqrt(2))) 
 
     # Slight rotation
-    angle = 90
-    mask = utils.rotate_video(mask, angle)
+    angle = -36
+    video = utils.rotate_video(video, angle)
+    video = utils.crop_video_square(video, 350) # crop out black
+
+    # Get adaptive mean mask
+    video_blr = utils.blur_video(video, (31,31), 0)
+    mask = utils.mask_adaptive(video_blr, 71, -2)
+    mask = utils.morph_open(mask, (15,15)) # clean small artifacts
 
     views.draw_middle_lines(mask, show_video=True)
+    views.draw_middle_lines(video, show_video=True)
 
-    views.view_frames(mask)
+    views.view_frames(video)
 
 if __name__ == "__main__":
     main()
