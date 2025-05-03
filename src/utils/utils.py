@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from typing import Tuple, List
 import math
+from src.config import VERBOSE
 
 def print_last_modified(filepath):
     """
@@ -283,38 +284,58 @@ def find_closest_point(mask: np.ndarray, axis: int = 0):
 
 import numpy as np
 
-def crop_square_frame(frame: np.ndarray, n: int, m: int = None):
+import numpy as np
+
+def crop_frame_square(frame: np.ndarray, h: int, w: int = None) -> np.ndarray:
     """
     Crops the input frame into a square or rectangular shape around the center.
 
     Inputs:
         frame (np.ndarray): The input frame to be cropped.
-        n (int): The desired height of the cropped frame.
-        m (optional; int): The desired width of the cropped frame. If None, a square crop (n x n) is used.
+        h (int): The desired height of the cropped frame.
+        w (optional; int): The desired width of the cropped frame. If None, a square crop (h x h) is used.
 
     Returns:
         np.ndarray: The cropped frame.
     """
+    he, we = frame.shape[:2]
+
+    if w is None:
+        w = h # default to square crop
+
+    center_y, center_x = he // 2, we // 2
+
+    half_h, half_w = h // 2, w // 2
+
+    y1 = max(center_y - half_h, 0)
+    y2 = min(center_y + half_h + (h % 2), he)
+
+    x1 = max(center_x - half_w, 0)
+    x2 = min(center_x + half_w + (w % 2), we)
+
+    return frame[y1:y2, x1:x2]
+
+
+def crop_video_square(video:np.ndarray, h:int, w:int=None) -> np.ndarray:
+    """Crops the input video into a centered square of dimensions h-by-h pixels (optionally, to h-by-w pixels)
+    Inputs: 
+        video (np.ndarray): video array with dimensions (nframes,h,w)
+    Outputs:
+        video (np.ndarray): same video crame but cropped around the centre
+    """
+    if VERBOSE: print("crop_video_square() called!")
     
-    # Get input frame dimensions
-    h, w = frame.shape[:2]  # Only take height and width, ignoring channels if present
+    if w is None:
+        w = h # default to square frame
 
-    # Ensure m is set to n if not provided (default to square cropping)
-    if m is None:
-        m = n
-
-    # Compute center coordinates
-    center_y, center_x = h // 2, w // 2
-
-    # Compute cropping bounds
-    half_n, half_m = n // 2, m // 2
-    y1, y2 = max(center_y - half_n, 0), min(center_y + half_n + (n % 2), h)
-    x1, x2 = max(center_x - half_m, 0), min(center_x + half_m + (m % 2), w)
-
-    # Crop the frame
-    cropped_frame = frame[y1:y2, x1:x2]
-
-    return cropped_frame
+    vid_c = []
+    for _, frame in enumerate(video):
+        f_c = crop_frame_square(frame, h, w)
+        vid_c.append(f_c)
+    vid_c = np.array(vid_c)
+    print(video.shape)
+    print(vid_c.shape)
+    return vid_c
 
 def pixels_left_of_line(frame, p1, p2):
     """Classify pixels as left or right of the line (p1, p2) using the cross product."""
@@ -362,3 +383,15 @@ def get_N_points_on_circle(ctr_pt: Tuple[int, int], ref_pt: Tuple[int, int], N: 
         points.append((round(x), round(y)))
     
     return points
+
+def blur_video(video:np.ndarray, kernel_dims:Tuple[int,int], sigma:int=0) -> np.ndarray:
+    """Implements a Gaussian blur over an entire video with dimensions (nframes,hgt,wth)"""
+    if VERBOSE: print("blur_video() called!")
+
+    video_b = []
+    for _, frame in enumerate(video):
+        frame = cv2.GaussianBlur(frame, kernel_dims, sigma)
+        video_b.append(frame)
+    video_b = np.array(video_b)
+
+    return video_b
