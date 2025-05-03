@@ -70,31 +70,6 @@ def get_intensity_diffs(intensities: Dict) -> Dict[str, np.ndarray]:
         derivs[k] = deriv
     return derivs
 
-def smooth_coords(coords:pd.DataFrame, window_size:int) -> pd.DataFrame:
-    """Implements a moving average filter over the coordinate data."""
-    if VERBOSE: print("smooth_coords() called!")
-
-    assert coords.shape[0]%4 == 0
-    nrows=coords.shape[0]//4
-
-    p1 = coords.iloc[0::4, :].copy()
-    p2 = coords.iloc[1::4, :].copy()
-    p3 = coords.iloc[2::4, :].copy()
-    p4 = coords.iloc[3::4, :].copy()
-
-    ps = [p1, p2, p3, p4]
-    for p in ps:
-        p["X"] = p["X"].rolling(window_size, min_periods=1, center=True).mean()
-        p["Y"] = p["Y"].rolling(window_size, min_periods=1, center=True).mean()
-    
-    coords_smtd = []
-    for r in range(nrows):
-        for p in ps:
-            coords_smtd.append(p.iloc[r])
-    coords_smtd = pd.DataFrame(coords_smtd)
-
-    return coords_smtd
-
 def get_intensity_derivs(intensities:Dict[str,np.ndarray]) -> Dict[str,np.ndarray]:
     """
     Implements a second-order finite difference approximation for the first derivative of the intensity data

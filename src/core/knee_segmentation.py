@@ -60,6 +60,31 @@ def translate_coords(translation_mxs: np.ndarray, coords: pd.DataFrame) -> pd.Da
 
     return coords_ctrd
 
+def smooth_coords(coords:pd.DataFrame, window_size:int) -> pd.DataFrame:
+    """Implements a moving average filter over the three-part segmentation coordinate data."""
+    if VERBOSE: print("smooth_coords() called!")
+
+    assert coords.shape[0]%4 == 0
+    nrows=coords.shape[0]//4
+
+    p1 = coords.iloc[0::4, :].copy()
+    p2 = coords.iloc[1::4, :].copy()
+    p3 = coords.iloc[2::4, :].copy()
+    p4 = coords.iloc[3::4, :].copy()
+
+    ps = [p1, p2, p3, p4]
+    for p in ps:
+        p["X"] = p["X"].rolling(window_size, min_periods=1, center=True).mean()
+        p["Y"] = p["Y"].rolling(window_size, min_periods=1, center=True).mean()
+    
+    coords_smtd = []
+    for r in range(nrows):
+        for p in ps:
+            coords_smtd.append(p.iloc[r])
+    coords_smtd = pd.DataFrame(coords_smtd)
+
+    return coords_smtd
+
 def get_three_segments(video: np.ndarray, coords: np.ndarray, thresh_scale:int=0.8) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
     """
     Inputs: 
