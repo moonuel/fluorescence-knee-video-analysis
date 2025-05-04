@@ -47,55 +47,55 @@ def get_closest_pts_to_edge(video:np.ndarray, edge:str) -> List[Tuple[int,int]]:
     
     return pts
 
-def get_N_points_on_circle_(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N: int) -> List[Tuple[int, int]]:
-    """Returns a list of N equally spaced points on a circle, arranged clockwise.
+def get_N_points_on_circle_(circle_ctr: Tuple[int, int], ref_pt: Tuple[int, int], N: int) -> np.ndarray:
+    """Returns N equally spaced points on a circle as a NumPy array.
     
-    The circle is defined by:
-    - Center point `circle_ctr`
-    - Radius = distance between `circle_ctr` and `ref_pt`
-    - First point is `ref_pt`, followed by the remaining points in clockwise order.
-
     Args:
         circle_ctr: (x, y) center of the circle.
-        ref_pt: (x, y) reference point on the circle (first point in the output).
-        N: Number of points to generate. If N=1, returns [ref_pt].
+        ref_pt: (x, y) reference point on the circle.
+        N: Number of points to generate.
 
     Returns:
-        List of (x, y) tuples representing the N points on the circle.
+        NumPy array of shape (N, 2) containing the (x, y) points.
     """
-
     cx, cy = circle_ctr
     rx, ry = ref_pt
     radius = math.hypot(rx - cx, ry - cy)
-    start_angle = math.atan2(ry - cy, rx - cx)  # Angle of ref_pt
+    start_angle = math.atan2(ry - cy, rx - cx)
     
-    circle_pts = []
+    circle_pts = np.zeros((N, 2), dtype=np.int32)
     for i in range(N):
-        angle = start_angle - 2 * math.pi * i / N  # Clockwise
+        angle = start_angle - 2 * math.pi * i / N
         x = cx + radius * math.cos(angle)
         y = cy + radius * math.sin(angle)
-        circle_pts.append((round(x), round(y)))
+        circle_pts[i] = [round(x), round(y)]
     
     return circle_pts
 
-def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[int,int]], N:int) -> np.ndarray: # np.ndarray[List[Tuple[int,int]]] specifically
-    """Gets N points on a circle, for an entire video"""
-    if VERBOSE: print("get_N_points_on_circle() called!")
+def get_N_points_on_circle(circle_ctrs: List[Tuple[int,int]], ref_pts: List[Tuple[int,int]], N: int) -> np.ndarray:
+    """Gets N points on a circle for an entire video.
+    
+    Returns:
+        NumPy array of shape (frames, N, 2) containing all points,
+        or (frames, N, 2) zeros for None inputs.
+    """
+    if VERBOSE: 
+        print("get_N_points_on_circle() called!")
 
     if len(circle_ctrs) != len(ref_pts):
-        raise ValueError("get_N_points_on_circle(): input lists must have the same length")
+        raise ValueError("Input lists must have the same length")
 
-    circle_points = [] 
+    circle_points = []
     for i in range(len(circle_ctrs)):
-        if circle_ctrs[i] is None or ref_pts[i] is None: # handle NaN cases without breaking
-            circle_points.append([0]*N)
+        if circle_ctrs[i] is None or ref_pts[i] is None:
+            # Use zeros for missing frames to maintain array structure
+            circle_points.append(np.zeros((N, 2), dtype=np.int32))
             continue
-        c_ctrs = list(circle_ctrs[i]) # Cast to list for numpy array homogeneity
-        r_pts = list(ref_pts[i])
-        circ_pts = get_N_points_on_circle_(c_ctrs, r_pts, N)
+        
+        circ_pts = get_N_points_on_circle_(circle_ctrs[i], ref_pts[i], N)
         circle_points.append(circ_pts)
-    circle_points = np.array(circle_points)    
-    
+    circle_points = np.array(circle_points)
+
     return circle_points
 
 def smooth_points(points:List[Tuple[int,int]], window_size:int) -> List[Tuple[int,int]]:
