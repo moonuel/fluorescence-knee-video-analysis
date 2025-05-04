@@ -9,7 +9,7 @@ from typing import Tuple, List
 from src.utils import io, views, utils
 from src.config import VERBOSE
 
-def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
+def get_closest_pt_to_edge_(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
     Finds the closest point in a binary mask to one edge of the frame.
     Inputs:
@@ -42,41 +42,61 @@ def get_closest_pts_to_edge(video:np.ndarray, edge:str) -> List[Tuple[int,int]]:
 
     pts = []
     for cf, frame in enumerate(video):
-        pt = get_closest_pt_to_edge(frame, edge)
+        pt = get_closest_pt_to_edge_(frame, edge)
         pts.append(pt)
     
     return pts
 
-def get_N_points_on_circle(circle_ctr:Tuple[int,int], first_pt:Tuple[int,int], N: int) -> List[Tuple[int, int]]:
+def get_N_points_on_circle_(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N: int) -> List[Tuple[int, int]]:
     """Returns a list of N equally spaced points on a circle, arranged clockwise.
     
     The circle is defined by:
     - Center point `circle_ctr`
-    - Radius = distance between `circle_ctr` and `first_pt`
-    - First point is `first_pt`, followed by the remaining points in clockwise order.
+    - Radius = distance between `circle_ctr` and `ref_pt`
+    - First point is `ref_pt`, followed by the remaining points in clockwise order.
 
     Args:
         circle_ctr: (x, y) center of the circle.
-        first_pt: (x, y) reference point on the circle (first point in the output).
-        N: Number of points to generate. If N=1, returns [first_pt].
+        ref_pt: (x, y) reference point on the circle (first point in the output).
+        N: Number of points to generate. If N=1, returns [ref_pt].
 
     Returns:
         List of (x, y) tuples representing the N points on the circle.
     """
 
     cx, cy = circle_ctr
-    rx, ry = first_pt
+    rx, ry = ref_pt
     radius = math.hypot(rx - cx, ry - cy)
-    start_angle = math.atan2(ry - cy, rx - cx)  # Angle of first_pt
+    start_angle = math.atan2(ry - cy, rx - cx)  # Angle of ref_pt
     
-    points = []
+    circle_pts = []
     for i in range(N):
         angle = start_angle - 2 * math.pi * i / N  # Clockwise
         x = cx + radius * math.cos(angle)
         y = cy + radius * math.sin(angle)
-        points.append((round(x), round(y)))
+        circle_pts.append((round(x), round(y)))
     
-    return points
+    return circle_pts
+
+def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[int,int]], N:int) -> np.ndarray: # np.ndarray[List[Tuple[int,int]]] specifically
+    """Gets N points on a circle, for an entire video"""
+    if VERBOSE: print("get_N_points_on_circle() called!")
+
+    if len(circle_ctrs) != len(ref_pts):
+        raise ValueError("get_N_points_on_circle(): input lists must have the same length")
+
+    circle_points = [] 
+    for i in range(len(circle_ctrs)):
+        if circle_ctrs[i] is None or ref_pts[i] is None: # handle NaN cases without breaking
+            circle_points.append([0]*N)
+            continue
+        c_ctrs = list(circle_ctrs[i]) # Cast to list for numpy array homogeneity
+        r_pts = list(ref_pts[i])
+        circ_pts = get_N_points_on_circle_(c_ctrs, r_pts, N)
+        circle_points.append(circ_pts)
+    circle_points = np.array(circle_points)    
+    
+    return circle_points
 
 def smooth_points(points:List[Tuple[int,int]], window_size:int) -> List[Tuple[int,int]]:
     """Smooths a set of points using a moving average filter"""
@@ -134,10 +154,10 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], Lis
     # Smooth midpoints
     midl_pts[1:] = smooth_points(midl_pts[1:], 5)
 
-    views.draw_point(mask, midl_pts) # Validate midpoint
+    # views.draw_point(mask, midl_pts) # Validate midpoint
 
     frame_ctr = [(w//2,h//2)]*nframes
-    views.draw_line(mask, midl_pts, frame_ctr) # Validate basic femur estimation
+    # views.draw_line(mask, midl_pts, frame_ctr) # Validate basic femur estimation
 
     
 
@@ -155,7 +175,7 @@ def main():
 
     # Pre-process video
     video = np.rot90(video, k=-1, axes=(1,2))
-    video = utils.crop_video_square(video, int(350*np.sqrt(2))) 
+    video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
 
     # Slight rotation
     angle = -29
@@ -166,29 +186,21 @@ def main():
     # Get adaptive mean mask
     video_blr = utils.blur_video(video, (31,31), 0)
     mask = utils.mask_adaptive(video_blr, 71, -2)
-    mask = utils.morph_open(mask, (15,15)) # clean small 
-    views.view_frames(mask) # Validate mask
+    mask = utils.morph_open(mask, (15,15)) # clean small artifacts
+    # views.view_frames(mask) # Validate mask    
 
+    # Get radial segmentation
+    femur_endpts, femur_midpts = estimate_femur_position(mask)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 10)
+
+    views.draw_line(video, femur_endpts, femur_midpts)
+    
     # > TODO: Get the leftmost points
     # > TODO: Get the basic femur estimation
+    # x TODO: Generate radial segmentation
     # x TODO: Brainstorm femur endpoint estimation improvements
     # x TODO: Get points on the interior of the mask region
     # x TODO: Fit least-squares line through all points 
-
-    
-
-    femur_endpts, femur_midpts = estimate_femur_position(mask)
-    
-    views.draw_line(video, femur_endpts, femur_midpts)
-    exit(420)
-
-
-    views.view_frames(mask_top)
-    views.view_frames(mask_btm)
-
-
-    # views.draw_middle_lines(video, show_video=True)
-    # views.view_frames(video)
 
 if __name__ == "__main__":
     main()
