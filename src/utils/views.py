@@ -155,6 +155,31 @@ def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=True) -> np.
 
     return video
 
+def draw_points_(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
+    """Helper func to draw_points(). Draws a set of points in pts directly on the frame."""
+    if pts.ndim != 2 or pts.shape[1] != 2: 
+        raise ValueError(f"draw_points_(): 'pts' must be 2D array with shape (N, 2)")
+    
+    for pt in pts:
+        cv2.circle(frame, tuple(pt), 1, (255,255,255))
+    
+def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=True) -> np.ndarray:
+    """For every frame, draws a set of points [[x1,y1], [x2,y2], ..., [xn,yn]] and displays it"""
+    if VERBOSE: print("draw_points() called!")
+
+    if video.shape[0] != pts.shape[0]:
+        raise ValueError("draw_points(): video and pts arrays must have same number of rows")
+
+    video = video.copy() # for safety
+    pts = pts.copy()
+
+    for cf in range(video.shape[0]):
+        draw_points_(video[cf], pts[cf])
+
+    if show_video: view_frames(video)
+    
+    return video
+
 def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int]], show_video:bool=True) -> np.ndarray:
     """Draws a line on a video between two points"""
     if VERBOSE: print("draw_line() called!")

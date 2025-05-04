@@ -193,6 +193,9 @@ def main():
     femur_endpts, femur_midpts = estimate_femur_position(mask)
     circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 10)
 
+
+    views.draw_points(video, circle_pts)
+    
     views.draw_line(video, femur_endpts, femur_midpts)
     
     # > TODO: Get the leftmost points
