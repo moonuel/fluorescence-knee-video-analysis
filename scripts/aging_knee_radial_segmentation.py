@@ -172,6 +172,12 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     """Gets the radial segments for the video. """
     if VERBOSE: print("get_radial_segments() called!")
 
+    video = video.copy()
+    circle_ctrs = np.array(circle_ctrs) # adhoc type cast since downstream operations are buggy without this
+    circle_pts = np.array(circle_pts)
+
+    # TODO: input validation
+
     # TODO:
     # > Get Otsu mask
     # x Get rough radial masks
@@ -182,9 +188,14 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     otsu_masks = ks.get_otsu_masks(video)
     # views.view_frames(otsu_masks) # Validate otsu masks
 
-    # Get rough radial masks
-    h_masks = [] # bisecting half masks 
-
+    # Get bisection mask for every point on the circle
+    nfs, h, w = video.shape
+    _, N, _ = circle_pts.shape
+    bsct_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        bsct_masks[n] = ks.get_bisecting_masks(video, circle_ctrs, circle_pts[:,n]) 
+        views.view_frames(bsct_masks[n])
+    
 
     radial_regions = NotImplemented
     radial_masks = NotImplemented
@@ -205,22 +216,21 @@ def main():
     angle = -29
     video = utils.rotate_video(video, angle)
     video = utils.crop_video_square(video, 350) # crop out black borders
-    # views.draw_middle_lines(mask, show_video=True) # Validate rotation
 
     # Get adaptive mean mask
     video_blr = utils.blur_video(video, (31,31), 0)
     mask = utils.mask_adaptive(video_blr, 71, -2)
     mask = utils.morph_open(mask, (15,15)) # clean small artifacts
     # views.view_frames(mask) # Validate mask    
+    # views.draw_middle_lines(mask, show_video=True) # Validate rotation
 
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 10)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 3)
+    views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
 
-    views.draw_points(video, circle_pts)
-
-    views.draw_line(video, femur_endpts, femur_midpts)
+    # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     
     # > TODO: Get the leftmost points
     # > TODO: Get the basic femur estimation
