@@ -72,7 +72,7 @@ def get_intensity_diffs(intensities: Dict) -> Dict[str, np.ndarray]:
 
 def get_intensity_derivs(intensities:Dict[str,np.ndarray]) -> Dict[str,np.ndarray]:
     """
-    Implements a second-order finite difference approximation for the first derivative of the intensity data
+    Implements a second-order accuracy finite difference approximation for the first derivative of the intensity data
     Inputs:
         intensities (Dict[str, np.ndarray, bool]) - region intensities for which derivatives are to be obtained
     Outputs:

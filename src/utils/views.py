@@ -64,8 +64,8 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, sa
     plt.style.use('default')
 
     # Prepare formatting strings
-    if normalized: ttl_sfx = "(Normalized " + metadata["knee_name"] + ")"
-    else: ttl_sfx = "(Raw " + metadata["knee_name"] + ")"    
+    if normalized: ttl_sfx = "(Normalized " + metadata["knee_id"] + ")"
+    else: ttl_sfx = "(Raw " + metadata["knee_id"] + ")"    
     ttl_pfx = {"l": "Left", "m": "Middle", "r": "Right", "otsu": "Whole"}
     clrs = {"l": "r", "m": "g", "r": "b", "otsu": NotImplemented}
     if normalized: sv_fl_pfx = "normalized"
@@ -88,7 +88,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, sa
         i+=1
 
     if save_figs:
-        fn = f"../figures/intensity_plots/{sv_fl_pfx}_separate_{metadata['knee_name']}.png"
+        fn = f"../figures/intensity_plots/{sv_fl_pfx}_separate_{metadata['knee_id']}.png"
         os.makedirs(os.path.dirname(fn), exist_ok=True)
         plt.tight_layout()
         plt.savefig(fn, dpi=300, bbox_inches="tight")
@@ -104,7 +104,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, sa
     plt.legend()
 
     if save_figs:
-        fn = f"../figures/intensity_plots/{sv_fl_pfx}_combined_{metadata['knee_name']}.png"
+        fn = f"../figures/intensity_plots/{sv_fl_pfx}_combined_{metadata['knee_id']}.png"
         os.makedirs(os.path.dirname(fn), exist_ok=True)
         plt.tight_layout()
         plt.savefig(fn, dpi=300, bbox_inches="tight")
@@ -121,7 +121,7 @@ def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
     regions = regions.copy()
     n_frames = regions[keys[0]].shape[0] # Assume each np.ndarray in regions[] has the same dimensions
     for cf in np.arange(n_frames):
-        f_stack = np.hstack(tuple([utils.crop_square_frame(regions[k][cf], n=350) for k in keys]))
+        f_stack = np.hstack(tuple([utils.crop_frame_square(regions[k][cf], h=350) for k in keys]))
         cv2.imshow(f"display_regions()", f_stack)
         if cv2.waitKey(0) == ord('q'): break
     cv2.destroyAllWindows()
