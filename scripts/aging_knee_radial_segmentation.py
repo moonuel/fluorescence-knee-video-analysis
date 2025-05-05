@@ -170,8 +170,8 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
 
 def intersect_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
     """
-    Performs element-wise binary AND over all frames in two 3D binary masks.
-    
+    Performs frame-wise binary AND over all frames in two 3D binary masks.
+
     Both mask1 and mask2 must have shape (nframes, height, width).
     """
     assert mask1.shape == mask2.shape, "Masks must have the same shape"
@@ -260,16 +260,18 @@ def main():
 
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 6)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=10)
     views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
 
-    # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
+    views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     
     # > TODO: Get the leftmost points
     # > TODO: Get the basic femur estimation
-    # x TODO: Generate radial segmentation
-    # x TODO: Brainstorm femur endpoint estimation improvements
+    # > TODO: Generate radial segmentation
+    # ^ Combine the radial slices into parts corresponding to the left/middle/right knee
+    # ^ Generate intensity plots -> see if its comparable to manual segmentation
+    # x TODO: Brainstorm femur endpoint estimation improvementsqq
     # x TODO: Get points on the interior of the mask region
     # x TODO: Fit least-squares line through all points 
 

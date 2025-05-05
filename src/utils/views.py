@@ -113,6 +113,42 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, sa
         plt.tight_layout()
         plt.show()
 
+    plt.close('all')
+
+    return
+
+def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=True, save_figs=False) -> None:
+    """Plots the three derivatives"""
+    if VERBOSE: print("plot_three_derivs() called!")
+
+    plt.style.use('default')
+
+    # Prepare formatting strings
+    keys = ["l","m","r"]
+    colors = {"l":"r","m":"g","r":"b"}
+    
+    fig, ax = plt.subplots(3,1, figsize=(17,10))
+    for i in range(3):
+        k = keys[i]
+        fns = np.arange(metadata["f0"], metadata["f0"] + len(derivs[k]))
+        ax[i].plot(fns, derivs[k], label=f"{k} knee", color=colors[k])
+        ax[i].axhline(0, color='k', alpha=0.7)
+        ax[i].axvline(metadata["flx_ext_pt"], color='k', linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
+        ax[i].legend()
+    ax[0].set_title(f"Change in intensity per frame ({metadata['knee_id']})")
+    ax[-1].set_xlabel(f"Frame number ({metadata['f0']}-{metadata['fN']})")
+
+    if save_figs:
+        fn = f"../figures/deriv_plots/derivs_{metadata['knee_id']}.png"
+        os.makedirs(os.path.dirname(fn), exist_ok=True)
+        plt.tight_layout()
+        plt.savefig(fn, dpi=300, bbox_inches="tight")
+
+    if show_figs: 
+        plt.tight_layout()
+        plt.show()
+
+    plt.close("all")
     return
 
 def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
