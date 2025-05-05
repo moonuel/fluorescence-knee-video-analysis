@@ -112,7 +112,7 @@ def smooth_points(points:List[Tuple[int,int]], window_size:int) -> List[Tuple[in
 
     return points
 
-def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], List[Tuple[int,int]] ]:
+def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
     """Estimates the position of the femur based on an adaptive mean mask. Assumes femur is pointing to the left of the screen.
     
     Returns (femur_endpts, femur_midpts), 
@@ -121,11 +121,13 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], Lis
     """
     if VERBOSE: print("estimate_femur_position() called!")
 
+    mask = mask.copy()
+
     # Split frame along the middle. TODO: Parameterize the split line?
-    split = 0.5
+    spl = 0.5
     nframes,h,w = mask.shape
-    mask_top = mask[:,0:int(h*split),:]
-    mask_btm = mask[:,int(h*split):,:]
+    mask_top = mask[:,0:int(h*spl),:]
+    mask_btm = mask[:,int(h*spl):,:]
 
     # Get left-most points on top/bottom halves
     topl_pts = get_closest_pts_to_edge(mask_top, "l")
@@ -138,7 +140,7 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], Lis
     btml_pts = [None] # to maintain 1-indexing 
     for pt in btml_pts_[1:]:
         pt = list(pt) # for mutability
-        pt[1] = pt[1] + int(h*split) 
+        pt[1] = pt[1] + int(h*spl) 
         btml_pts.append(tuple(pt))
 
     # views.draw_line(mask, topl_pts, btml_pts) # Validate drawn line
@@ -166,6 +168,32 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ List[Tuple[int,int]], Lis
 
     return femur_endpts, femur_midpts
 
+def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Gets the radial segments for the video. """
+    if VERBOSE: print("get_radial_segments() called!")
+
+    # TODO:
+    # > Get Otsu mask
+    # x Get rough radial masks
+    # x Get radial masks
+    # x Intersect radial masks with Otsu mask
+
+    # Get Otsu masks
+    otsu_masks = ks.get_otsu_masks(video)
+    views.view_frames(otsu_masks) # Validate otsu masks
+
+    # Get rough radial masks
+    h_masks = [] # bisecting half masks 
+    test = ks.get_bisecting_masks(video, circle_pts, circle_ctrs)
+
+    views.view_frames(test)
+
+    exit(420)
+
+    radial_regions = NotImplemented
+    radial_masks = NotImplemented
+    return radial_regions, radial_masks
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -192,10 +220,10 @@ def main():
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
     circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 10)
-
+    radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
 
     views.draw_points(video, circle_pts)
-    
+
     views.draw_line(video, femur_endpts, femur_midpts)
     
     # > TODO: Get the leftmost points

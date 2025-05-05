@@ -112,6 +112,7 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray, thresh_scale:int=0
         
     otsu_masks = np.array(otsu_masks)
 
+    # otsu_masks = get_otsu_masks(video) # TODO: Validate that this replaces the above
 
     l_masks = []
     m_masks = []
@@ -175,3 +176,63 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray, thresh_scale:int=0
     regions = {"l": l_region, "m": m_region, "r": r_region, "otsu": otsu_region}
     
     return regions, masks
+
+def get_otsu_masks(video:np.ndarray, thresh_scale:int=0.8) -> np.ndarray:
+    """Gets the Otsu masks for the video. Optionally rescale the threshold value"""
+    if VERBOSE: print("get_otsu_masks() called!")
+
+    video = video.copy()
+    otsu_masks = []
+    for cf, frame in enumerate(video):
+        
+        # Get otsu mask
+        thresh_val, _ = cv2.threshold(frame, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        thresh_val = int(thresh_val*thresh_scale)
+        _, otsu_mask = cv2.threshold(frame, thresh_val, 255, cv2.THRESH_BINARY)
+        
+        # Store otsu mask
+        otsu_masks.append(otsu_mask)
+        
+    otsu_masks = np.array(otsu_masks)
+
+    return otsu_masks
+
+def get_bisecting_mask(frame:np.ndarray, p1:Tuple[int,int], p2:Tuple[int,int]) -> np.ndarray:
+    """Gets a binary mask bisecting the plane by a line (p2 - p1)."""
+    # if VERBOSE: print("get_bisecting_mask() called!")
+
+    h,w = frame.shape
+    
+    # Create a coordinate grid
+    yi, xi = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
+    
+    # Compute the signed area (cross product)
+    cross = (xi - p1[0]) * (p2[1] - p1[1]) - (yi - p1[1]) * (p2[0] - p1[0])
+    
+    # Classify left side to positive, right side to negative
+    bsct_mask = ((cross > 0) * 255).astype(np.uint8) 
+    
+    return bsct_mask
+
+def get_bisecting_masks(video:np.ndarray, p1s:np.ndarray, p2s:np.ndarray) -> np.ndarray:
+    """Gets a binary mask that bisects every frame in a video by the set of lines {(p2 - p1)}, for p2 in p2s and p1 in p1s"""
+    if VERBOSE: print("get_bisecting_masks() called!")
+
+    print(type(video))
+    print(type(p1s))
+    print(type(p2s))
+
+    if not video.shape[0] == p1s.shape[0] == p2s.shape[0]:
+        raise ValueError(f"get_bisecting_masks(): frame count mismatch. got {video.shape[0]}, {p1s.shape[0]}, {p2s.shape[0]}")
+
+    video = video.copy()
+    p1s = p1s.copy()
+    p2s = p2s.copy()
+
+    bsct_masks = []
+    for cf, frame in enumerate(video):
+        bsct_mask = get_bisecting_mask(frame, p1s[cf], p2s[cf])
+        bsct_masks.append(bsct_mask)
+    bsct_masks = np.array(bsct_masks)
+
+    return bsct_masks
