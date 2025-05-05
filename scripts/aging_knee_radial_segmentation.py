@@ -211,14 +211,18 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     _, N, _ = circle_pts.shape
     bsct_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
-        bsct_masks[n] = ks.get_bisecting_masks(video, circle_ctrs, circle_pts[:,n]) 
+        print(n)
+        bsct_masks[n] = ks.get_bisecting_masks(video, circle_pts[:,n], circle_ctrs) 
         # views.view_frames(bsct_masks[n]) # Validate bisecting masks
 
-    # Get radial bisecting masks
+    # Get radial masks
     radial_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
-        radial_masks[n] = intersect_masks(bsct_masks[n], bsct_masks[n-1])
+        print(n)
+        radial_masks[n] = intersect_masks(bsct_masks[n], ~bsct_masks[n-1])
         views.view_frames(radial_masks[n]) # Validate radial masks
+
+    
     
 
     radial_regions = NotImplemented
