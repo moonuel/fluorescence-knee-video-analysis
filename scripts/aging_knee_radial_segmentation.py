@@ -211,22 +211,28 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     _, N, _ = circle_pts.shape
     bsct_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
-        print(n)
         bsct_masks[n] = ks.get_bisecting_masks(video, circle_pts[:,n], circle_ctrs) 
         # views.view_frames(bsct_masks[n]) # Validate bisecting masks
+
+    # Get radial slices
+    radial_slices = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        radial_slices[n] = intersect_masks(bsct_masks[n], ~bsct_masks[n-1])
+        # views.view_frames(radial_masks[n]) # Validate radial slices
 
     # Get radial masks
     radial_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
-        print(n)
-        radial_masks[n] = intersect_masks(bsct_masks[n], ~bsct_masks[n-1])
-        views.view_frames(radial_masks[n]) # Validate radial masks
+        radial_masks[n] = intersect_masks(radial_slices[n], otsu_masks)
+        # views.view_frames(radial_masks[n]) # Validate radial masks
 
-    
-    
+    # Get radial regions
+    otsu_region = intersect_masks(otsu_masks, video)
+    radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        radial_masks[n] = intersect_masks(radial_slices[n], otsu_region)
+        views.view_frames(radial_masks[n]) # Validate radial regions
 
-    radial_regions = NotImplemented
-    radial_masks = NotImplemented
     return radial_regions, radial_masks
 
 def main():
@@ -254,7 +260,7 @@ def main():
 
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 10)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 6)
     views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
 
