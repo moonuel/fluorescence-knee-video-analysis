@@ -218,10 +218,6 @@ def get_bisecting_masks(video:np.ndarray, p1s:np.ndarray, p2s:np.ndarray) -> np.
     """Gets a binary mask that bisects every frame in a video by the set of lines {(p2 - p1)}, for p2 in p2s and p1 in p1s"""
     if VERBOSE: print("get_bisecting_masks() called!")
 
-    print(type(video))
-    print(type(p1s))
-    print(type(p2s))
-
     if not video.shape[0] == p1s.shape[0] == p2s.shape[0]:
         raise ValueError(f"get_bisecting_masks(): frame count mismatch. got {video.shape[0]}, {p1s.shape[0]}, {p2s.shape[0]}")
 

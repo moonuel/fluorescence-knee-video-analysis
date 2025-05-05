@@ -137,16 +137,16 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
     # views.draw_point(mask_btm, btml_pts_, True)
 
     # Convert bottom-left coords to the whole mask
-    btml_pts = [None] # to maintain 1-indexing 
+    btml_pts = [None] # to maintain 1-indexing. this gets skipped in the next block 
     for pt in btml_pts_[1:]:
         pt = list(pt) # for mutability
         pt[1] = pt[1] + int(h*spl) 
-        btml_pts.append(tuple(pt))
+        btml_pts.append(tuple(pt)) # tuple for opencv compatibility
 
     # views.draw_line(mask, topl_pts, btml_pts) # Validate drawn line
 
     # Get midpoint of left line 
-    midl_pts = [None]
+    midl_pts = [(0,0)]
     for cf in range(1, len(mask)):
         topl_pt = np.array(topl_pts[cf])
         btml_pt = np.array(btml_pts[cf])
@@ -180,15 +180,11 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
 
     # Get Otsu masks
     otsu_masks = ks.get_otsu_masks(video)
-    views.view_frames(otsu_masks) # Validate otsu masks
+    # views.view_frames(otsu_masks) # Validate otsu masks
 
     # Get rough radial masks
     h_masks = [] # bisecting half masks 
-    test = ks.get_bisecting_masks(video, circle_pts, circle_ctrs)
 
-    views.view_frames(test)
-
-    exit(420)
 
     radial_regions = NotImplemented
     radial_masks = NotImplemented
