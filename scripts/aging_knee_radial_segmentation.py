@@ -168,6 +168,24 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
 
     return femur_endpts, femur_midpts
 
+def intersect_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
+    """
+    Performs element-wise binary AND over all frames in two 3D binary masks.
+    
+    Both mask1 and mask2 must have shape (nframes, height, width).
+    """
+    assert mask1.shape == mask2.shape, "Masks must have the same shape"
+    
+    nfs,h,w = mask1.shape
+
+    AND_frs = []
+    for cf in range(nfs):
+        AND_frs.append(mask1[cf] & mask2[cf])
+    AND_frs = np.array(AND_frs, dtype=np.uint8)
+    
+    return AND_frs
+
+
 def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Gets the radial segments for the video. """
     if VERBOSE: print("get_radial_segments() called!")
@@ -194,7 +212,13 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     bsct_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
         bsct_masks[n] = ks.get_bisecting_masks(video, circle_ctrs, circle_pts[:,n]) 
-        views.view_frames(bsct_masks[n])
+        # views.view_frames(bsct_masks[n]) # Validate bisecting masks
+
+    # Get radial bisecting masks
+    radial_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        radial_masks[n] = intersect_masks(bsct_masks[n], bsct_masks[n-1])
+        views.view_frames(radial_masks[n]) # Validate radial masks
     
 
     radial_regions = NotImplemented
@@ -226,7 +250,7 @@ def main():
 
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 3)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, 10)
     views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
 
