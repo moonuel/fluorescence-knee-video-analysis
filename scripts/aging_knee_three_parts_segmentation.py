@@ -15,10 +15,10 @@ def main():
     translation_mxs = io.load_nparray("../data/processed/translation_mxs.npy")
 
     # Process the coord data. TODO: wrap coords-dependent code in a loop to process all data sets at once?
-    knee_name = "aging-1" 
+    knee_name = "aging-3" 
     coords, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)
     coords_ctrd = ks.translate_coords(translation_mxs, coords) # Processes *some* frames
-    # coords_ctrd = ks.smooth_coords(coords_ctrd, 5) # Implements a moving average filter over the coordinate data
+    coords_ctrd = ks.smooth_coords(coords_ctrd, 5) # Implements a moving average filter over the coordinate data
     # views.plot_coords(video_ctrd, coords_ctrd) # Validate smoothing
 
     # Get masks
@@ -31,10 +31,10 @@ def main():
     normalized_intensities = cd.measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    show_figs = False
-    save_figs = False
-    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs)
-    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs)
+    show_figs = True
+    save_figs = True
+    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True)
+    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True)
 
     # exit(0)
 
@@ -43,7 +43,7 @@ def main():
     # raw_deriv = cd.get_intensity_derivs(raw_intensities) 
 
     # Plot derivatives 
-    views.plot_three_derivs(raw_deriv, metadata)
+    views.plot_three_derivs(raw_deriv, metadata, save_figs=True)
     
     
 

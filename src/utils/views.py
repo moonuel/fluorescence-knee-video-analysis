@@ -49,7 +49,7 @@ def view_frames(video:np.ndarray) -> None:
 
     return
 
-def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, save_figs=False) -> None:
+def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False) -> None:
     """
     Inputs:
         intensities (Dict[str, np.ndarray, bool]) - region intensity values to be plotted 
@@ -72,7 +72,10 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs=True, sa
     else: sv_fl_pfx = "raw"
 
     # Plot three (or more) figs separately
-    fig, axes = plt.subplots(1, len(keys), figsize=(20,7))
+    if vert_layout:
+        fig, axes = plt.subplots(len(keys), 1, figsize=(7,20))
+    else:
+        fig, axes = plt.subplots(1, len(keys), figsize=(20,7))
     i = 0
     for k in keys:
 
