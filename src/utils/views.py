@@ -81,14 +81,20 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
 
         # Plot intensities
         fns = np.arange(metadata["f0"], metadata["f0"] + len(intensities[k]))
-        axes[i].plot(fns, intensities[k], color=clrs[k])
+        axes[i].plot(fns, intensities[k], color=clrs[k], label=f"{ttl_pfx[k]} knee")
 
         # Formatting
-        axes[i].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
         axes[i].axvline(metadata["flx_ext_pt"], color="k", linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
         axes[i].legend()
 
         i+=1
+
+    if vert_layout: 
+        axes[0].set_title("Knee pixel intensities")
+    else:
+        for k in keys:
+            axes[i].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
+
 
     if save_figs:
         fn = f"../figures/intensity_plots/{sv_fl_pfx}_separate_{metadata['knee_id']}.png"
