@@ -172,8 +172,8 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray, thresh_scale:int=0
     otsu_region = np.array(otsu_region)
 
     # Store in dict
-    masks = {"l": l_masks, "m": m_masks, "r": r_masks, "otsu": otsu_masks}
-    regions = {"l": l_region, "m": m_region, "r": r_region, "otsu": otsu_region}
+    masks = {"l": l_masks, "m": m_masks, "r": r_masks}
+    regions = {"l": l_region, "m": m_region, "r": r_region}
     
     return regions, masks
 

@@ -66,8 +66,8 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
     # Prepare formatting strings
     if normalized: ttl_sfx = "(Normalized " + metadata["knee_id"] + ")"
     else: ttl_sfx = "(Raw " + metadata["knee_id"] + ")"    
-    ttl_pfx = {"l": "Left", "m": "Middle", "r": "Right", "otsu": "Whole"}
-    clrs = {"l": "r", "m": "g", "r": "b", "otsu": NotImplemented}
+    ttl_pfx = {"l": "Left", "m": "Middle", "r": "Right"}
+    clrs = {"l": "r", "m": "g", "r": "b"}
     if normalized: sv_fl_pfx = "normalized"
     else: sv_fl_pfx = "raw"
 
