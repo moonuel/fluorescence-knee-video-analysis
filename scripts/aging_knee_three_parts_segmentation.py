@@ -9,7 +9,7 @@ def main():
     print(__name__ + " called!")
 
     # Process the video data 
-    # video = io.load_tif("../data/1 aging_00000221.tif") # TODO: for performance gains: write the centered video data to file, but first check if it exists
+    # video = io.load_tif("../data/1 aging_00000221.tif") 
     # video_ctrd, translation_mxs = ks.pre_process_video(video) # Centers *all* frames
     video_ctrd = io.load_nparray("../data/processed/aging_knee_processed.npy")
     translation_mxs = io.load_nparray("../data/processed/translation_mxs.npy")
@@ -31,12 +31,12 @@ def main():
     normalized_intensities = cd.measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
-    show_figs = True
+    show_figs = False
     save_figs = True
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True)
     views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True)
 
-    # exit(0)
+    exit(0)
 
     # Get per-region rate of change
     raw_deriv = cd.get_intensity_diffs(raw_intensities)
