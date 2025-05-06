@@ -139,7 +139,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
     ax[-1].set_xlabel(f"Frame number ({metadata['f0']}-{metadata['fN']})")
 
     if save_figs:
-        fn = f"../figures/deriv_plots/derivs_{metadata['knee_id']}.png"
+        fn = f"../figures/derivative_plots/derivs_{metadata['knee_id']}.png"
         os.makedirs(os.path.dirname(fn), exist_ok=True)
         plt.tight_layout()
         plt.savefig(fn, dpi=300, bbox_inches="tight")

@@ -3,10 +3,10 @@ import sys
 import numpy as np
 import pandas as pd
 import cv2
-from src.utils import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 import src.core.knee_segmentation as ks
+from src.utils import io, utils, views
 
 VERBOSE = True
 
@@ -49,16 +49,14 @@ def load_normal_knee_coords(fn:str, sheet_num:int) -> pd.DataFrame:
 def main():
     if VERBOSE: print("main() called!")
 
-    # Load video
-    video = load_avi("../data/video_1.avi")
+    # Load and preprocess video
+    # video = load_avi("../data/video_1.avi")
+    # video, translation_mxs = ks.pre_process_video(video)
+    video = io.load_nparray("../data/processed/aging_knee_processed.npy")
+    translation_mxs = io.load_nparray("../data/processed/translation_mxs.npy")
 
-    # Load coords
+    # Load and transform coords
     coords, metadata = load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 3)
-
-    # Preprocess video
-    video, translation_mxs = ks.pre_process_video(video)
-
-    # Transform coords
     coords = ks.translate_coords(translation_mxs, coords)
 
     # Segment video
@@ -74,8 +72,8 @@ def main():
     # Plot intensities
     raw_intensities = ks.measure_region_intensities(regions, masks, keys)
     normalized_intensities = ks.measure_region_intensities(regions, masks, keys, normalized=True)
-    ks.plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    ks.plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+    views.plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
+    views.plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
 
 
 
