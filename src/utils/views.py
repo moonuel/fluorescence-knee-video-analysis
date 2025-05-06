@@ -32,9 +32,9 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame) -> None:
     cv2.destroyAllWindows()    
     return
 
-def view_frames(video:np.ndarray) -> None:
+def show_frames(video:np.ndarray) -> None:
     """Shows all frames. Press any button to advance, or 'q' to exit"""
-    if VERBOSE: print("view_frames() called!")
+    if VERBOSE: print("show_frames() called!")
 
     video = video.copy() # don't modify original
     h,w = video.shape[1:]
@@ -43,7 +43,7 @@ def view_frames(video:np.ndarray) -> None:
     for cf, frame in enumerate(video):
         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
                     fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
-        cv2.imshow("view_frames()", frame)
+        cv2.imshow("show_frames()", frame)
         if cv2.waitKey(0) == ord('q'): break
     cv2.destroyAllWindows()
 
@@ -184,7 +184,7 @@ def draw_middle_lines(video:np.ndarray, show_video:bool=True, hplace:float=0.5, 
         cv2.line(frame, (0, round(h*hplace)), (w, round(h*hplace)), (255, 255, 255), 1)  # Horizontal line
         cv2.line(frame, (round(w*vplace), 0), (round(w*vplace), h), (255, 255, 255), 1)  # Vertical line
     
-    if show_video: view_frames(video)
+    if show_video: show_frames(video)
 
     return video
 
@@ -196,7 +196,7 @@ def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=True) -> np.
     for cf, frame in enumerate(video):
         cv2.circle(frame, pt[cf], 3, (255,255,255), -1)
 
-    if show_video: view_frames(video)
+    if show_video: show_frames(video)
 
     return video
 
@@ -221,7 +221,7 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=True) -> np.nd
     for cf in range(video.shape[0]):
         draw_points_(video[cf], pts[cf])
 
-    if show_video: view_frames(video)
+    if show_video: show_frames(video)
     
     return video
 
@@ -233,6 +233,6 @@ def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int
     for cf, frame in enumerate(video):
         cv2.line(frame, pt1[cf], pt2[cf], (255,255,255), 1)
     
-    if show_video: view_frames(video)
+    if show_video: show_frames(video)
     
     return video
