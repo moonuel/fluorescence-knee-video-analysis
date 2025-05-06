@@ -204,7 +204,7 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
 
     # Get Otsu masks
     otsu_masks = ks.get_otsu_masks(video)
-    # views.view_frames(otsu_masks) # Validate otsu masks
+    # views.show_frames(otsu_masks) # Validate otsu masks
 
     # Get bisection mask for every point on the circle
     nfs, h, w = video.shape
@@ -212,26 +212,26 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     bsct_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
         bsct_masks[n] = ks.get_bisecting_masks(video, circle_pts[:,n], circle_ctrs) 
-        # views.view_frames(bsct_masks[n]) # Validate bisecting masks
+        # views.show_frames(bsct_masks[n]) # Validate bisecting masks
 
     # Get radial slices
     radial_slices = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
         radial_slices[n] = intersect_masks(bsct_masks[n], ~bsct_masks[n-1])
-        # views.view_frames(radial_masks[n]) # Validate radial slices
+        # views.show_frames(radial_masks[n]) # Validate radial slices
 
     # Get radial masks
     radial_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
         radial_masks[n] = intersect_masks(radial_slices[n], otsu_masks)
-        # views.view_frames(radial_masks[n]) # Validate radial masks
+        # views.show_frames(radial_masks[n]) # Validate radial masks
 
     # Get radial regions
     otsu_region = intersect_masks(otsu_masks, video)
     radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
         radial_masks[n] = intersect_masks(radial_slices[n], otsu_region)
-        views.view_frames(radial_masks[n]) # Validate radial regions
+        views.show_frames(radial_masks[n]) # Validate radial regions
 
     return radial_regions, radial_masks
 
@@ -255,7 +255,7 @@ def main():
     video_blr = utils.blur_video(video, (31,31), 0)
     mask = utils.mask_adaptive(video_blr, 71, -2)
     mask = utils.morph_open(mask, (15,15)) # clean small artifacts
-    # views.view_frames(mask) # Validate mask    
+    # views.show_frames(mask) # Validate mask    
     # views.draw_middle_lines(mask, show_video=True) # Validate rotation
 
     # Get radial segmentation
