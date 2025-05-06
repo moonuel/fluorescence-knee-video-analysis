@@ -49,7 +49,8 @@ def show_frames(video:np.ndarray) -> None:
 
     return
 
-def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple = (20,7)) -> None:
+def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple = (20,7), normalized:bool=False) -> None: 
+    # TODO: added normalized parameter. remove normalized metadata from intensity data
     """
     Inputs:
         intensities (Dict[str, np.ndarray, bool]) - region intensity values to be plotted 
@@ -59,7 +60,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
     """
     if VERBOSE: print("plot_three_intensities() called!")
 
-    normalized = intensities["normalized"] # Get intensity metadata
+    normalized = intensities["normalized"] # Get intensity metadata 
     keys = ["l", "m", "r"] # Hardcoded 
     plt.style.use('default')
 
