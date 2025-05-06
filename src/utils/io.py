@@ -4,6 +4,7 @@ import os
 from tifffile import imread as tif_imread
 from src.config import VERBOSE
 from typing import Tuple, Dict, Union
+import cv2
 
 
 def load_aging_knee_coords(filename:str, knee_id:Union[str, int]) -> Tuple[pd.DataFrame, Dict[str, int]]:
@@ -55,6 +56,25 @@ def load_aging_knee_coords(filename:str, knee_id:Union[str, int]) -> Tuple[pd.Da
     metadata = {"knee_id": knee_id, "flx_ext_pt": flx_ext_pt, "f0": uqf[0], "fN": uqf[-1]}
     return coords, metadata
 
+def load_normal_knee_coords(fn:str, sheet_num:int) -> pd.DataFrame:
+    if VERBOSE: print("load_normal_knee_coords() called!")
+
+    sheet_names=["8.29 re-measure", "8.29 2nd", "8.29 3rd", "8.6"]
+    coords = pd.read_excel(fn, engine="openpyxl", sheet_name=sheet_num, usecols="B,D,E")
+
+    coords["Frame Number"] = coords["Frame Number"].ffill().astype(int)
+    coords.set_index("Frame Number", inplace=True)
+
+    assert coords.isnull().values.any() == 0
+
+    flx_ext_pts = [117, 299, 630, 117]
+    uqf = coords.index.unique()
+
+    metadata = {"knee_id": sheet_names[sheet_num], "flx_ext_pt": flx_ext_pts[sheet_num], "f0": uqf[0], "fN": uqf[-1]}
+
+    return coords, metadata
+
+
 def load_tif(filename) -> np.ndarray:
     """
     Inputs:
@@ -92,3 +112,22 @@ def load_nparray(filepath:str) -> np.ndarray:
     array = np.load(filepath)
 
     return array
+
+def load_avi(fn) -> np.ndarray:
+    if VERBOSE: print("load_avi() called!")
+
+    cap = cv2.VideoCapture(fn)
+    video = []
+    while cap.isOpened():
+
+        ret, frame = cap.read() # Returns (boolean, bgr frame)
+        if not ret: break
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        video.append(frame)
+
+    cap.release()
+    video = np.array(video)
+    return video
+

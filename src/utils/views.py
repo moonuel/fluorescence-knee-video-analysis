@@ -91,12 +91,14 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
 
         i+=1
 
+    i=0
     # Vertical layout formatting
     if vert_layout: 
         axes[0].set_title(f"{metadata['knee_id']} knee pixel intensities")
     else:
         for k in keys:
-            axes[i].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
+            axes[0].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
+            i+=1
 
 
     if save_figs:

@@ -7,44 +7,8 @@ from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 import src.core.knee_segmentation as ks
 from src.utils import io, utils, views
-
-VERBOSE = True
-
-def load_avi(fn) -> np.ndarray:
-    if VERBOSE: print("load_avi() called!")
-
-    cap = cv2.VideoCapture(fn)
-    video = []
-    while cap.isOpened():
-
-        ret, frame = cap.read() # Returns (boolean, bgr frame)
-        if not ret: break
-
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        video.append(frame)
-
-    cap.release()
-    video = np.array(video)
-    return video
-
-def load_normal_knee_coords(fn:str, sheet_num:int) -> pd.DataFrame:
-    if VERBOSE: print("load_normal_knee_coords() called!")
-
-    sheet_names=["8.29 re-measure", "8.29 2nd", "8.29 3rd", "8.6"]
-    coords = pd.read_excel(fn, engine="openpyxl", sheet_name=sheet_num, usecols="B,D,E")
-
-    coords["Frame Number"] = coords["Frame Number"].ffill().astype(int)
-    coords.set_index("Frame Number", inplace=True)
-
-    assert coords.isnull().values.any() == 0
-
-    flx_ext_pts = [117, 299, 630, 117]
-    uqf = coords.index.unique()
-
-    metadata = {"knee_name": sheet_names[sheet_num], "flx_ext_pt": flx_ext_pts[sheet_num], "f0": uqf[0], "fN": uqf[-1]}
-
-    return coords, metadata
+from src.core import data_processing as dp
+from src.config import VERBOSE
 
 def main():
     if VERBOSE: print("main() called!")
@@ -52,28 +16,32 @@ def main():
     # Load and preprocess video
     # video = load_avi("../data/video_1.avi")
     # video, translation_mxs = ks.pre_process_video(video)
-    video = io.load_nparray("../data/processed/aging_knee_processed.npy")
-    translation_mxs = io.load_nparray("../data/processed/translation_mxs.npy")
+    video = io.load_nparray("../data/processed/normal_knee_processed.npy")
+    translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
 
     # Load and transform coords
-    coords, metadata = load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 3)
+    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=3)
     coords = ks.translate_coords(translation_mxs, coords)
+    # coords = ks.smooth_coords(coords, 5) # Smooth coords
 
     # Segment video
     regions, masks = ks.get_three_segments(video, coords, thresh_scale=0.65)
 
-    keys = ['l','m','r']
-    for k in keys:
-        for idx, frame in enumerate(regions[k]):
-            cv2.imshow("",frame)
-            if cv2.waitKey(10) == ord('q'): break
-    cv2.destroyAllWindows()
-
     # Plot intensities
-    raw_intensities = ks.measure_region_intensities(regions, masks, keys)
-    normalized_intensities = ks.measure_region_intensities(regions, masks, keys, normalized=True)
-    views.plot_three_intensities(raw_intensities, metadata, save_figs=True, show_figs=False)
-    views.plot_three_intensities(normalized_intensities, metadata, save_figs=True, show_figs=False)
+    keys=['l','m','r']
+    show_figs=True
+    save_figs=True
+    figsize=(10,15)
+
+    raw_intensities = dp.measure_region_intensities(regions, masks, keys)
+    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+
+    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+
+    # Plot rates of change
+    raw_deriv = dp.get_intensity_diffs(raw_intensities)
+    views.plot_three_derivs(raw_deriv, metadata, show_figs, save_figs, figsize)
 
 
 

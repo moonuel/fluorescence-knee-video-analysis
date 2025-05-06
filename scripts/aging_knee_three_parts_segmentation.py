@@ -1,7 +1,7 @@
 import os
 import sys
 from src.core import knee_segmentation as ks
-from src.core import calculate_data as cd
+from src.core import data_processing as dp
 from src.utils import io, views
 import matplotlib.pyplot as plt
 
@@ -12,7 +12,7 @@ def main():
     # video = io.load_tif("../data/1 aging_00000221.tif") 
     # video_ctrd, translation_mxs = ks.pre_process_video(video) # Centers *all* frames
     video_ctrd = io.load_nparray("../data/processed/aging_knee_processed.npy")
-    translation_mxs = io.load_nparray("../data/processed/translation_mxs.npy")
+    translation_mxs = io.load_nparray("../data/processed/aging_translation_mxs.npy")
 
     # Process the coord data. TODO: wrap coords-dependent code in a loop to process all data sets at once?
     knee_name = "aging-3" 
@@ -27,8 +27,8 @@ def main():
 
     # Get intensity data
     keys = ["l", "m", "r"]
-    raw_intensities = cd.measure_region_intensities(regions, masks, keys) # Returns a dict
-    normalized_intensities = cd.measure_region_intensities(regions, masks, keys, normalized=True)
+    raw_intensities = dp.measure_region_intensities(regions, masks, keys) # Returns a dict
+    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
 
     # Plot intensities
     show_figs = False
@@ -40,8 +40,8 @@ def main():
     # exit(0)
 
     # Get per-region rate of change
-    raw_deriv = cd.get_intensity_diffs(raw_intensities)
-    # raw_deriv = cd.get_intensity_derivs(raw_intensities) # second order accuracy
+    raw_deriv = dp.get_intensity_diffs(raw_intensities)
+    # raw_deriv = dp.get_intensity_derivs(raw_intensities) # second order accuracy
 
     # Plot derivatives 
     views.plot_three_derivs(raw_deriv, metadata, show_figs, save_figs, figsize=figsize)
