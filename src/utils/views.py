@@ -49,7 +49,7 @@ def show_frames(video:np.ndarray) -> None:
 
     return
 
-def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False) -> None:
+def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple = (20,7)) -> None:
     """
     Inputs:
         intensities (Dict[str, np.ndarray, bool]) - region intensity values to be plotted 
@@ -73,9 +73,10 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
 
     # Plot three (or more) figs separately
     if vert_layout:
-        fig, axes = plt.subplots(len(keys), 1, figsize=(7,20))
+        fig, axes = plt.subplots(len(keys), 1, figsize=figsize)
     else:
-        fig, axes = plt.subplots(1, len(keys), figsize=(20,7))
+        fig, axes = plt.subplots(1, len(keys), figsize=figsize)
+
     i = 0
     for k in keys:
 
@@ -127,7 +128,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
 
     return
 
-def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=True, save_figs=False) -> None:
+def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=True, save_figs=False, figsize:Tuple[int,int]=(17,10)) -> None:
     """Plots the three derivatives"""
     if VERBOSE: print("plot_three_derivs() called!")
 
@@ -137,7 +138,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
     keys = ["l","m","r"]
     colors = {"l":"r","m":"g","r":"b"}
     
-    fig, ax = plt.subplots(3,1, figsize=(17,10))
+    fig, ax = plt.subplots(3,1, figsize=figsize)
     for i in range(3):
         k = keys[i]
         fns = np.arange(metadata["f0"], metadata["f0"] + len(derivs[k]))
