@@ -32,19 +32,47 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame) -> None:
     cv2.destroyAllWindows()    
     return
 
+# TODO: implement arrow keys traversal
+# def show_frames(video:np.ndarray) -> None:
+#     """Shows all frames. Press any button to advance, or 'q' to exit"""
+#     if VERBOSE: print("show_frames() called!")
+
+#     video = video.copy() # don't modify original
+#     h,w = video.shape[1:]
+#     btm_l_pos = (10, h - 10)
+
+#     for cf, frame in enumerate(video):
+#         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+#                     fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+#         cv2.imshow("show_frames()", frame)
+#         if cv2.waitKey(0) == ord('q'): break
+#     cv2.destroyAllWindows()
+
+#     return
+# 
 def show_frames(video:np.ndarray) -> None:
-    """Shows all frames. Press any button to advance, or 'q' to exit"""
+    """Shows all frames. Use keys {a,d} to navigate, or 'q' to exit"""
     if VERBOSE: print("show_frames() called!")
 
     video = video.copy() # don't modify original
-    h,w = video.shape[1:]
+    nfs, h,w = video.shape
     btm_l_pos = (10, h - 10)
+    cf=0
 
-    for cf, frame in enumerate(video):
+    while True:
+        frame = video[cf]
         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
                     fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
         cv2.imshow("show_frames()", frame)
-        if cv2.waitKey(0) == ord('q'): break
+
+        # Controls 
+        k = cv2.waitKey(0)
+        if k == ord('q'): break
+        if k == ord("a"): cf-=1
+        if k == ord("d"): cf+=1
+
+        # Edge handling
+        cf = cf%nfs # mod num_frames
     cv2.destroyAllWindows()
 
     return
