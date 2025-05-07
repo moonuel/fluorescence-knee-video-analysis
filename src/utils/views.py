@@ -288,3 +288,5 @@ def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int
     if show_video: show_frames(video)
     
     return video
+
+def show_radial_segments(video:np.ndarray)
