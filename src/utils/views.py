@@ -8,26 +8,43 @@ from typing import Dict, List, Tuple
 from src.utils import utils
 
 
-def plot_coords(video:np.ndarray, coords:pd.DataFrame) -> None:
+def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None) -> None:
     """Plots the set of coordinates for the three part segmentation"""
     if VERBOSE: print("plot_coords() called!")
 
     video = video.copy()
+    nfs, h, w = video.shape
     uqf = coords.index.unique()
-    for cf in uqf:
+    cf = uqf[0]
+
+    btm_l_pos = (10, h - 10)
+
+    if title is None: title = "plot_coords()"
+
+    while True:
 
         frame = video[cf]
         pts = coords.loc[cf].to_numpy().astype(int)
 
+        # Draw points and lines
         for x,y in pts:
             cv2.circle(frame, (x,y), 3, (255,255,255))
 
         cv2.line(frame, tuple(pts[0]), tuple(pts[1]), (255,255,255), 1)
         cv2.line(frame, tuple(pts[2]), tuple(pts[3]), (255,255,255), 1)
 
-        cv2.imshow("plot_coords()", frame)
+        # Draw line
+        cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+            fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
 
-        if cv2.waitKey(0) == ord('q'): break
+        cv2.imshow(title, frame)
+
+        # Controls
+        k = cv2.waitKey(0)
+        if k == ord('q'): break
+        if k == ord('a'): cf-=1
+        if k == ord('d'): cf+=1
+        cf = (cf - uqf[0]) % (uqf[-1] - uqf[0] + 1) + uqf[0] # Wrap cfs
 
     cv2.destroyAllWindows()    
     return
@@ -50,7 +67,7 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame) -> None:
 
 #     return
 # 
-def show_frames(video:np.ndarray) -> None:
+def show_frames(video:np.ndarray, title:str=None) -> None:
     """Shows all frames. Use keys {a,d} to navigate, or 'q' to exit"""
     if VERBOSE: print("show_frames() called!")
 
@@ -59,11 +76,13 @@ def show_frames(video:np.ndarray) -> None:
     btm_l_pos = (10, h - 10)
     cf=0
 
+    if title is None: title = "show_frames()"
+
     while True:
         frame = video[cf]
         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
                     fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
-        cv2.imshow("show_frames()", frame)
+        cv2.imshow(title, frame)
 
         # Controls 
         k = cv2.waitKey(0)
