@@ -23,7 +23,7 @@ def main():
 
     # Get masks
     regions, masks = ks.get_three_segments(video_ctrd, coords_ctrd)  
-    # views.display_regions(regions, keys) # Validate regions
+    # views.show_regions(regions, keys) # Validate regions
 
     # Get intensity data
     keys = ["l", "m", "r"]
