@@ -212,14 +212,14 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
     plt.close("all")
     return
 
-def display_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
-    if VERBOSE: print("display_regions() called!")
+def show_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
+    if VERBOSE: print("show_regions() called!")
 
     regions = regions.copy()
     n_frames = regions[keys[0]].shape[0] # Assume each np.ndarray in regions[] has the same dimensions
     for cf in np.arange(n_frames):
         f_stack = np.hstack(tuple([utils.crop_frame_square(regions[k][cf], h=350) for k in keys]))
-        cv2.imshow(f"display_regions()", f_stack)
+        cv2.imshow(f"show_regions()", f_stack)
         if cv2.waitKey(0) == ord('q'): break
     cv2.destroyAllWindows()
 
