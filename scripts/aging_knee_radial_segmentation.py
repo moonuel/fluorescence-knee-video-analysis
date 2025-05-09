@@ -260,11 +260,12 @@ def main():
 
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
+    views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=10)
     views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
+    views.show_radial_segments(radial_regions)
 
-    views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     
     # > TODO: Get the leftmost points
     # > TODO: Get the basic femur estimation
