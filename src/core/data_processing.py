@@ -50,7 +50,43 @@ def measure_region_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, 
 
     return region_intensities
 
+def _measure_region_mean_intensity(region: np.ndarray) -> np.ndarray:
+    """
+        Helper function. Returns mean of pixel intensities for every frame.
+    """
+    # if VERBOSE: print("_measure_region_intensity() called!")
 
+    intensities = []
+    for cf, frame in enumerate(region):
+        nonzero = frame[frame!=0]
+        intsty = np.mean(nonzero) # np.mean instead of np.sum
+        intensities.append(intsty)
+
+    intensities = np.array(intensities)
+
+    return intensities
+
+# TODO: refine return type hint. TypedDict? 
+def measure_region_mean_intensities(regions: Dict[str, np.ndarray], masks: Dict[str, np.ndarray], keys: List[str]) -> Dict: 
+    """
+    For testing/comparison with Juan's plots.
+    Inputs: 
+        regions (Dict[str, np.ndarray]) - segmented regions for which brightness is to be measured
+        masks (Dict[str, np.ndarray]) - corresponding segmented masks used for normalization
+        keys (List[str]) - specifies which regions are to be measured
+        normalized (bool) - flag to normalize data
+    Outputs:
+        region_intensities (Dict[str, np.ndarray, bool]) - Dict of region intensity readings (np.ndarray); and also a normalized (bool) flag
+    """
+    if VERBOSE: print("measure_region_mean_intensities() called!")
+
+    region_intensities = {}
+    for k in keys:
+        region_intensities[k] = _measure_region_mean_intensity(regions[k])
+        
+    region_intensities["normalized"] = False # Store some metadata TODO This needs to be retired...
+
+    return region_intensities
 
 
 def get_intensity_diffs(intensities: Dict) -> Dict[str, np.ndarray]:
