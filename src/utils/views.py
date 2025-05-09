@@ -259,6 +259,19 @@ def _draw_mask_outline(frame:np.ndarray, mask_segment:np.ndarray) -> np.ndarray:
     return frame
 
 
+def draw_current_frame_num(frame:np.ndarray, frame_num:int) -> None:
+    """Draws current frame number on the bottom left corner, directly on the frame. Modifies input frame."""
+
+    h, w = frame.shape
+    btm_l_pos = (10, h - 10)
+    
+    # Draw line
+    cv2.putText(frame, str(frame_num), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+        fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+    
+    return
+
+
 def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray) -> None:
     if VERBOSE: print("draw_radial_segments() called!")
 
@@ -275,6 +288,7 @@ def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray) -> None:
         for seg in range(nsegs):
             frame = _draw_mask_outline(frame, radial_masks[seg, cf])
 
+        draw_current_frame_num(frame, cf)
         cv2.imshow("draw_radial_segments()", frame)
 
         # Controls
