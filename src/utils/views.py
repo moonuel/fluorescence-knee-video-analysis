@@ -49,53 +49,6 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None) -> None:
     cv2.destroyAllWindows()    
     return
 
-# TODO: implement arrow keys traversal
-# def show_frames(video:np.ndarray) -> None:
-#     """Shows all frames. Press any button to advance, or 'q' to exit"""
-#     if VERBOSE: print("show_frames() called!")
-
-#     video = video.copy() # don't modify original
-#     h,w = video.shape[1:]
-#     btm_l_pos = (10, h - 10)
-
-#     for cf, frame in enumerate(video):
-#         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
-#                     fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
-#         cv2.imshow("show_frames()", frame)
-#         if cv2.waitKey(0) == ord('q'): break
-#     cv2.destroyAllWindows()
-
-#     return
-# 
-def show_frames(video:np.ndarray, title:str=None) -> None:
-    """Shows all frames. Use keys {a,d} to navigate, or 'q' to exit"""
-    if VERBOSE: print("show_frames() called!")
-
-    video = video.copy() # don't modify original
-    nfs, h,w = video.shape
-    btm_l_pos = (10, h - 10)
-    cf=0
-
-    if title is None: title = "show_frames()"
-
-    while True:
-        frame = video[cf]
-        cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
-                    fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
-        cv2.imshow(title, frame)
-
-        # Controls 
-        k = cv2.waitKey(0)
-        if k == ord('q'): break
-        if k == ord("a"): cf-=1
-        if k == ord("d"): cf+=1
-
-        # Edge handling
-        cf = cf%nfs # mod num_frames
-    cv2.destroyAllWindows()
-
-    return
-
 def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple = (20,7), normalized:bool=False) -> None: 
     # TODO: added normalized parameter. remove normalized metadata from intensity data
     """
@@ -138,14 +91,16 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
 
         i+=1
 
-    i=0
     # Vertical layout formatting
     if vert_layout: 
         axes[0].set_title(f"{metadata['knee_id']} knee pixel intensities")
     else:
-        for k in keys:
-            axes[0].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
-            i+=1
+        axes[1].set_title(f"Knee pixel intensities {ttl_sfx}")
+
+        # i=0
+        # for k in keys:
+        #     axes[i].set_title(ttl_pfx[k] + " knee pixel intensities " + ttl_sfx)
+        #     i+=1
 
 
     if save_figs:
@@ -157,7 +112,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
 
 
     # Plot three (or more) figs combined
-    plt.figure(figsize=(15,8))
+    plt.figure(figsize=figsize)
     for k in keys:
         plt.plot(fns, intensities[k], color=clrs[k], label=ttl_pfx[k] + " knee")
     plt.axvline(metadata["flx_ext_pt"], color='k', linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
@@ -212,16 +167,93 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
     plt.close("all")
     return
 
+# TODO: implement arrow keys traversal
+# def show_frames(video:np.ndarray) -> None:
+#     """Shows all frames. Press any button to advance, or 'q' to exit"""
+#     if VERBOSE: print("show_frames() called!")
+
+#     video = video.copy() # don't modify original
+#     h,w = video.shape[1:]
+#     btm_l_pos = (10, h - 10)
+
+#     for cf, frame in enumerate(video):
+#         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+#                     fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+#         cv2.imshow("show_frames()", frame)
+#         if cv2.waitKey(0) == ord('q'): break
+#     cv2.destroyAllWindows()
+
+#     return
+# 
+def show_frames(video:np.ndarray, title:str=None) -> None:
+    """Shows all frames. Use keys {a,d} to navigate, or 'q' to exit"""
+    if VERBOSE: print("show_frames() called!")
+
+    video = video.copy() # don't modify original
+    nfs, h,w = video.shape
+    btm_l_pos = (10, h - 10)
+    cf=0
+
+    if title is None: title = "show_frames()"
+
+    while True:
+        frame = video[cf]
+        cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+                    fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+        cv2.imshow(title, frame)
+
+        # Controls 
+        k = cv2.waitKey(0)
+        if k == ord('q'): break
+        if k == ord("a"): cf-=1
+        if k == ord("d"): cf+=1
+
+        # Edge handling
+        cf = cf%nfs # mod num_frames
+    cv2.destroyAllWindows()
+
+    return
+
 def show_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
     if VERBOSE: print("show_regions() called!")
 
     regions = regions.copy()
-    n_frames = regions[keys[0]].shape[0] # Assume each np.ndarray in regions[] has the same dimensions
-    for cf in np.arange(n_frames):
+    n_frames, _, _ = regions[keys[0]].shape # Assume each np.ndarray in regions[] has the same dimensions
+
+    cf = 0
+    # for cf in np.arange(n_frames):
+    while True:
+
         f_stack = np.hstack(tuple([utils.crop_frame_square(regions[k][cf], h=350) for k in keys]))
+        # f_stack = regions["l"][cf] | regions['m'][cf] | regions['r'][cf]
+        h = f_stack.shape[0]
+        btm_l_pos = (10, h - 10)
+
+        cv2.putText(f_stack, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+                    fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+        
+
         cv2.imshow(f"show_regions()", f_stack)
-        if cv2.waitKey(0) == ord('q'): break
+
+        # Controls
+        c = cv2.waitKey(0)
+        if c == ord('q'): break
+        if c == ord("a"): cf-=1
+        if c == ord("d"): cf+=1
+        cf = cf%n_frames # Wrap frames
+
     cv2.destroyAllWindows()
+
+def show_radial_segments(radial_segments:np.ndarray) -> None:
+    if VERBOSE: print("show_radial_segments() called!")
+
+    # Show lines between each region
+    # x outline each region?
+
+    # Print slice number in the middle of each region
+
+    # Controls
+
 
 def draw_middle_lines(video:np.ndarray, show_video:bool=True, hplace:float=0.5, vplace:float=0.5) -> np.ndarray:
     """Draws lines through the middle of the frame. Lines can be offset by optional params"""
@@ -288,5 +320,3 @@ def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int
     if show_video: show_frames(video)
     
     return video
-
-def show_radial_segments(video:np.ndarray)
