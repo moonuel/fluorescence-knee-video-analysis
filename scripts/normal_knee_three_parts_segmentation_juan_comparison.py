@@ -35,7 +35,7 @@ def main():
     keys=['l','m','r']
     show_figs=True
     save_figs=False
-    figsize=(5,3)
+    figsize=(9,3)
 
     raw_intensities = dp.measure_region_mean_intensities(regions, masks, keys)
 
