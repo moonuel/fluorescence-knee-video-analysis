@@ -244,8 +244,48 @@ def show_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
 
     cv2.destroyAllWindows()
 
-def show_radial_segments(radial_segments:np.ndarray) -> None:
-    if VERBOSE: print("show_radial_segments() called!")
+def _draw_mask_outline(frame:np.ndarray, mask_segment:np.ndarray) -> np.ndarray:
+    """Helper function. Draws the outline of a binary mask on the frame and returns it"""
+
+    assert frame.shape == mask_segment.shape
+
+    frame = frame.copy()
+    mask_segment = mask_segment.copy()
+    cv2.imshow("test", mask_segment)
+
+    im, contours, _ = cv2.findContours(mask_segment, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    cv2.drawContours(frame, contours, -1, (255,0,0), 1)
+
+    return frame
+
+
+def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray) -> None:
+    if VERBOSE: print("draw_radial_segments() called!")
+
+    radial_masks = radial_masks.copy()
+    video = video.copy()
+
+    nsegs, nfrs, h, w = radial_masks.shape
+
+    cf = 0
+    while True: # for every frame
+
+        frame = video[cf]
+
+        for seg in range(nsegs):
+            frame = _draw_mask_outline(frame, radial_masks[seg, cf])
+
+        cv2.imshow("draw_radial_segments()", frame)
+
+        # Controls
+        c = cv2.waitKey(0)
+        if c == ord('q'): break
+        if c == ord('a'): cf-=1
+        if c == ord('d'): cf+=1
+        cf = cf%nfrs
+
+    cv2.destroyAllWindows()
+    return
 
     # Show lines between each region
     # x outline each region?
@@ -284,7 +324,7 @@ def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=True) -> np.
 
     return video
 
-def draw_points_(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
+def _draw_points(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
     """Helper func to draw_points(). Draws a set of points in pts directly on the frame."""
     if pts.ndim != 2 or pts.shape[1] != 2: 
         raise ValueError(f"draw_points_(): 'pts' must be 2D array with shape (N, 2)")
@@ -303,7 +343,7 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=True) -> np.nd
     pts = pts.copy()
 
     for cf in range(video.shape[0]):
-        draw_points_(video[cf], pts[cf])
+        _draw_points(video[cf], pts[cf])
 
     if show_video: show_frames(video)
     
