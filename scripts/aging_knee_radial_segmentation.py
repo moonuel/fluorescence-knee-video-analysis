@@ -231,7 +231,7 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
         radial_masks[n] = intersect_masks(radial_slices[n], otsu_region)
-        # views.show_frames(radial_masks[n]) # Validate radial regions
+        views.show_frames(radial_masks[n]) # Validate radial regions
 
     return radial_regions, radial_masks
 
@@ -261,14 +261,15 @@ def main():
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask_adt)
     # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=20, radius_scale=2)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=4, radius_scale=2)
     # views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
     
     video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
     video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
-    video_demo = views.draw_points(video_demo, circle_pts, show_video=False)
-    video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=True)
+    # video_demo = views.draw_points(video_demo, circle_pts, show_video=False)
+    video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
+    # video_demo = views.
 
     
     # > TODO: Get the leftmost points

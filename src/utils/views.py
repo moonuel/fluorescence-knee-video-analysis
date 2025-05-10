@@ -361,15 +361,29 @@ def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int
     return video
 
 def _draw_numbers_on_circle_coords(frame:np.ndarray, coords:np.ndarray):
+    """Helper function. Draws number in each slice."""
 
+    h, w = frame.shape
     N, _ = coords.shape
-    # TODO: shift coords by pi/N
-    
+
+    cx, cy = w / 2, h / 2  # note (x, y) order for center
+    theta = np.pi / N
+
+    rot_mx = np.array([
+        [np.cos(theta), -np.sin(theta)],
+        [np.sin(theta),  np.cos(theta)]
+    ])
+
     for n in range(N):
-        
-        x, y = coords[n]
-        cv2.putText(frame, str(n), (x,y), fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
-            fontScale = 0.2, color = (255,255,0), thickness = 1, lineType=cv2.LINE_AA)
+
+        x,y = coords[n]
+        vec = np.array([x - cx, y - cy]) # vector from center
+        rot_vec = rot_mx @ vec 
+        nx, ny = rot_vec + np.array([cx, cy]) # translate back
+        nx, ny = int(nx), int(ny)
+
+        cv2.putText(frame, str(n), (nx,ny), fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+            fontScale = 0.3, color = (255,255,0), thickness = 1, lineType=cv2.LINE_AA)
 
     return
 
