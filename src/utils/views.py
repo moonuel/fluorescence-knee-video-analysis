@@ -186,7 +186,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
 
 #     return
 # 
-def show_frames(video:np.ndarray, title:str=None) -> None:
+def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     """Shows all frames. Use keys {a,d} to navigate, or 'q' to exit"""
     if VERBOSE: print("show_frames() called!")
 
@@ -199,8 +199,10 @@ def show_frames(video:np.ndarray, title:str=None) -> None:
 
     while True:
         frame = video[cf]
-        cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
-                    fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+
+        if show_num:
+            cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+        
         cv2.imshow(title, frame)
 
         # Controls 
@@ -399,4 +401,22 @@ def draw_radial_slice_numbers(video:np.ndarray, coords_on_circle:np.ndarray, sho
 
     if show_video: show_frames(video)
 
-    return
+    return video
+
+def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True) -> np.ndarray:
+
+    video = video.copy()
+    nfrs, h,w = video.shape
+
+    # nh, nw = h*scale_factor, w*scale_factor
+    # nh, nw = int(nh), int(nw)
+
+    video_rscld = []
+    for cf in range(nfrs):
+        frame = cv2.resize(video[cf], None, fx = scale_factor, fy = scale_factor, interpolation=cv2.INTER_LINEAR)
+        video_rscld.append(frame)
+    video_rscld = np.array(video_rscld)
+
+    if show_video: show_frames(video_rscld, show_num=False)
+
+    return video_rscld
