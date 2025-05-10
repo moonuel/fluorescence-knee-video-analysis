@@ -47,7 +47,7 @@ def get_closest_pts_to_edge(video:np.ndarray, edge:str) -> List[Tuple[int,int]]:
     
     return pts
 
-def get_N_points_on_circle_(circle_ctr: Tuple[int, int], ref_pt: Tuple[int, int], N: int) -> np.ndarray:
+def _get_N_points_on_circle(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N:int, radius_scale:int=1) -> np.ndarray:
     """Returns N equally spaced points on a circle as a NumPy array.
     
     Args:
@@ -60,7 +60,7 @@ def get_N_points_on_circle_(circle_ctr: Tuple[int, int], ref_pt: Tuple[int, int]
     """
     cx, cy = circle_ctr
     rx, ry = ref_pt
-    radius = math.hypot(rx - cx, ry - cy)
+    radius = math.hypot(rx - cx, ry - cy)*radius_scale
     start_angle = math.atan2(ry - cy, rx - cx)
     
     circle_pts = np.zeros((N, 2), dtype=np.int32)
@@ -72,7 +72,7 @@ def get_N_points_on_circle_(circle_ctr: Tuple[int, int], ref_pt: Tuple[int, int]
     
     return circle_pts
 
-def get_N_points_on_circle(circle_ctrs: List[Tuple[int,int]], ref_pts: List[Tuple[int,int]], N: int) -> np.ndarray:
+def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[int,int]], N:int, radius_scale:int=1) -> np.ndarray:
     """Gets N points on a circle for an entire video.
     
     Returns:
@@ -92,7 +92,7 @@ def get_N_points_on_circle(circle_ctrs: List[Tuple[int,int]], ref_pts: List[Tupl
             circle_points.append(np.zeros((N, 2), dtype=np.int32))
             continue
         
-        circ_pts = get_N_points_on_circle_(circle_ctrs[i], ref_pts[i], N)
+        circ_pts = _get_N_points_on_circle(circle_ctrs[i], ref_pts[i], N, radius_scale)
         circle_points.append(circ_pts)
     circle_points = np.array(circle_points)
 
@@ -231,7 +231,7 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
         radial_masks[n] = intersect_masks(radial_slices[n], otsu_region)
-        views.show_frames(radial_masks[n]) # Validate radial regions
+        # views.show_frames(radial_masks[n]) # Validate radial regions
 
     return radial_regions, radial_masks
 
@@ -253,18 +253,22 @@ def main():
 
     # Get adaptive mean mask
     video_blr = utils.blur_video(video, (31,31), 0)
-    mask = utils.mask_adaptive(video_blr, 71, -2)
-    mask = utils.morph_open(mask, (15,15)) # clean small artifacts
+    mask_adt = utils.mask_adaptive(video_blr, 71, -2)
+    mask_adt = utils.morph_open(mask_adt, (15,15)) # clean small artifacts
     # views.show_frames(mask) # Validate mask    
     # views.draw_middle_lines(mask, show_video=True) # Validate rotation
 
     # Get radial segmentation
-    femur_endpts, femur_midpts = estimate_femur_position(mask)
+    femur_endpts, femur_midpts = estimate_femur_position(mask_adt)
     # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=3)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=20, radius_scale=2)
     # views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
-    views.draw_radial_masks(video, radial_masks) # Validate radial segments
+    
+    video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
+    video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
+    video_demo = views.draw_points(video_demo, circle_pts, show_video=False)
+    video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=True)
 
     
     # > TODO: Get the leftmost points

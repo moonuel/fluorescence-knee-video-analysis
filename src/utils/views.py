@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import math
 from src.config import VERBOSE
 from typing import Dict, List, Tuple
 from src.utils import utils
@@ -251,10 +252,9 @@ def _draw_mask_outline(frame:np.ndarray, mask_segment:np.ndarray) -> np.ndarray:
 
     frame = frame.copy()
     mask_segment = mask_segment.copy()
-    cv2.imshow("test", mask_segment)
 
     im, contours, _ = cv2.findContours(mask_segment, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    cv2.drawContours(frame, contours, -1, (255,0,0), 1)
+    cv2.drawContours(frame, contours, -1, (127,0,0), 1)
 
     return frame
 
@@ -272,41 +272,26 @@ def draw_current_frame_num(frame:np.ndarray, frame_num:int) -> None:
     return
 
 
-def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray) -> None:
-    if VERBOSE: print("draw_radial_segments() called!")
+def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray, show_video:bool=True) -> None:
+    if VERBOSE: print("draw_radial_masks() called!")
 
     radial_masks = radial_masks.copy()
     video = video.copy()
 
     nsegs, nfrs, h, w = radial_masks.shape
 
-    cf = 0
-    while True: # for every frame
+    for cf in range(nfrs):
 
         frame = video[cf]
 
         for seg in range(nsegs):
-            frame = _draw_mask_outline(frame, radial_masks[seg, cf])
+            video[cf] = _draw_mask_outline(frame, radial_masks[seg, cf])
 
         draw_current_frame_num(frame, cf)
-        cv2.imshow("draw_radial_segments()", frame)
 
-        # Controls
-        c = cv2.waitKey(0)
-        if c == ord('q'): break
-        if c == ord('a'): cf-=1
-        if c == ord('d'): cf+=1
-        cf = cf%nfrs
+    if show_video: show_frames(video)
 
-    cv2.destroyAllWindows()
-    return
-
-    # Show lines between each region
-    # x outline each region?
-
-    # Print slice number in the middle of each region
-
-    # Controls
+    return video
 
 
 def draw_middle_lines(video:np.ndarray, show_video:bool=True, hplace:float=0.5, vplace:float=0.5) -> np.ndarray:
@@ -374,3 +359,30 @@ def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int
     if show_video: show_frames(video)
     
     return video
+
+def _draw_numbers_on_circle_coords(frame:np.ndarray, coords:np.ndarray):
+
+    N, _ = coords.shape
+    # TODO: shift coords by pi/N
+    
+    for n in range(N):
+        
+        x, y = coords[n]
+        cv2.putText(frame, str(n), (x,y), fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+            fontScale = 0.2, color = (255,255,0), thickness = 1, lineType=cv2.LINE_AA)
+
+    return
+
+def draw_radial_slice_numbers(video:np.ndarray, coords_on_circle:np.ndarray, show_video:bool=True) -> np.ndarray:
+    """Draws the slice number on every frame"""
+
+    nfrs, h, w = video.shape
+
+    for cf in range(nfrs):
+        
+        frame = video[cf]
+        _draw_numbers_on_circle_coords(frame, coords_on_circle[cf])
+
+    if show_video: show_frames(video)
+
+    return
