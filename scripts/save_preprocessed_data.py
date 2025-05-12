@@ -5,7 +5,7 @@ from src.core import data_processing as dp
 def main():
 
     video = io.load_avi("../data/video_1.avi")
-    video, translation_mxs = ks.pre_process_video(video)
+    video, translation_mxs = ks.centre_video(video)
 
     io.save_nparray(video, "../data/processed/normal_knee_processed.npy")
     io.save_nparray(translation_mxs, "../data/processed/normal_translation_mxs.npy")

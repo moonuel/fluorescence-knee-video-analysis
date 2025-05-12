@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 VERBOSE = True
 DEBUG = True
 
-def pre_process_video(video: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def centre_video(video: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Inputs:
         video (np.ndarray) - video to be pre-processed. Dimensions (nframes, height, width)
@@ -19,7 +19,7 @@ def pre_process_video(video: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         video (np.ndarray) - processed video. Dimensions (nframes, height, width)
         translation_mxs (np.ndarray) - translation matrices used to centre each frame
     """
-    if VERBOSE: print("pre_process_video() called!")
+    if VERBOSE: print("centre_video() called!")
 
     video_ctrd = []
     translation_mxs = []

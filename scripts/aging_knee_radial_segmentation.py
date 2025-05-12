@@ -239,7 +239,7 @@ def main():
     if VERBOSE: print("main() called!")
 
     # Load pre-processed video
-    # video, _ = knee.pre_process_video(video) 
+    # video, _ = knee.centre_video(video) 
     video = io.load_nparray("../data/processed/aging_knee_processed.npy") # result of above function call
 
     # Pre-process video

@@ -10,7 +10,7 @@ def main():
 
     # Process the video data 
     # video = io.load_tif("../data/1 aging_00000221.tif") 
-    # video_ctrd, translation_mxs = ks.pre_process_video(video) # Centers *all* frames
+    # video_ctrd, translation_mxs = ks.centre_video(video) # Centers *all* frames
     video_ctrd = io.load_nparray("../data/processed/aging_knee_processed.npy")
     translation_mxs = io.load_nparray("../data/processed/aging_translation_mxs.npy")
 
