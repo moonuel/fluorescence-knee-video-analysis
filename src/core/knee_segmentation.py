@@ -87,6 +87,7 @@ def smooth_coords(coords:pd.DataFrame, window_size:int) -> pd.DataFrame:
 
 def get_three_segments(video: np.ndarray, coords: np.ndarray, thresh_scale:int=0.8) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
     """
+    Manually segments a knee video using a set of coordinates and Otsu thresholded masks. 
     Inputs: 
         video (np.ndarray) - video to be manually segmented
         coords (np.ndarray) - coordinates to use for three part segmentation

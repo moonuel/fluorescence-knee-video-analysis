@@ -20,9 +20,12 @@ def main():
     translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
 
     # Load and transform coords
-    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=3)
+    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=0)
     coords = ks.translate_coords(translation_mxs, coords)
     # coords = ks.smooth_coords(coords, 5) # Smooth coords
+
+    # Log transform video
+    video = utils.log_transform_video(video, gain=1)
 
     # Segment video
     regions, masks = ks.get_three_segments(video, coords, thresh_scale=0.65)
@@ -31,7 +34,7 @@ def main():
     keys=['l','m','r']
     show_figs=True
     save_figs=True
-    figsize=(10,15)
+    figsize=(9,3)
 
     raw_intensities = dp.measure_region_intensities(regions, masks, keys)
     normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)

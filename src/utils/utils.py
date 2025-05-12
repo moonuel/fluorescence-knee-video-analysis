@@ -363,3 +363,56 @@ def rotate_video(video:np.ndarray, angle:int, center:Tuple[int,int]=None) -> np.
 
     return video_r
 
+def log_transform_video(video:np.ndarray, gain:float=1.0) -> np.ndarray:
+    """Log transforms every frame in a video"""
+
+    video = video.copy()
+    for cf, frame in enumerate(video):
+        # video[cf] = _log_transform_frame(frame, gain)
+        # video[cf] = _adjust_log_cv(frame, gain)
+        video[cf] = _log_transform_opencv(frame, gain=1)
+
+    return video
+
+def _log_transform_frame(frame:np.ndarray, gain:float) -> np.ndarray:
+    """Helper function. Log transforms a frame"""
+    # Convert to float32 for precision and avoid overflow
+    flt_frm = frame.astype(np.float32)
+
+    # Apply log transform
+    log_frame = gain * np.log1p(flt_frm)  # log(1 + I)
+
+    # Normalize to [0,255] and convert back to uint8
+    log_frame = cv2.normalize(log_frame, None, 0, 255, cv2.NORM_MINMAX)
+
+    return np.uint8(log_frame)
+
+def _adjust_log_cv(img, gain=1.0):
+    """Helper function. Log transforms a frame. Similar to skimage.exposure.adjust_log()?"""
+    img = img.astype(np.float32)
+    img /= img.max()  # Normalize to [0, 1]
+    log_img = gain * np.log1p(img)  # log(1 + I)
+    log_img = np.clip(log_img / log_img.max(), 0, 1)  # Normalize log output
+    return np.uint8(log_img * 255)  # Scale to [0, 255]
+
+import numpy as np
+import cv2
+
+def _log_transform_opencv(image: np.ndarray, gain: float = 1.0, inv: bool = False) -> np.ndarray:
+    """Log or inverse log correction using OpenCV-compatible operations."""
+    if np.any(image < 0):
+        raise ValueError("Image contains negative values. Log transform is undefined.")
+
+    image = image.astype(np.float32)  # work in float
+    scale = 255.0 if image.dtype == np.uint8 else image.max()
+
+    image_scaled = image / scale  # normalize to [0,1]
+
+    if inv:
+        out = (2 ** image_scaled - 1) * scale * gain
+    else:
+        out = np.log2(1 + image_scaled) * scale * gain
+
+    out = np.clip(out, 0, 255)
+    return out.astype(np.uint8)  # convert back for OpenCV display
+
