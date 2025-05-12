@@ -23,7 +23,7 @@ def main():
     video_smthd = views.plot_coords(video, coords_smthd, show_video=False)
     video_smthd = views.rescale_video(video_smthd, 0.5, show_video=False)
 
-    views.show_frames(np.concatenate([video_unsmthd, video_smthd], axis=2), show_num=False)
+    views.show_frames(np.concatenate([video_unsmthd[71:156], video_smthd[71:156]], axis=2), show_num=False, title="Left: Unsmoothed coords, right: Smoothed coords")
 
 if __name__ == "__main__":
     main()
