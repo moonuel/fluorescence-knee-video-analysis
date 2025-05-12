@@ -271,15 +271,15 @@ def main():
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
-    
-    # > TODO: Get the leftmost points
-    # > TODO: Get the basic femur estimation
-    # > TODO: Generate radial segmentation
-    # ^ Combine the radial slices into parts corresponding to the left/middle/right knee
-    # ^ Generate intensity plots -> see if its comparable to manual segmentation
-    # x TODO: Brainstorm femur endpoint estimation improvementsqq
-    # x TODO: Get points on the interior of the mask region
-    # x TODO: Fit least-squares line through all points 
+    # TODO:
+    # > Get the leftmost points
+    # > Get the basic femur estimation
+    # > Generate radial segmentation
+        # x Combine the radial slices into parts corresponding to the left/middle/right knee
+        # x Generate intensity plots -> see if its comparable to manual segmentation
+    # x Brainstorm femur endpoint estimation improvements
+        # x Get points on the interior of the mask region
+        # x Fit least-squares line through all points 
 
 if __name__ == "__main__":
     main()

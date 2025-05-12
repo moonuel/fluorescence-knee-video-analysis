@@ -407,7 +407,7 @@ def draw_radial_slice_numbers(video:np.ndarray, coords_on_circle:np.ndarray, sho
 
     return video
 
-def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True) -> np.ndarray:
+def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True, show_num:bool=False) -> np.ndarray:
 
     video = video.copy()
     nfrs, h,w = video.shape
@@ -421,6 +421,6 @@ def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True) -> n
         video_rscld.append(frame)
     video_rscld = np.array(video_rscld)
 
-    if show_video: show_frames(video_rscld, show_num=False)
+    if show_video: show_frames(video_rscld, show_num=show_num)
 
     return video_rscld
