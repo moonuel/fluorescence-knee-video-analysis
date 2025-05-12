@@ -20,31 +20,32 @@ def main():
     translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
 
     # Load and transform coords
-    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=0)
+    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=2)
     coords = ks.translate_coords(translation_mxs, coords)
-    # coords = ks.smooth_coords(coords, 5) # Smooth coords
+    coords = ks.smooth_coords(coords, 5) # Smooth coords
 
-    # Log transform video
+    # Transform video like Juan
+    video = utils.blur_video(video, kernel_dims=(25,25), sigma=3)
     video = utils.log_transform_video(video, gain=1)
 
     # Segment video
-    regions, masks = ks.get_three_segments(video, coords, thresh_scale=0.65)
+    regions, masks = ks.get_three_segments(video, coords, thresh_scale=1)
 
     # Plot intensities
     keys=['l','m','r']
     show_figs=True
     save_figs=True
-    figsize=(9,3)
+    figsize=(9,17)
 
     raw_intensities = dp.measure_region_intensities(regions, masks, keys)
-    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+    # normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
 
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
-    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+    # views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
 
     # Plot rates of change
-    raw_deriv = dp.get_intensity_diffs(raw_intensities)
-    views.plot_three_derivs(raw_deriv, metadata, show_figs, save_figs, figsize)
+    # raw_deriv = dp.get_intensity_diffs(raw_intensities)
+    # views.plot_three_derivs(raw_deriv, metadata, show_figs, save_figs, figsize)
 
 
 

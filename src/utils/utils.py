@@ -309,7 +309,7 @@ def pixels_left_of_line(frame, p1, p2):
 
 
 
-def blur_video(video:np.ndarray, kernel_dims:Tuple[int,int], sigma:int=0) -> np.ndarray:
+def blur_video(video:np.ndarray, kernel_dims:Tuple[int,int]=(25,25), sigma:int=0) -> np.ndarray:
     """Implements a Gaussian blur over a grayscale video with dimensions (nframes,hgt,wth)"""
     if VERBOSE: print("blur_video() called!")
 
