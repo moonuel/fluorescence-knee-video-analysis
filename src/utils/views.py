@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple
 from src.utils import utils
 
 
-def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None) -> None:
+def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None, show_video:bool=True) -> np.ndarray:
     """Plots the set of coordinates for the three part segmentation"""
     if VERBOSE: print("plot_coords() called!")
 
@@ -22,7 +22,8 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None) -> None:
 
     if title is None: title = "plot_coords()"
 
-    while True:
+    # while True:
+    for cf in np.arange(uqf[0], uqf[-1] + 1):
 
         frame = video[cf]
         pts = coords.loc[cf].to_numpy().astype(int)
@@ -38,17 +39,20 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None) -> None:
         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
             fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
 
-        cv2.imshow(title, frame)
+        # cv2.imshow(title, frame)
 
-        # Controls
-        k = cv2.waitKey(0)
-        if k == ord('q'): break
-        if k == ord('a'): cf-=1
-        if k == ord('d'): cf+=1
-        cf = (cf - uqf[0]) % (uqf[-1] - uqf[0] + 1) + uqf[0] # Wrap cfs
+        # # Controls
+        # k = cv2.waitKey(0)
+        # if k == ord('q'): break
+        # if k == ord('a'): cf-=1
+        # if k == ord('d'): cf+=1
+        # cf = (cf - uqf[0]) % (uqf[-1] - uqf[0] + 1) + uqf[0] # Wrap cfs
 
-    cv2.destroyAllWindows()    
-    return
+    # cv2.destroyAllWindows()    
+
+    if show_video: show_frames(video, title=title)
+
+    return video
 
 def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple = (20,7), normalized:bool=False) -> None: 
     # TODO: added normalized parameter. remove normalized metadata from intensity data
