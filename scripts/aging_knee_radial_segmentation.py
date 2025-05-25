@@ -307,8 +307,8 @@ def main():
     keys = ['l','m','r']
 
     # Get intensity data
-    # raw_intensities = dp.measure_region_intensities(regions, masks, keys)
-    # normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+    raw_intensities = dp.measure_region_intensities(regions, masks, keys)
+    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
     # print(raw_intensities)
     # print(metadata)
 
@@ -316,8 +316,8 @@ def main():
     show_figs=True
     save_figs=False
     figsize=(9,17)
-    # views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
-    # views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
+    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
 
 
     # > Get the leftmost points
