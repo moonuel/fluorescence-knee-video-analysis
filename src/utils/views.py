@@ -68,7 +68,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
     """
     if VERBOSE: print("plot_three_intensities() called!")
 
-    normalized = intensities["normalized"] # Get intensity metadata 
+    normalized = intensities["normalized"] # Get intensity metadata (boolean flag)
     keys = ["l", "m", "r"] # Hardcoded 
     plt.style.use('default')
 
