@@ -246,7 +246,7 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     otsu_region = intersect_masks(otsu_masks, video)
     radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
-        radial_masks[n] = intersect_masks(radial_slices[n], otsu_region)
+        radial_regions[n] = intersect_masks(radial_slices[n], otsu_region)
         # views.show_frames(radial_masks[n]) # Validate radial regions
 
     return radial_regions, radial_masks
@@ -296,9 +296,11 @@ def main():
     m_mask = combine_masks(radial_masks[8:13])
     r_mask = combine_masks(radial_masks[2:8])
 
-    l_region = radial_regions[12:]
-    m_region = radial_regions[8:13]
-    r_region = radial_regions[2:8]
+    l_region = combine_masks(radial_regions[12:])
+    m_region = combine_masks(radial_regions[8:13])
+    r_region = combine_masks(radial_regions[2:8])
+    views.show_frames(m_mask) # Validate combined masks/regions
+    views.show_frames(m_region)
 
     masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} # shape (nslices, nframes, h, w)
     regions = {'l': l_region, 'm': m_region, 'r': r_region}
