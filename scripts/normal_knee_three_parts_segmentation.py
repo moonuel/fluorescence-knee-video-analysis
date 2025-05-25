@@ -20,7 +20,7 @@ def main():
     translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
 
     # Load and transform coords
-    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=2)
+    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=0)
     coords = ks.translate_coords(translation_mxs, coords)
     coords = ks.smooth_coords(coords, 5) # Smooth coords
 

@@ -39,6 +39,9 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None, show_vide
         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
             fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
 
+        # Commit changes
+        video[cf] = frame
+
         # cv2.imshow(title, frame)
 
         # # Controls

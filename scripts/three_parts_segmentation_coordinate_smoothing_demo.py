@@ -10,7 +10,7 @@ def main():
     # Load example video and coords
     video = io.load_nparray("../data/processed/normal_knee_processed.npy")
     translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
-    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 3) # 8.6 normal knee
+    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 0) # 8.6 normal knee
     coords = ks.translate_coords(translation_mxs, coords) # Center the coords
 
     # Smooth coords
@@ -23,7 +23,11 @@ def main():
     video_smthd = views.plot_coords(video, coords_smthd, show_video=False)
     video_smthd = views.rescale_video(video_smthd, 0.5, show_video=False)
 
-    views.show_frames(np.concatenate([video_unsmthd[71:156], video_smthd[71:156]], axis=2), show_num=False, title="Left: Unsmoothed coords, right: Smoothed coords")
+    f0 = metadata['f0']
+    fN = metadata['fN']
+    # video_unsmthd = utils.crop_video_square(video_unsmthd, 350)
+    # video_smthd = utils.crop_video_square(video_smthd, 350)
+    views.show_frames(np.concatenate([video_unsmthd[f0:fN+1], video_smthd[f0:fN+1]], axis=2), show_num=False, title="Left: Unsmoothed coords, right: Smoothed coords")
 
 if __name__ == "__main__":
     main()
