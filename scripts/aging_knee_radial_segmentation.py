@@ -8,6 +8,7 @@ import src.core.knee_segmentation as ks
 from typing import Tuple, List
 from src.utils import io, views, utils
 from src.config import VERBOSE
+from src.core import data_processing as dp
 
 def get_closest_pt_to_edge_(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -185,6 +186,27 @@ def intersect_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
     
     return AND_frs
 
+def combine_masks(masks:np.ndarray) -> np.ndarray:
+    """Takes the frame-wise union of all input masks"""
+
+    # TODO: input validation
+
+    masks = masks.copy()
+    nmsks, nfrms, h, w = masks.shape
+    
+    combined_masks = []
+    for cf in range (nfrms):
+        
+        frame = np.zeros((h,w), dtype=np.uint8)
+
+        for mn in range(nmsks):
+            frame = frame | masks[mn, cf]
+
+        combined_masks.append(frame)
+
+    combined_masks = np.array(combined_masks)
+    return combined_masks
+
 
 def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Gets the radial segments for the video. """
@@ -195,12 +217,6 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     circle_pts = np.array(circle_pts)
 
     # TODO: input validation
-
-    # TODO:
-    # > Get Otsu mask
-    # x Get rough radial masks
-    # x Get radial masks
-    # x Intersect radial masks with Otsu mask
 
     # Get Otsu masks
     otsu_masks = ks.get_otsu_masks(video)
@@ -265,14 +281,43 @@ def main():
     # views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
     
-    video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
-    video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
-    video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
-    video_demo = views.rescale_video(video_demo, 2, True)
+    # video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
+    # video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
+    # video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
+    # video_demo = views.rescale_video(video_demo, 2, True)
 
-    l_knee = radial_masks[12:]
+    """Reproducing manual segmentation experiment"""
 
-    # TODO:
+    # Load metadata 
+    _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", "aging-3")
+
+    # Manually assign left/middle/right knee
+    l_mask = combine_masks(radial_masks[12:])
+    m_mask = combine_masks(radial_masks[8:13])
+    r_mask = combine_masks(radial_masks[2:8])
+
+    l_region = radial_regions[12:]
+    m_region = radial_regions[8:13]
+    r_region = radial_regions[2:8]
+
+    masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} # shape (nslices, nframes, h, w)
+    regions = {'l': l_region, 'm': m_region, 'r': r_region}
+    keys = ['l','m','r']
+
+    # Get intensity data
+    # raw_intensities = dp.measure_region_intensities(regions, masks, keys)
+    # normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+    # print(raw_intensities)
+    # print(metadata)
+
+    # Validate intensity data
+    show_figs=True
+    save_figs=False
+    figsize=(9,17)
+    # views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+    # views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
+
+
     # > Get the leftmost points
     # > Get the basic femur estimation
     # > Generate radial segmentation
