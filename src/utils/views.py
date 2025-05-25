@@ -90,8 +90,10 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
     for k in keys:
 
         # Plot intensities
-        fns = np.arange(metadata["f0"], metadata["f0"] + len(intensities[k]))
-        axes[i].plot(fns, intensities[k], color=clrs[k], label=f"{ttl_pfx[k]} knee")
+        f0 = metadata["f0"]
+        fN = metadata["fN"]
+        frmns = np.arange(f0, fN+1)
+        axes[i].plot(frmns, intensities[k][f0:fN+1], color=clrs[k], label=f"{ttl_pfx[k]} knee")
 
         # Formatting
         axes[i].axvline(metadata["flx_ext_pt"], color="k", linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
@@ -122,7 +124,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
     # Plot three (or more) figs combined
     plt.figure(figsize=figsize)
     for k in keys:
-        plt.plot(fns, intensities[k], color=clrs[k], label=ttl_pfx[k] + " knee")
+        plt.plot(frmns, intensities[k][f0:fN+1], color=clrs[k], label=ttl_pfx[k] + " knee")
     plt.axvline(metadata["flx_ext_pt"], color='k', linestyle="--", label=f"Start of extension (frame {metadata['flx_ext_pt']})")
     plt.title("Knee pixel intensities " + ttl_sfx)
     plt.legend()

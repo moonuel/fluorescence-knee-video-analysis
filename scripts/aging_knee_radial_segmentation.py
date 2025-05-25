@@ -323,7 +323,7 @@ def main():
     # > Get the leftmost points
     # > Get the basic femur estimation
     # > Generate radial segmentation
-        # x Combine the radial slices into parts corresponding to the left/middle/right knee
+        # > Combine the radial slices into parts corresponding to the left/middle/right knee
         # x Generate intensity plots -> see if its comparable to manual segmentation
     # x Brainstorm femur endpoint estimation improvements
         # x Get points on the interior of the mask region
