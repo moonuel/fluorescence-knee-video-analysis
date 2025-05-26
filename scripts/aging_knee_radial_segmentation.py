@@ -316,10 +316,11 @@ def main():
 
     # Validate intensity data
     show_figs=False
-    save_figs=True
+    save_figs=False
     figsize=(9,17)
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
     views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
+    views.plot_radial_segment_intensities(raw_intensities)
 
 
     # > Get the leftmost points

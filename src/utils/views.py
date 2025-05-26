@@ -57,6 +57,84 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None, show_vide
 
     return video
 
+def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=None, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple=(20,7)) -> None:
+    """
+    Alternate function intended for use with the radial segmentation scheme.
+    Plots all provided intensity figures.
+
+    Pass f0 = fN = None for default settings (whole video).
+    
+    Args:
+        intensities (np.ndarray): shape (n_slices, n_frames, h, w), intensity data
+        f0 (int): starting frame index (inclusive), defaults to 0
+        fN (int): ending frame index (inclusive), defaults to last frame
+        show_figs (bool): whether to show figures
+        save_figs (bool): whether to save figures to ../figures/
+        vert_layout (bool): vertical or horizontal subplots
+        figsize (tuple): figure size
+    """
+    return
+    if VERBOSE: print("plot_radial_segment_intensities() called!")
+
+    nslcs, nfrms, h, w = intensities.shape
+
+    if f0 is None: f0 = 0
+    if fN is None: fN = nfrms
+
+    intensities = intensities[:, f0 : fN + 1].copy()
+
+    frmns = np.arange(f0, fN + 1)
+
+    # Plot all slices on same figure
+    plt.figure(figsize=figsize)
+    for slc in range(nslcs):
+        plt.plot(frmns, intensities[slc], label=f"Slice {slc}")
+    plt.title("Radial Segment Intensities")
+    plt.xlabel("Frame")
+    plt.ylabel("Intensity")
+    plt.legend()
+    plt.tight_layout()
+
+    if save_figs:
+        save_path = "../figures/radial_intensity_combined.png"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    if show_figs:
+        plt.show()
+    else:
+        plt.close()
+
+    # Plot each slice on its own subplot
+    if vert_layout:
+        fig, axes = plt.subplots(nslcs, 1, figsize=(figsize[0], figsize[1] * nslcs), squeeze=False)
+        axes = axes.flatten()
+    else:
+        fig, axes = plt.subplots(1, nslcs, figsize=(figsize[0] * nslcs, figsize[1]), squeeze=False)
+        axes = axes.flatten()
+
+    for slc in range(nslcs):
+        axes[slc].plot(frmns, intensities[slc], label=f"Slice {slc}")
+        axes[slc].set_title(f"Slice {slc} Intensity")
+        axes[slc].set_xlabel("Frame")
+        axes[slc].set_ylabel("Intensity")
+        axes[slc].legend()
+
+    plt.tight_layout()
+
+    if save_figs:
+        save_path = "../figures/radial_intensity_subplots.png"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    if show_figs:
+        plt.show()
+    else:
+        plt.close()
+
+    return
+
+
 def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple = (20,7), normalized:bool=False) -> None: 
     # TODO: added normalized parameter. remove normalized metadata from intensity data
     """
