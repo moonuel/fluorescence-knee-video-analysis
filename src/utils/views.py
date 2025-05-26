@@ -73,17 +73,16 @@ def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=
         vert_layout (bool): vertical or horizontal subplots
         figsize (tuple): figure size
     """
-    return
     if VERBOSE: print("plot_radial_segment_intensities() called!")
 
-    nslcs, nfrms, h, w = intensities.shape
+    nslcs, nfrms = intensities.shape
 
     if f0 is None: f0 = 0
     if fN is None: fN = nfrms
 
-    intensities = intensities[:, f0 : fN + 1].copy()
+    intensities = intensities[:, f0 : fN+1].copy()
 
-    frmns = np.arange(f0, fN + 1)
+    frmns = np.arange(f0, fN)
 
     # Plot all slices on same figure
     plt.figure(figsize=figsize)

@@ -86,7 +86,25 @@ def measure_region_mean_intensities(regions: Dict[str, np.ndarray], masks: Dict[
         
     region_intensities["normalized"] = False # Store some metadata TODO This needs to be retired...
 
-    return region_intensities
+    return 
+
+def measure_radial_intensities(regions: np.ndarray) -> np.ndarray:
+    """
+    Returns the frame-wise sum of pixel intensities, for every slice.
+    Expects `regions` to be a NumPy array with shape (nslices, nframes, h, w).
+    """
+    if VERBOSE: print("measure_radial_intensities() called!")
+
+    regions = regions.copy()
+    nslcs, nfrms, h, w = regions.shape
+
+    intensities = np.zeros(shape=(nslcs, nfrms))
+    for slc in range(nslcs):
+        # Sum over spatial dimensions (h, w) for each frame
+        intensities[slc] = np.sum(regions[slc], axis=(1, 2))
+
+    return intensities
+
 
 
 def get_intensity_diffs(intensities: Dict) -> Dict[str, np.ndarray]:

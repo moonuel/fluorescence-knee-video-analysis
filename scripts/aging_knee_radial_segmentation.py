@@ -311,6 +311,7 @@ def main():
     # Get intensity data
     raw_intensities = dp.measure_region_intensities(regions, masks, keys)
     normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+    radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
     # print(raw_intensities)
     # print(metadata)
 
@@ -320,7 +321,7 @@ def main():
     figsize=(9,17)
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
     views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
-    views.plot_radial_segment_intensities(raw_intensities)
+    views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
 
     # > Get the leftmost points
