@@ -261,6 +261,7 @@ def main():
     # Pre-process video
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
+    # video = utils.log_transform_video(video, 1)
 
     # Slight rotation
     angle = -29
@@ -292,17 +293,18 @@ def main():
     _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", "aging-3")
 
     # Manually assign left/middle/right knee
-    l_mask = combine_masks(radial_masks[12:])
-    m_mask = combine_masks(radial_masks[8:13])
+    l_mask = combine_masks(np.concatenate([radial_masks[12:], radial_masks[0:1]], axis=0)) # 12-15 and 0
+    m_mask = combine_masks(radial_masks[8:12])
     r_mask = combine_masks(radial_masks[2:8])
 
-    l_region = combine_masks(radial_regions[12:])
-    m_region = combine_masks(radial_regions[8:13])
+    l_region = combine_masks(np.concatenate([radial_regions[12:], radial_regions[0:1]], axis=0)) # 12-15 and 0
+    m_region = combine_masks(radial_regions[8:12])
     r_region = combine_masks(radial_regions[2:8])
-    views.show_frames(m_mask) # Validate combined masks/regions
-    views.show_frames(m_region)
+    # views.show_frames(m_mask) # Validate combined masks/regions
+    # views.show_frames(m_region)
+    # views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
 
-    masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} # shape (nslices, nframes, h, w)
+    masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
     regions = {'l': l_region, 'm': m_region, 'r': r_region}
     keys = ['l','m','r']
 
@@ -313,8 +315,8 @@ def main():
     # print(metadata)
 
     # Validate intensity data
-    show_figs=True
-    save_figs=False
+    show_figs=False
+    save_figs=True
     figsize=(9,17)
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
     views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
