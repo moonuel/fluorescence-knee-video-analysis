@@ -10,7 +10,7 @@ from src.utils import io, views, utils
 from src.config import VERBOSE
 from src.core import data_processing as dp
 
-def get_closest_pt_to_edge_(mask:np.ndarray, edge:str) -> Tuple[int,int]:
+def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
     Finds the closest point in a binary mask to one edge of the frame.
     Inputs:
@@ -43,7 +43,7 @@ def get_closest_pts_to_edge(video:np.ndarray, edge:str) -> List[Tuple[int,int]]:
 
     pts = []
     for cf, frame in enumerate(video):
-        pt = get_closest_pt_to_edge_(frame, edge)
+        pt = get_closest_pt_to_edge(frame, edge)
         pts.append(pt)
     
     return pts
@@ -208,7 +208,7 @@ def combine_masks(masks:np.ndarray) -> np.ndarray:
     return combined_masks
 
 
-def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
     """Gets the radial segments for the video. """
     if VERBOSE: print("get_radial_segments() called!")
 
@@ -219,7 +219,7 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     # TODO: input validation
 
     # Get Otsu masks
-    otsu_masks = ks.get_otsu_masks(video)
+    otsu_masks = ks.get_otsu_masks(video, thresh_scale=thresh_scale)
     # views.show_frames(otsu_masks) # Validate otsu masks
 
     # Get bisection mask for every point on the circle
@@ -280,7 +280,7 @@ def main():
     # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5)
     # views.draw_points(video, circle_pts) # Validate points on circle
-    radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts)
+    radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts, thresh_scale=0.6)
     
     # video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
     # video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
@@ -317,11 +317,11 @@ def main():
 
     # Validate intensity data
     show_figs=False
-    save_figs=False
+    save_figs=True
     figsize=(9,17)
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
     views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
-    views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
+    # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
 
     # > Get the leftmost points
