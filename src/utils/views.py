@@ -506,3 +506,18 @@ def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True, show
     if show_video: show_frames(video_rscld, show_num=show_num)
 
     return video_rscld
+
+def draw_text(frame:np.ndarray, text:str, pos:str='bl') -> np.ndarray:
+    """Draws text on a frame. Some planned options in the future"""
+
+    # frame = frame.copy()
+    h, w = frame.shape
+
+    positions = {"bl": (20, h-10)} # TODO: other positions
+    coords = positions[pos]
+
+    cv2.putText(frame, text, coords, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+            fontScale = 0.3, color = (255,255,0), thickness = 1, lineType=cv2.LINE_AA)
+
+
+    return frame

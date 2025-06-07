@@ -261,6 +261,7 @@ def main():
     # Pre-process video
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
+    video = utils.blur_video(video)
     # video = utils.log_transform_video(video, 1)
 
     # Slight rotation
@@ -302,7 +303,7 @@ def main():
     r_region = combine_masks(radial_regions[2:8])
     # views.show_frames(m_mask) # Validate combined masks/regions
     # views.show_frames(m_region)
-    # views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
+    views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
 
     masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
     regions = {'l': l_region, 'm': m_region, 'r': r_region}

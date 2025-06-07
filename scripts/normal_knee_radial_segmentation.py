@@ -12,8 +12,9 @@ from src.core import data_processing as dp
 import aging_knee_radial_segmentation as rdl
 
 
-def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
+def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple[np.ndarray, np.ndarray]:
     """Estimates the position of the femur based on an adaptive mean mask. Assumes femur is pointing to the left of the screen.
+    init_guess = (endpt, midpt)
     
     Returns (femur_endpts, femur_midpts), 
         where femur_endpts is the position of the femur inside the knee, 
@@ -22,21 +23,80 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
     if VERBOSE: print("estimate_femur_position() called!")
 
     mask = mask.copy()
-
-    # Split frame along the middle. TODO: Parameterize the split line?
-    # spl = 0.41
-    # nframes,h,w = mask.shape
-    # mask_top = mask[:,0:int(h*spl),:]
-    # mask_btm = mask[:,int(h*spl):,:]
+    nframes, h, w = mask.shape
 
     # IDEA: for every frame, estimate the femur position. 
     # Then, align the video by centering it based on the femur position.
     # Then, estimate the next femur position
     # Greedy-type approach to reliably estimating the femur position?
 
-    for cf, frame in enumerate(mask):
-        pass
+    endpt, midpt = init_guess # (x1,y1), (x2,y2)
+    total_angle = 0
 
+    for cf, frame in enumerate(mask):
+
+        # Get angle between femur estumation and left horizontal axis
+        (x1,y1), (x2,y2) = endpt, midpt
+        agl = np.arctan2(y2-y1, x2-x1)
+        agl = np.degrees(agl) + 180 # angle with left horizontal axis
+        total_angle += agl
+
+        views.draw_text(frame, str(agl))
+
+        # Rotate frame to flatten horizontal line
+        ctr = (w//2, h//2)
+        rot_mx = cv2.getRotationMatrix2D(ctr, total_angle, 1.0) 
+        frame = cv2.warpAffine(frame, rot_mx, (w,h)) 
+        
+        # cv2.line(frame, (x1,y1), (x2,y2), (255,255,255), 1)
+
+        """Estimate the midpoint"""
+
+        # Split into top/bottom slices
+        slc_wdh = 70 # pixels. to be manually set 
+        top_slc = frame[h//2 - slc_wdh : h//2, :]
+        btm_slc = frame[h//2 : h//2 + slc_wdh , :]
+
+        # Get leftmost pts
+        topl = rdl.get_closest_pt_to_edge(top_slc, "l")
+        btml = rdl.get_closest_pt_to_edge(btm_slc, "l")
+        # cv2.circle(frame, topl, 3, (255,255,255), -1) # Validate leftmost pts
+        # cv2.circle(btm_slc, btml, 3, (255,255,255), -1)
+
+        # Translate back into coordinates of original frame
+        topl = list(topl)
+        topl[1] = topl[1] + h//2 - slc_wdh
+        topl = tuple(topl)
+
+        btml = list(btml)
+        btml[1] = btml[1] + h//2
+        btml = tuple(btml)
+
+        cv2.circle(frame, topl, 3, (255,255,255), -1) # Validate translated points
+        cv2.circle(frame, btml, 3, (255,255,255), -1)
+
+        # Get left midpoint
+        midl = (np.array(btml) + np.array(topl)) // 2
+        midl = tuple(midl)
+        cv2.circle(frame, midl, 3, (255,255,255), -1) # Validate middle point
+
+        # Update femur estimation
+        endpt = endpt
+        midpt = midl
+        cv2.circle(frame, endpt, 3, (255,255,255), -1)
+
+        # TODO: Set femur endpoint in the middle of the frame 
+
+        # TODO: unrotate coords
+
+        # TODO: plot points on frame
+
+        cv2.imshow("postrotation", frame)
+        cv2.imshow("topslc", top_slc)
+        cv2.imshow("btmslc", btm_slc)
+        if cv2.waitKey(0) == ord('q'): break
+
+    cv2.destroyAllWindows()
     return
 
     # Get left-most points on top/bottom halves
@@ -103,7 +163,8 @@ def main():
     views.show_frames(mask)
 
     # Estimate femur position
-    femur_endpts, femur_midpts = estimate_femur_position(mask)
+    init_guess = ((450//2, 500//2), (20, 500//2) )
+    femur_endpts, femur_midpts = estimate_femur_position(mask, init_guess)
 
 
     return
