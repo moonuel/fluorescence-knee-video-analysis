@@ -9,7 +9,7 @@ from typing import Tuple, List
 from src.utils import io, views, utils
 from src.config import VERBOSE
 from src.core import data_processing as dp
-import aging_knee_radial_segmentation as rdl
+import src.core.radial_segmentation as rdl
 
 
 def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple[np.ndarray, np.ndarray]:
@@ -58,10 +58,13 @@ def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple
         btm_slc = frame[h//2 : h//2 + slc_wdh , :]
 
         # Get leftmost pts
-        topl = rdl.get_closest_pt_to_edge(top_slc, "l")
-        btml = rdl.get_closest_pt_to_edge(btm_slc, "l")
-        # cv2.circle(frame, topl, 3, (255,255,255), -1) # Validate leftmost pts
-        # cv2.circle(btm_slc, btml, 3, (255,255,255), -1)
+        topl = rdl.get_closest_pt_along_direction(top_slc, "b", 45)
+        btml = rdl.get_closest_pt_along_direction(btm_slc, "t", -45)
+
+        # topl = rdl.get_closest_pt_to_edge(top_slc, "l")
+        # btml = rdl.get_closest_pt_to_edge(btm_slc, "l")
+        # # cv2.circle(frame, topl, 3, (255,255,255), -1) # Validate leftmost pts
+        # # cv2.circle(btm_slc, btml, 3, (255,255,255), -1)
 
         # Translate back into coordinates of original frame
         topl = list(topl)
@@ -99,43 +102,6 @@ def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple
     cv2.destroyAllWindows()
     return
 
-    # Get left-most points on top/bottom halves
-    topl_pts = rdl.get_closest_pts_to_edge(mask_top, "l")
-    btml_pts_ = rdl.get_closest_pts_to_edge(mask_btm, "l")
-
-    # views.draw_point(mask_top, topl_pts, True) # Validate left-most points
-    # views.draw_point(mask_btm, btml_pts_, True)
-
-    # Convert bottom-left coords to the whole mask
-    btml_pts = [None] # to maintain 1-indexing. this gets skipped in the next block 
-    for pt in btml_pts_[1:]:
-        pt = list(pt) # for mutability
-        pt[1] = pt[1] + int(h*spl) 
-        btml_pts.append(tuple(pt)) # tuple for opencv compatibility
-
-    # views.draw_line(mask, topl_pts, btml_pts) # Validate drawn line
-
-    # Get midpoint of left line 
-    midl_pts = [(0,0)]
-    for cf in range(1, len(mask)):
-        topl_pt = np.array(topl_pts[cf])
-        btml_pt = np.array(btml_pts[cf])
-        midl_pt = (topl_pt + btml_pt)//2
-        midl_pts.append(tuple(midl_pt))
-
-    # Smooth midpoints
-    midl_pts[1:] = rdl.smooth_points(midl_pts[1:], 5)
-
-    # views.draw_point(mask, midl_pts) # Validate midpoint
-
-    frame_ctr = [(w//2,h//2)]*nframes
-    # views.draw_line(mask, midl_pts, frame_ctr) # Validate basic femur estimation
-
-    
-
-    femur_endpts = frame_ctr
-    femur_midpts = midl_pts
-
     # return femur_endpts, femur_midpts
 
 def main():
@@ -157,23 +123,26 @@ def main():
 
     # Get adaptive mean mask
     mask_src = utils.log_transform_video(video)
-    mask_src = utils.blur_video(video, (61,61), 0)
-    mask = utils.mask_adaptive(mask_src, 121, 5)
-    mask = utils.morph_open(mask, (31,31)) # clean small artifacts
-    views.show_frames(mask)
+    mask_src = utils.blur_video(video, (41,41), 0)
+    mask = utils.mask_adaptive(mask_src, 141, 10)
+    # mask = utils.morph_open(mask, (31,31)) # clean small artifacts
+    # views.show_frames(mask)
 
     # Get otsu mask
-    otsu_mask = ks.get_otsu_masks(video, thresh_scale=0.8)
+    otsu_mask = ks.get_otsu_masks(mask_src, thresh_scale=0.5)
+    otsu_mask = utils.morph_close(otsu_mask, (51,51)) # Close gaps in otsu mask
+    views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask")
     
-    # Intersect Otsu and adaptive masks
-    comb_mask = rdl.intersect_masks(mask, otsu_mask)
+    # Get adaptive mask inside otsu mask
+    intr_mask = rdl.interior_mask(otsu_mask, mask)
+    # intr_mask = utils.morph_open(intr_mask, (31,31))
 
-    side_by_side = np.concatenate([video, comb_mask], axis=2)
-    views.show_frames(side_by_side)
+    side_by_side = np.concatenate([mask, intr_mask], axis=2)
+    views.show_frames(side_by_side, "mask vs interior mask")
 
     # Estimate femur position
     init_guess = ((450//2, 500//2), (20, 500//2) )
-    femur_endpts, femur_midpts = estimate_femur_position(comb_mask, init_guess)
+    femur_endpts, femur_midpts = estimate_femur_position(intr_mask, init_guess)
 
 
     return

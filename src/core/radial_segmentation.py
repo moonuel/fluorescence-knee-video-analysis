@@ -48,6 +48,33 @@ def get_closest_pts_to_edge(video:np.ndarray, edge:str) -> List[Tuple[int,int]]:
     
     return pts
 
+def get_closest_pt_along_direction(mask: np.ndarray, edge: str, angle_d: int) -> Tuple[int, int]:
+    """Rotates the mask by the specified angle and finds the point closest to the specified edge.
+    Returns the corresponding point in the original coordinate system.
+    """
+
+    mask = mask.copy()
+    h, w = mask.shape
+
+    # 1. Rotate the mask
+    ctr = (w // 2, h // 2)
+    rot_mx = cv2.getRotationMatrix2D(ctr, angle_d, 1.0)
+    rotated = cv2.warpAffine(mask, rot_mx, (w, h))
+
+    # 2. Get point in rotated frame
+    pt_rot = get_closest_pt_to_edge(rotated, edge)
+
+    # 3. Unrotate point (convert 2x3 rot matrix to 3x3, then invert)
+    rot_affine = np.vstack([rot_mx, [0, 0, 1]])  # Make 3x3
+    inv_rot_affine = np.linalg.inv(rot_affine)
+
+    pt_hom = np.array([pt_rot[0], pt_rot[1], 1])
+    pt_orig = inv_rot_affine @ pt_hom
+    pt_orig = tuple(np.round(pt_orig[:2]).astype(int))
+
+    return pt_orig
+
+
 def _get_N_points_on_circle(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N:int, radius_scale:int=1) -> np.ndarray:
     """Returns N equally spaced points on a circle as a NumPy array.
     
@@ -142,6 +169,29 @@ def intersect_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
     AND_frs = np.array(AND_frs, dtype=np.uint8)
     
     return AND_frs
+
+def union_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
+
+    assert mask1.shape == mask2.shape
+
+    nfs, h, w = mask1.shape
+
+    OR_frs = []
+    for cf in range(nfs):
+        OR_frs.append(mask1[cf] | mask2[cf])
+    OR_frs = np.array(OR_frs, dtype=np.uint8)
+
+    return OR_frs
+
+def interior_mask(bndry_mask: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Returns the portion of the mask in the interior of the boundary mask, for every frame"""
+    if VERBOSE: print("interior_mask() called!")
+
+    assert bndry_mask.shape == mask.shape
+
+    intr_mask = mask * (bndry_mask > 0) # Zero-out all elements outside the boundary! 
+
+    return intr_mask
 
 def combine_masks(masks:np.ndarray) -> np.ndarray:
     """Takes the frame-wise union of all input masks"""

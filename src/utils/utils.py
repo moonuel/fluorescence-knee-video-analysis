@@ -346,6 +346,19 @@ def morph_open(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
 
     return video_o
 
+def morph_close(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
+    "Implements a morphological closing operation over a grayscale video with dimensions (nframes,hgt,wth)"
+    if VERBOSE: print("morph_close() called!")
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size)
+    video_c = []
+    for _, frame in enumerate(video):
+        frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel)
+        video_c.append(frame)
+    video_c = np.array(video_c)
+
+    return video_c
+
 def rotate_video(video:np.ndarray, angle:int, center:Tuple[int,int]=None) -> np.ndarray:
     "Rotates (cw) an entire video (nframes,hgt,wth) around the center by a given angle. Optionally specify the center of rotation"
     if VERBOSE: print("rotate_video() called!")
