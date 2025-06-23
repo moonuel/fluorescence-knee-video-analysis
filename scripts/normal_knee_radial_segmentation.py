@@ -153,18 +153,27 @@ def main():
     # Remove first 44 frames
     srt_fm = 45
     video = video[srt_fm:]
-    views.show_frames(video)
+    # views.show_frames(video)
 
     # Get adaptive mean mask
     mask_src = utils.log_transform_video(video)
     mask_src = utils.blur_video(video, (61,61), 0)
-    mask = utils.mask_adaptive(mask_src, 101, -2)
-    # mask = utils.morph_open(mask, (31,31)) # clean small artifacts
+    mask = utils.mask_adaptive(mask_src, 121, 5)
+    mask = utils.morph_open(mask, (31,31)) # clean small artifacts
     views.show_frames(mask)
+
+    # Get otsu mask
+    otsu_mask = ks.get_otsu_masks(video, thresh_scale=0.8)
+    
+    # Intersect Otsu and adaptive masks
+    comb_mask = rdl.intersect_masks(mask, otsu_mask)
+
+    side_by_side = np.concatenate([video, comb_mask], axis=2)
+    views.show_frames(side_by_side)
 
     # Estimate femur position
     init_guess = ((450//2, 500//2), (20, 500//2) )
-    femur_endpts, femur_midpts = estimate_femur_position(mask, init_guess)
+    femur_endpts, femur_midpts = estimate_femur_position(comb_mask, init_guess)
 
 
     return

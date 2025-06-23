@@ -273,7 +273,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
 #     return
 # 
 def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
-    """Shows all frames. Use keys {a,d} to navigate, or 'q' to exit"""
+    """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit"""
     if VERBOSE: print("show_frames() called!")
 
     video = video.copy() # don't modify original
@@ -295,7 +295,7 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
         k = cv2.waitKey(0)
         if k == ord('q'): break
         if k == ord("a"): cf-=1
-        if k == ord("d"): cf+=1
+        if k == ord("s"): cf+=1
 
         # Edge handling
         cf = cf%nfs # mod num_frames
