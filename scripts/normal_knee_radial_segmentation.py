@@ -104,6 +104,51 @@ def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple
 
     # return femur_endpts, femur_midpts
 
+def sample_femur_interior_pts(video: np.ndarray, N_lns: int) -> np.ndarray:
+    """
+    For each frame in a binary fluorescence mask video, place N_lns
+    equally spaced vertical scan lines and keep the (x,y) coordinates
+    where each line exhibits exactly four 0↔255 transitions (“zero-
+    crossings”), corresponding to the femur's interior boundary.
+
+    Parameters
+    ----------
+    video   : np.ndarray  # shape (n_frames, H, W), dtype binary (0/255)
+    N_lns   : int         # number of vertical scan lines to test
+
+    Returns
+    -------
+    np.ndarray (ragged, dtype=object)
+        One-dimensional object array of length n_frames.  Each element
+        is a Python list of (x,y) integer tuples giving the retained
+        crossing coordinates for that frame.
+    """
+    video = video.copy()
+    nframes, h, w = video.shape
+
+    # Step 1 – choose scan columns (x‑indices)
+    scan_cols = np.linspace(0, w - 1, N_lns)
+    scan_cols = np.rint(scan_cols).astype(int)          # shape (N_lns,)
+
+    femur_pts_per_frame: list[list[tuple[int, int]]] = []
+
+    # Step 2 – per‑frame scan and zero‑crossing detection
+    for cf in range(nframes):
+        frame = video[cf]                               # (H, W)
+        valid_pts: list[tuple[int, int]] = []
+
+        for x in scan_cols:
+            col = frame[:, x]                           # 1‑D column
+            changes = np.where(col[:-1] != col[1:])[0] + 1  # crossing rows
+
+            if changes.size == 4:                       # keep only 4‑crossing lines
+                valid_pts.extend((int(x), int(y)) for y in changes)
+
+        femur_pts_per_frame.append(valid_pts)
+
+    # Step 3 – return as ragged NumPy object array
+    return np.array(femur_pts_per_frame, dtype=object)
+
 def main():
 
     # Import normal knee data
@@ -123,22 +168,31 @@ def main():
 
     # Get adaptive mean mask
     mask_src = utils.log_transform_video(video)
-    mask_src = utils.blur_video(video, (41,41), 0)
-    mask = utils.mask_adaptive(mask_src, 141, 10)
+    mask_src = utils.blur_video(video, (41,41), sigma=0) # sigma is variance
+    mask = utils.mask_adaptive(mask_src, 141, 14) # increase thresholding to get better femur boundary
     # mask = utils.morph_open(mask, (31,31)) # clean small artifacts
     # views.show_frames(mask)
 
     # Get otsu mask
     otsu_mask = ks.get_otsu_masks(mask_src, thresh_scale=0.5)
-    otsu_mask = utils.morph_close(otsu_mask, (51,51)) # Close gaps in otsu mask
-    views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask")
+    otsu_mask = utils.morph_close(otsu_mask, (31,31)) # Close gaps in otsu mask
+    # views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask") # type: ignore
     
-    # Get adaptive mask inside otsu mask
+    # Exclude intr_mask region outside of otsu mask
     intr_mask = rdl.interior_mask(otsu_mask, mask)
-    # intr_mask = utils.morph_open(intr_mask, (31,31))
+    intr_mask = utils.morph_open(intr_mask, (31,31)) # clean small artifacts
+    intr_mask = utils.morph_close(intr_mask, (15,15)) # try to remove the dip
 
-    side_by_side = np.concatenate([mask, intr_mask], axis=2)
-    views.show_frames(side_by_side, "mask vs interior mask")
+    views.show_frames(np.concatenate([mask, intr_mask], axis=2), "mask vs interior mask")
+    views.show_frames(np.concatenate([video, intr_mask, otsu_mask], axis=2), "video vs interior mask vs otsu boundary")
+
+    views.draw_mask_boundary(video, intr_mask)
+
+    estimate_femur_position
+
+
+    return
+
 
     # Estimate femur position
     init_guess = ((450//2, 500//2), (20, 500//2) )

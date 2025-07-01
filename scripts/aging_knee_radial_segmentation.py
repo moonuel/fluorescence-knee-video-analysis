@@ -273,20 +273,22 @@ def main():
     video_blr = utils.blur_video(video, (31,31), 0)
     mask = utils.mask_adaptive(video_blr, 71, -2)
     mask = utils.morph_open(mask, (15,15)) # clean small artifacts
-    # views.show_frames(mask) # Validate mask    
+    views.show_frames(mask) # Validate mask    
     # views.draw_middle_lines(mask, show_video=True) # Validate rotation
 
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
-    # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
+    views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5)
     # views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts, thresh_scale=0.6)
     
-    # video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
-    # video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
-    # video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
-    # video_demo = views.rescale_video(video_demo, 2, True)
+    video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
+    video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
+    video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
+    video_demo = views.rescale_video(video_demo, 2, True)
+
+    exit(0) # End early 
 
     """Reproducing manual segmentation experiment"""
 

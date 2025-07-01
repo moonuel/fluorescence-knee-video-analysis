@@ -346,6 +346,27 @@ def _draw_mask_outline(frame:np.ndarray, mask_segment:np.ndarray) -> np.ndarray:
 
     return frame
 
+def draw_mask_boundary(video:np.ndarray, mask:np.ndarray, show_video:bool=True) -> np.ndarray:
+    """Draws the boundary of a binary mask on each frame of the video."""
+    if VERBOSE: print("draw_mask_boundary() called!")
+
+    assert video.shape == mask.shape
+
+    video = video.copy()
+    nfs,h,w = video.shape
+
+    for cf in range(nfs):
+        frame = video[cf]
+        mask_f = mask[cf]
+
+        video[cf] = _draw_mask_outline(frame, mask_f)
+
+    if show_video: show_frames(video)
+
+    return video
+
+
+
 
 def draw_current_frame_num(frame:np.ndarray, frame_num:int) -> None:
     """Draws current frame number on the bottom left corner, directly on the frame. Modifies input frame."""
