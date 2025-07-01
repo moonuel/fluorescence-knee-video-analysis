@@ -144,7 +144,7 @@ def sample_femur_interior_pts(video: np.ndarray, N_lns: int) -> np.ndarray:
             # Indices where pixel value changes (0 <-> 255)
             crossings = np.where(col[:-1] != col[1:])[0] + 1  # +1 -> row of change
             if crossings.size == 4:                  # accept columns with 4 crossings
-                for y in crossings:
+                for y in crossings[1:-1]:
                     valid_pts.append([int(x), int(y)])
 
         femur_pts_per_frame.append(valid_pts)
@@ -152,6 +152,32 @@ def sample_femur_interior_pts(video: np.ndarray, N_lns: int) -> np.ndarray:
     # Step 3 – return as object array (ragged structure)
     femur_pts_per_frame = np.array(femur_pts_per_frame, dtype=object)
     return femur_pts_per_frame
+
+def estimate_femur_tip_boundary(sample_pts:np.ndarray) -> np.ndarray:
+    """Filters for only the points corresponding to the interior boundary of the femur"""
+
+    print(sample_pts.shape)
+    # print(sample_pts)
+
+    sample_pts = sample_pts.copy()
+    nfs = sample_pts.shape[0]
+
+    # Select only right half of points 
+    femur_pts = []
+    for cf in range(nfs):
+        pts = np.asarray(sample_pts[cf])
+        npts, _ = pts.shape
+
+        # points are stored in pairs
+        # divide by 2, then divide by 2, and round 
+        # take midpoint to be twice the previous number
+        midpt = int(npts/4)*2
+
+        femur_pt = pts[midpt:, :]
+        femur_pts.append(femur_pt)
+
+    return np.array(femur_pts, dtype=object)
+
 
 def main():
 
