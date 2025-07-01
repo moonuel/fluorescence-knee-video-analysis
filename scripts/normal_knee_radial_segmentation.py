@@ -105,49 +105,53 @@ def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple
     # return femur_endpts, femur_midpts
 
 def sample_femur_interior_pts(video: np.ndarray, N_lns: int) -> np.ndarray:
-    """
-    For each frame in a binary fluorescence mask video, place N_lns
-    equally spaced vertical scan lines and keep the (x,y) coordinates
-    where each line exhibits exactly four 0↔255 transitions (“zero-
-    crossings”), corresponding to the femur's interior boundary.
+    """Sample interior-boundary points of a binary femur-mask video.
 
     Parameters
     ----------
-    video   : np.ndarray  # shape (n_frames, H, W), dtype binary (0/255)
-    N_lns   : int         # number of vertical scan lines to test
+    video   : np.ndarray
+        Binary fluorescence video mask, shape (n_frames, H, W) with pixel
+        values 0 or 255.
+    N_lns   : int
+        Number of equally-spaced vertical scan lines (columns) to use.
 
     Returns
     -------
-    np.ndarray (ragged, dtype=object)
-        One-dimensional object array of length n_frames.  Each element
-        is a Python list of (x,y) integer tuples giving the retained
-        crossing coordinates for that frame.
+    np.ndarray (dtype=object)
+        Length-n_frames object array.  Each element is a Python list of
+        (x, y) tuples giving the coordinates of zero-crossing points along
+        scan lines *that exhibit exactly four crossings* in that frame.
     """
+    if VERBOSE: print("sample_femur_interior_pts() called!")
+
     video = video.copy()
     nframes, h, w = video.shape
 
-    # Step 1 – choose scan columns (x‑indices)
-    scan_cols = np.linspace(0, w - 1, N_lns)
-    scan_cols = np.rint(scan_cols).astype(int)          # shape (N_lns,)
+    # Step 1 – choose equally-spaced column indices (x-coords)
+    scan_cols = np.linspace(0, w, N_lns+2)
+    scan_cols = scan_cols[1:-1] # interior lines only
+    scan_cols = np.rint(scan_cols).astype(int) # Round to int column indices
 
-    femur_pts_per_frame: list[list[tuple[int, int]]] = []
+    femur_pts_per_frame = []
 
-    # Step 2 – per‑frame scan and zero‑crossing detection
+    # Step 2 – per-frame scan
     for cf in range(nframes):
-        frame = video[cf]                               # (H, W)
-        valid_pts: list[tuple[int, int]] = []
+        frame = video[cf] # (H, W) binary mask
+        valid_pts = []
 
         for x in scan_cols:
-            col = frame[:, x]                           # 1‑D column
-            changes = np.where(col[:-1] != col[1:])[0] + 1  # crossing rows
-
-            if changes.size == 4:                       # keep only 4‑crossing lines
-                valid_pts.extend((int(x), int(y)) for y in changes)
+            col = frame[:, x] # 1-D array length H
+            # Indices where pixel value changes (0 <-> 255)
+            crossings = np.where(col[:-1] != col[1:])[0] + 1  # +1 -> row of change
+            if crossings.size == 4:                  # accept columns with 4 crossings
+                for y in crossings:
+                    valid_pts.append([int(x), int(y)])
 
         femur_pts_per_frame.append(valid_pts)
 
-    # Step 3 – return as ragged NumPy object array
-    return np.array(femur_pts_per_frame, dtype=object)
+    # Step 3 – return as object array (ragged structure)
+    femur_pts_per_frame = np.array(femur_pts_per_frame, dtype=object)
+    return femur_pts_per_frame
 
 def main():
 
@@ -184,12 +188,12 @@ def main():
     intr_mask = utils.morph_close(intr_mask, (15,15)) # try to remove the dip
 
     views.show_frames(np.concatenate([mask, intr_mask], axis=2), "mask vs interior mask")
-    views.show_frames(np.concatenate([video, intr_mask, otsu_mask], axis=2), "video vs interior mask vs otsu boundary")
+    # views.show_frames(np.concatenate([video, intr_mask, otsu_mask], axis=2), "video vs interior mask vs otsu boundary")
+    # views.draw_mask_boundary(video, intr_mask)
 
-    views.draw_mask_boundary(video, intr_mask)
+    femur_pts = sample_femur_interior_pts(intr_mask, 32)
 
-    estimate_femur_position
-
+    views.draw_points(video, femur_pts)
 
     return
 
