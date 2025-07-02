@@ -171,13 +171,77 @@ def estimate_femur_tip_boundary(sample_pts:np.ndarray) -> np.ndarray:
         # points are stored in pairs
         # divide by 2, then divide by 2, and round 
         # take midpoint to be twice the previous number
-        midpt = int(npts/4)*2
+        midpt = int(npts/4)*2 # TODO: parameterize to use something like right 1/3 of points?
 
         femur_pt = pts[midpt:, :]
         femur_pts.append(femur_pt)
 
     return np.array(femur_pts, dtype=object)
 
+def filter_outlier_points(points:np.ndarray, method:str) -> np.ndarray:
+
+    # TODO: filter outlier points using some different methods?
+
+    return NotImplemented
+
+def estimate_femur_tip(femur_pts: np.ndarray) -> np.ndarray:
+    "Calculates centroid of all points, per frame."
+
+    femur_pts = femur_pts.copy()
+    nfs = femur_pts.shape[0] # Ragged array. intended dimensions nfs, npts, 2
+
+    centroids = []
+    for cf in range(nfs):
+        pass
+
+        # Compute centroid of points
+
+        # Filter out points outside 
+
+    return
+
+def get_mask_convex_hull(mask: np.ndarray) -> np.ndarray:
+    """Compute the convex‑hull mask for each frame in a binary‑mask video.
+
+    Parameters
+    ----------
+    mask : np.ndarray
+        Boolean or 0/1 array of shape (n_frames, H, W).
+
+    Returns
+    -------
+    np.ndarray
+        Array of the same shape, where each frame is replaced by the filled
+        convex hull of its foreground pixels.
+    """
+    mask = mask.copy()
+    nfs, h, w = mask.shape
+    dtype = mask.dtype
+
+    hull_frames = []
+
+    for cf in range(nfs):
+        frame = mask[cf]
+
+        # 1. Collect foreground pixel coordinates as (x, y) points
+        ys, xs = np.where(frame > 0)
+        if xs.size == 0:                       # empty mask → empty hull
+            hull_frames.append(np.zeros((h, w), dtype=dtype))
+            continue
+
+        pts = np.stack((xs, ys), axis=1).astype(np.int32)  # shape (N, 2)
+        pts = pts.reshape(-1, 1, 2)                       # required by cv2
+
+        # 2. Compute convex hull
+        hull = cv2.convexHull(pts)
+
+        # 3. Draw filled convex hull into a blank mask
+        hull_mask = np.zeros((h, w), dtype=dtype)
+        cv2.fillConvexPoly(hull_mask, hull, (255,255,255))
+
+        hull_frames.append(hull_mask)
+
+    return np.stack(hull_frames, axis=0).astype(dtype)
 
 def main():
 
@@ -206,6 +270,8 @@ def main():
     # Get otsu mask
     otsu_mask = ks.get_otsu_masks(mask_src, thresh_scale=0.5)
     otsu_mask = utils.morph_close(otsu_mask, (31,31)) # Close gaps in otsu mask
+    otsu_mask = utils.morph_erode(otsu_mask, (21,21))
+    # otsu_mask = get_mask_convex_hull(otsu_mask) # works as intended but results are not good
     # views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask") # type: ignore
     
     # Exclude intr_mask region outside of otsu mask
@@ -218,6 +284,13 @@ def main():
     # views.draw_mask_boundary(video, intr_mask)
 
     femur_pts = sample_femur_interior_pts(intr_mask, 32)
+
+    sample_pts = sample_femur_interior_pts(intr_mask, 128)
+    femur_pts = estimate_femur_tip_boundary(sample_pts)
+    femur_tip_pts = estimate_femur_tip(femur_pts)
+
+    views.draw_points(video, sample_pts); # All sampling points
+    views.draw_points(video, femur_pts); # Filter for only right half of points to estimate the femur tip
 
     views.draw_points(video, femur_pts)
 
