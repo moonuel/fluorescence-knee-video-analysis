@@ -278,7 +278,7 @@ def main():
     otsu_mask = utils.morph_erode(otsu_mask, (21,21))
     # otsu_mask = get_mask_convex_hull(otsu_mask) # works as intended but results are not good
     # views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask") # type: ignore
-    
+
     # Exclude intr_mask region outside of otsu mask
     intr_mask = rdl.interior_mask(otsu_mask, mask)
     intr_mask = utils.morph_open(intr_mask, (31,31)) # clean small artifacts
@@ -292,13 +292,14 @@ def main():
     sample_pts = sample_femur_interior_pts(intr_mask, 128)
 
     # Estimate the tip of the femur
-    femur_pts = estimate_femur_tip_boundary(sample_pts)
-    femur_tip_pts = estimate_femur_tip(femur_pts)
+    femur_pts = estimate_femur_tip_boundary(sample_pts, 0.5)
+    femur_tip_pts = get_centroid_pts(femur_pts)
+
+    print(femur_tip_pts.shape)
 
     views.draw_points(video, sample_pts); # All sampling points
-    views.draw_points(video, femur_pts); # Filter for only right half of points to estimate the femur tip
-
-    views.draw_points(video, femur_pts)
+    pv = views.draw_points(video, femur_pts); # Filter for only right half of points to estimate the femur tip
+    views.draw_points(pv, femur_tip_pts)
 
     return
 
