@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 import cv2
+import sklearn as skl
 import math
 import src.core.knee_segmentation as ks
 from typing import Tuple, List
@@ -153,7 +154,7 @@ def sample_femur_interior_pts(video: np.ndarray, N_lns: int) -> np.ndarray:
     femur_pts_per_frame = np.array(femur_pts_per_frame, dtype=object)
     return femur_pts_per_frame
 
-def estimate_femur_tip_boundary(sample_pts:np.ndarray) -> np.ndarray:
+def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np.ndarray:
     """Filters for only the points corresponding to the interior boundary of the femur"""
 
     print(sample_pts.shape)
@@ -171,7 +172,7 @@ def estimate_femur_tip_boundary(sample_pts:np.ndarray) -> np.ndarray:
         # points are stored in pairs
         # divide by 2, then divide by 2, and round 
         # take midpoint to be twice the previous number
-        midpt = int(npts/4)*2 # TODO: parameterize to use something like right 1/3 of points?
+        midpt = int(npts/2*midpoint)*2 # TODO: parameterize to use something like right 1/3 of points?
 
         femur_pt = pts[midpt:, :]
         femur_pts.append(femur_pt)
@@ -184,21 +185,25 @@ def filter_outlier_points(points:np.ndarray, method:str) -> np.ndarray:
 
     return NotImplemented
 
-def estimate_femur_tip(femur_pts: np.ndarray) -> np.ndarray:
+def get_centroid_pts(femur_pts: np.ndarray) -> np.ndarray:
     "Calculates centroid of all points, per frame."
 
+    if VERBOSE: print("get_centroid_pts() called!")
+
     femur_pts = femur_pts.copy()
-    nfs = femur_pts.shape[0] # Ragged array. intended dimensions nfs, npts, 2
+    nfs = femur_pts.shape[0] # Ragged array. intended dimensions (nfs, npts, 2_
 
     centroids = []
     for cf in range(nfs):
-        pass
+        
+        pts = femur_pts[cf]
+        n = pts.shape[0]
 
         # Compute centroid of points
+        cntrd = np.mean(pts, axis=0, dtype=int)
+        centroids.append([cntrd])
 
-        # Filter out points outside 
-
-    return
+    return np.array(centroids, dtype=object)
 
 def get_mask_convex_hull(mask: np.ndarray) -> np.ndarray:
     """Compute the convex‑hull mask for each frame in a binary‑mask video.
@@ -206,7 +211,7 @@ def get_mask_convex_hull(mask: np.ndarray) -> np.ndarray:
     Parameters
     ----------
     mask : np.ndarray
-        Boolean or 0/1 array of shape (n_frames, H, W).
+        Binary array of shape (n_frames, H, W).
 
     Returns
     -------
@@ -283,9 +288,10 @@ def main():
     # views.show_frames(np.concatenate([video, intr_mask, otsu_mask], axis=2), "video vs interior mask vs otsu boundary")
     # views.draw_mask_boundary(video, intr_mask)
 
-    femur_pts = sample_femur_interior_pts(intr_mask, 32)
-
+    # Sample points along the interior of the mask 
     sample_pts = sample_femur_interior_pts(intr_mask, 128)
+
+    # Estimate the tip of the femur
     femur_pts = estimate_femur_tip_boundary(sample_pts)
     femur_tip_pts = estimate_femur_tip(femur_pts)
 
