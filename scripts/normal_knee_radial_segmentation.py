@@ -221,8 +221,6 @@ def filter_outlier_points_dbscan(points: np.ndarray,
     return np.array(filtered_frames, dtype=object)
 
 def filter_outlier_points_hdbscan(points: np.ndarray,
-                          eps: float = 15.0,
-                          min_samples: int = 5,
                           min_cluster_size:int = 5,
                           allow_single_cluster:bool = False) -> np.ndarray:
     """Remove outlier 2-D points in each frame via HDBSCAN.
@@ -248,13 +246,12 @@ def filter_outlier_points_hdbscan(points: np.ndarray,
 
     for cpts in points:
         # Guard: empty frame
-        if cpts.size == 0 or cpts.shape[0] < min_samples:
+        if cpts.size == 0:
             filtered_frames.append(np.empty((0, 2), dtype=cpts.dtype))
             continue
 
-        # Run DBSCAN
-        # labels = sklc.DBSCAN(eps=eps, min_samples=min_samples).fit_predict(cpts)
-        labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples, allow_single_cluster=allow_single_cluster).fit_predict(cpts)
+        # Run HDBSCAN
+        labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, allow_single_cluster=allow_single_cluster).fit_predict(cpts)
 
         # Keep only core/edge points (label != -1)
         keep_mask = labels != -1
@@ -397,7 +394,7 @@ def main():
     # Estimate the tip of the femur
     femur_bndry = estimate_femur_tip_boundary(sample_pts, 0.45)
     # femur_bndry_filtered = filter_outlier_points(femur_bndry, eps=20, min_samples=4)
-    femur_bndry_filtered = filter_outlier_points_hdbscan(femur_bndry, eps=20, min_samples=5, min_cluster_size=5, allow_single_cluster=True)
+    femur_bndry_filtered = filter_outlier_points_hdbscan(femur_bndry, min_cluster_size=5, allow_single_cluster=True)
     femur_tip = get_centroid_pts(femur_bndry_filtered)
 
     pvw1 = views.draw_points(video, sample_pts); # All sampling points
