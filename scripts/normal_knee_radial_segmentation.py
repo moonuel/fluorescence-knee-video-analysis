@@ -3,7 +3,8 @@ import sys
 import numpy as np
 import pandas as pd
 import cv2
-import sklearn as skl
+import sklearn.cluster as sklc 
+import hdbscan
 import math
 import src.core.knee_segmentation as ks
 from typing import Tuple, List
@@ -179,11 +180,89 @@ def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np
 
     return np.array(femur_pts, dtype=object)
 
-def filter_outlier_points(points:np.ndarray, method:str) -> np.ndarray:
+def filter_outlier_points_dbscan(points: np.ndarray,
+                          eps: float = 15.0,
+                          min_samples: int = 5) -> np.ndarray:
+    """Remove outlier 2-D points in each frame via DBSCAN.
 
-    # TODO: filter outlier points using some different methods?
+    Parameters
+    ----------
+    points : np.ndarray (jagged, dtype=object or list-like)
+        Shape (n_frames,), each element a (n_pts_i, 2) float/-int array.
+    eps : float
+        DBSCAN `eps` radius (default 15 px).
+    min_samples : int
+        DBSCAN `min_samples` (default 5).
 
-    return NotImplemented
+    Returns
+    -------
+    np.ndarray (dtype=object)
+        Filtered per-frame arrays; still jagged: (n_frames,) where
+        each entry is (n_kept_i, 2).
+    """
+    print("filter_outlier_points_dbscan() called!")
+
+    filtered_frames = []
+
+    for cpts in points:
+        # Guard: empty frame
+        if cpts.size == 0 or cpts.shape[0] < min_samples:
+            filtered_frames.append(np.empty((0, 2), dtype=cpts.dtype))
+            continue
+
+        # Run DBSCAN
+        labels = sklc.DBSCAN(eps=eps, min_samples=min_samples).fit_predict(cpts)
+
+        # Keep only core/edge points (label != -1)
+        keep_mask = labels != -1
+        filtered_frames.append(cpts[keep_mask])
+
+    # Return as an object-dtype array to keep jagged structure
+    return np.array(filtered_frames, dtype=object)
+
+def filter_outlier_points_hdbscan(points: np.ndarray,
+                          eps: float = 15.0,
+                          min_samples: int = 5,
+                          min_cluster_size:int = 5,
+                          allow_single_cluster:bool = False) -> np.ndarray:
+    """Remove outlier 2-D points in each frame via HDBSCAN.
+
+    Parameters
+    ----------
+    points : np.ndarray (jagged, dtype=object or list-like)
+        Shape (n_frames,), each element a (n_pts_i, 2) float/-int array.
+    eps : float
+        DBSCAN `eps` radius (default 15 px).
+    min_samples : int
+        DBSCAN `min_samples` (default 5).
+
+    Returns
+    -------
+    np.ndarray (dtype=object)
+        Filtered per-frame arrays; still jagged: (n_frames,) where
+        each entry is (n_kept_i, 2).
+    """
+    print("filter_outlier_points_hdbscan() called!")
+
+    filtered_frames = []
+
+    for cpts in points:
+        # Guard: empty frame
+        if cpts.size == 0 or cpts.shape[0] < min_samples:
+            filtered_frames.append(np.empty((0, 2), dtype=cpts.dtype))
+            continue
+
+        # Run DBSCAN
+        # labels = sklc.DBSCAN(eps=eps, min_samples=min_samples).fit_predict(cpts)
+        labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, min_samples=min_samples, allow_single_cluster=allow_single_cluster).fit_predict(cpts)
+
+        # Keep only core/edge points (label != -1)
+        keep_mask = labels != -1
+        filtered_frames.append(cpts[keep_mask])
+
+    # Return as an object-dtype array to keep jagged structure
+    return np.array(filtered_frames, dtype=object)
+
 
 def get_centroid_pts(femur_pts: np.ndarray) -> np.ndarray:
     "Calculates centroid of all points, per frame."
@@ -201,12 +280,14 @@ def get_centroid_pts(femur_pts: np.ndarray) -> np.ndarray:
 
         # Compute centroid of points
         cntrd = np.mean(pts, axis=0, dtype=int)
+
+        # Filter out points outside 
         centroids.append([cntrd])
 
     return np.array(centroids, dtype=object)
 
 def get_mask_convex_hull(mask: np.ndarray) -> np.ndarray:
-    """Compute the convex‑hull mask for each frame in a binary‑mask video.
+    """Compute the convex-hull mask for each frame in a binary-mask video.
 
     Parameters
     ----------
@@ -248,7 +329,28 @@ def get_mask_convex_hull(mask: np.ndarray) -> np.ndarray:
 
     return np.stack(hull_frames, axis=0).astype(dtype)
 
+def interpolate_sample_points(sample_pts:np.ndarray) -> np.ndarray:
+    """Detects missing values and interpolates them"""
+
+    sample_pts = sample_pts.copy()
+    nfs = sample_pts.shape[0] # dimensions (nfs, npts, 2), where npts is jagged
+
+    h = NotImplemented # minimum distance between adjacent 
+
 def main():
+    """Performs the radial segmentation analysis on the normal knee data. 
+    
+    Steps:
+    - Use adaptive thresholding mask to get a good boundary around the femur
+    - Use otsu thresholding mask to clean up artifacts along the borders of the frame
+    - Discretize the boundary around the femur tip by sampling points along the interior of the resulting mask 
+    - Remove outliers and calculate the centroid of the points around the femur tip 
+
+    x Estimate a point along the length of the femur 
+    x Estimate a line representing the position of the femur 
+    x Perform the radial segmentation analysis
+    
+    """
 
     # Import normal knee data
     video = io.load_nparray("../data/processed/normal_knee_processed.npy")
@@ -290,16 +392,18 @@ def main():
 
     # Sample points along the interior of the mask 
     sample_pts = sample_femur_interior_pts(intr_mask, 128)
+    # sample_pts = interpolate_sample_points(sample_pts)
 
     # Estimate the tip of the femur
-    femur_pts = estimate_femur_tip_boundary(sample_pts, 0.5)
-    femur_tip_pts = get_centroid_pts(femur_pts)
+    femur_bndry = estimate_femur_tip_boundary(sample_pts, 0.45)
+    # femur_bndry_filtered = filter_outlier_points(femur_bndry, eps=20, min_samples=4)
+    femur_bndry_filtered = filter_outlier_points_hdbscan(femur_bndry, eps=20, min_samples=5, min_cluster_size=5, allow_single_cluster=True)
+    femur_tip = get_centroid_pts(femur_bndry_filtered)
 
-    print(femur_tip_pts.shape)
-
-    views.draw_points(video, sample_pts); # All sampling points
-    pv = views.draw_points(video, femur_pts); # Filter for only right half of points to estimate the femur tip
-    views.draw_points(pv, femur_tip_pts)
+    pvw1 = views.draw_points(video, sample_pts); # All sampling points
+    pvw = views.draw_points(video, femur_bndry_filtered, show_video=False); # Femur tip points only (already filtered)
+    pvw = views.draw_points(pvw, femur_tip, show_video=False)
+    views.show_frames(np.concatenate([pvw1, pvw], axis=2))
 
     return
 
