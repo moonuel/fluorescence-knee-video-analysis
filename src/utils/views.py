@@ -439,7 +439,7 @@ def _draw_points(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
     """Helper func to draw_points(). Draws a set of points in pts directly on the frame."""
     pts = np.array(pts)
     if pts.ndim != 2 or pts.shape[1] != 2: 
-        raise ValueError(f"draw_points_(): 'pts' must be 2D array with shape (N, 2)")
+        raise ValueError(f"draw_points_(): 'pts' must be 2D array with shape (N, 2). Shape {pts.shape} was given")
     
     for pt in pts:
         cv2.circle(frame, tuple(pt), 1, (255,255,255))

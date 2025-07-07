@@ -501,7 +501,12 @@ def main():
     # femur_bndry_filtered = filter_outlier_points_hdbscan(femur_bndry, min_cluster_size=5, allow_single_cluster=True) # better but not perfect
     femur_bndry_filtered = filter_outlier_points_centroid(femur_bndry, 75) # Best results so far but rigid due to fixed threshold value?
     femur_tip = get_centroid_pts(femur_bndry_filtered)
-    # femur_tip = rdl.smooth_points(femur_tip, window_size=7) # Not working
+
+    # Smooth femur tip points
+    femur_tip = np.reshape(femur_tip, newshape=(-1, 2)) # Resize for rdl.smooth_points() 
+    femur_tip = rdl.smooth_points(femur_tip, window_size=7) # Smooth points
+    femur_tip = np.array(femur_tip) # Cast back to array
+    femur_tip = np.reshape(femur_tip, (-1, 1, 2)) # Reshape for views.draw_points()
 
     pvw1 = views.draw_points(video, femur_bndry); # All sampling points
     pvw = views.draw_points(video, femur_bndry_filtered, show_video=False); # Femur tip points only (already filtered)
