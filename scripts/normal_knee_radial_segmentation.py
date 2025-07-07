@@ -522,28 +522,28 @@ def main():
     # femur_bndry_filtered = filter_outlier_points_dbscan(femur_bndry, eps=20, min_samples=2) # not great 
     # femur_bndry_filtered = filter_outlier_points_hdbscan(femur_bndry, min_cluster_size=5, allow_single_cluster=True) # better but not perfect
     femur_bndry_filtered = filter_outlier_points_centroid(femur_bndry, 75) # Best results so far but rigid due to fixed threshold value?
-    femur_tip = get_centroid_pts(femur_bndry_filtered)
+    femur_endpts = get_centroid_pts(femur_bndry_filtered)
 
     # Smooth femur tip points
-    femur_tip = np.reshape(femur_tip, newshape=(-1, 2)) # Resize for rdl.smooth_points() 
-    femur_tip = rdl.smooth_points(femur_tip, window_size=7) # Smooth points
-    femur_tip = np.array(femur_tip) # Cast back to array
-    femur_tip = np.reshape(femur_tip, (-1, 1, 2)) # Reshape for views.draw_points()
+    femur_endpts = np.reshape(femur_endpts, newshape=(-1, 2)) # Resize for rdl.smooth_points() 
+    femur_endpts = rdl.smooth_points(femur_endpts, window_size=7) # Smooth points
+    femur_endpts = np.array(femur_endpts) # Cast back to array
+    femur_endpts = np.reshape(femur_endpts, (-1, 1, 2)) # Reshape for views.draw_points()
 
-    pvw1 = views.draw_points(video, femur_bndry); # All sampling points
+    # pvw1 = views.draw_points(video, femur_bndry); # All sampling points
     pvw = views.draw_points(video, femur_bndry_filtered, show_video=False); # Femur tip points only (already filtered)
-    pvw = views.draw_points(pvw, femur_tip, show_video=False)
+    pvw = views.draw_points(pvw, femur_endpts, show_video=False)
     # views.show_frames(np.concatenate([pvw1, pvw], axis=2))
 
     # Estimate midpoint of femur
-    femur_midpoint = estimate_femur_midpoint_boundary(sample_pts, 0.3)
-    femur_midpoint = np.reshape(femur_midpoint, (-1, 2)) # Reshape for coordinate smoothing
-    femur_midpoint = rdl.smooth_points(femur_midpoint, window_size=7)
-    femur_midpoint = np.array(femur_midpoint)
-    femur_midpoint = np.reshape(femur_midpoint, (-1, 1, 2)) # Reshape back to expected format for views.draw_points()
+    femur_midpts = estimate_femur_midpoint_boundary(sample_pts, 0.35)
+    femur_midpts = np.reshape(femur_midpts, (-1, 2)) # Reshape for coordinate smoothing
+    femur_midpts = rdl.smooth_points(femur_midpts, window_size=7)
+    femur_midpts = np.array(femur_midpts)
+    femur_midpts = np.reshape(femur_midpts, (-1, 1, 2)) # Reshape back to expected format for views.draw_points()
     
     # print(femur_midpoint)
-    pvw2 = views.draw_points(pvw, femur_midpoint)
+    pvw2 = views.draw_points(pvw, femur_midpts)
     views.show_frames(np.concatenate([pvw, pvw2], axis=2))
 
     # Draw convex hull. TODO since refinement is less important
@@ -558,6 +558,30 @@ def main():
     # Estimate femur position
     # init_guess = ((450//2, 500//2), (20, 500//2) )
     # femur_endpts, femur_midpts = estimate_femur_position(intr_mask, init_guess)
+
+
+    # Validate femur estimation
+    femur_endpts = np.reshape(femur_endpts, (-1, 2))
+    femur_endpts = [tuple(pts) for pts in femur_endpts]
+
+    femur_midpts = np.reshape(femur_midpts, (-1, 2))
+    femur_midpts = [tuple(pts) for pts in femur_midpts]
+
+    views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
+
+    # Get circle points
+    circle_pts = rdl.get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5)
+    views.draw_points(video, circle_pts) # Validate points on circle
+
+    # Get radial segments
+    radial_regions, radial_masks = rdl.get_radial_segments(mask_src, femur_endpts, circle_pts, thresh_scale=0.6)
+
+    video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
+    video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
+    video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
+    video_demo = views.rescale_video(video_demo, 1, True)
+
+    
 
 
     return
