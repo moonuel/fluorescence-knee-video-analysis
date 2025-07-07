@@ -276,6 +276,9 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit"""
     if VERBOSE: print("show_frames() called!")
 
+    # if isinstance(video, List):
+    #     video = np.concatenate(video, axis=2)
+
     video = video.copy() # don't modify original
     nfs, h,w = video.shape
     btm_l_pos = (10, h - 10)

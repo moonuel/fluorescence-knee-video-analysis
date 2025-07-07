@@ -368,13 +368,75 @@ def get_mask_convex_hull(mask: np.ndarray) -> np.ndarray:
 
     return np.stack(hull_frames, axis=0).astype(dtype)
 
-def interpolate_sample_points(sample_pts:np.ndarray) -> np.ndarray:
-    """Detects missing values and interpolates them"""
+def get_pts_convex_hull(points: np.ndarray, video:np.ndarray) -> np.ndarray:
+    """Compute the convex-hull based on a set of points given for every frame in a video.
 
-    sample_pts = sample_pts.copy()
-    nfs = sample_pts.shape[0] # dimensions (nfs, npts, 2), where npts is jagged
+    Parameters
+    ----------
+    points : np.ndarray
+        Jagged array of shape (n_frames,), each entry an (npts, 2) array of [x, y] coords.
 
-    h = NotImplemented # minimum distance between adjacent 
+    frame_shape : tuple
+        Height and width of the binary output mask (default is 512x512).
+
+    Returns
+    -------
+    np.ndarray
+        Binary array of shape (n_frames, H, W), with the filled convex hull for each frame.
+    """
+    nfs = points.shape[0]
+    nfs, h, w = video.shape
+    conv_hull = []
+
+    for cf in range(nfs):
+        pts = points[cf].reshape(-1,1,2).astype(np.uint8)
+        mask = np.zeros((h,w), dtype=np.uint8)
+
+        # print(pts)
+
+        # if len(pts) >= 3:
+        hull = cv2.convexHull(pts.astype(np.int32))
+        cv2.fillConvexPoly(mask, hull, 255)
+
+        conv_hull.append(mask)
+
+    print(np.array(conv_hull).shape)
+
+    return np.array(conv_hull)
+
+def generate_convex_hull_mask(points_per_frame, video):
+    """
+    Draw convex hulls on a binary mask for each frame.
+
+    Parameters
+    ----------
+    points_per_frame : list of (n_i, 2) np.ndarrays
+        List of per-frame point arrays with shape (n_i, 2). Each array contains
+        float (x, y) coordinates. NaNs and infs will be ignored.
+    video : np.ndarray, shape (n_frames, height, width)
+        The reference video array, only used for shape.
+
+    Returns
+    -------
+    mask : np.ndarray, shape (n_frames, height, width)
+        Binary mask with convex hulls drawn for each frame.
+    """
+    n_frames, height, width = video.shape
+    mask = np.zeros((n_frames, height, width), dtype=np.uint8)
+
+    for i, pts in enumerate(points_per_frame):
+        if pts is None or len(pts) < 3:
+            continue
+        pts = np.asarray(pts, dtype=np.float32)
+        pts = pts[np.isfinite(pts).all(axis=1)]
+        if len(pts) < 3:
+            continue
+        pts[:, 0] = np.clip(pts[:, 0], 0, width - 1)
+        pts[:, 1] = np.clip(pts[:, 1], 0, height - 1)
+        hull = cv2.convexHull(pts.astype(np.int32))
+        cv2.fillConvexPoly(mask[i], hull, 1)
+
+    return mask
 
 def main():
     """Performs the radial segmentation analysis on the normal knee data. 
@@ -388,7 +450,7 @@ def main():
     x Estimate a point along the length of the femur 
     x Estimate a line representing the position of the femur 
     x Perform the radial segmentation analysis
-    
+
     """
 
     # Import normal knee data
@@ -430,20 +492,35 @@ def main():
     # views.draw_mask_boundary(video, intr_mask)
 
     # Sample points along the interior of the mask 
-    sample_pts = sample_femur_interior_pts(intr_mask, 128)
-    # sample_pts = interpolate_sample_points(sample_pts)
+    sample_pts = sample_femur_interior_pts(intr_mask, N_lns=128)
+    views.draw_points(video, sample_pts)
 
     # Estimate the tip of the femur
     femur_bndry = estimate_femur_tip_boundary(sample_pts, 0.45)
-    # femur_bndry_filtered = filter_outlier_points(femur_bndry, eps=20, min_samples=4) # not great 
+    # femur_bndry_filtered = filter_outlier_points_dbscan(femur_bndry, eps=20, min_samples=2) # not great 
     # femur_bndry_filtered = filter_outlier_points_hdbscan(femur_bndry, min_cluster_size=5, allow_single_cluster=True) # better but not perfect
-    femur_bndry_filtered = filter_outlier_points_centroid(femur_bndry, 75) # Best results so far but weak due to fixed threshold value?
+    femur_bndry_filtered = filter_outlier_points_centroid(femur_bndry, 75) # Best results so far but rigid due to fixed threshold value?
     femur_tip = get_centroid_pts(femur_bndry_filtered)
+    # femur_tip = rdl.smooth_points(femur_tip, window_size=7) # Not working
 
     pvw1 = views.draw_points(video, femur_bndry); # All sampling points
     pvw = views.draw_points(video, femur_bndry_filtered, show_video=False); # Femur tip points only (already filtered)
     pvw = views.draw_points(pvw, femur_tip, show_video=False)
     views.show_frames(np.concatenate([pvw1, pvw], axis=2))
+
+    # Draw convex hull. TODO since refinement is less important
+    # femur_convex_hull = get_pts_convex_hull(femur_bndry_filtered, video) # Not working
+    # femur_convex_hull = generate_convex_hull_mask(femur_bndry_filtered, video) # Not working
+    # views.show_frames(femur_convex_hull)
+
+
+    # return
+
+
+    # Estimate femur position
+    # init_guess = ((450//2, 500//2), (20, 500//2) )
+    # femur_endpts, femur_midpts = estimate_femur_position(intr_mask, init_guess)
+
 
     return
 
