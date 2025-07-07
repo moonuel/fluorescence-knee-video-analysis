@@ -180,6 +180,28 @@ def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np
 
     return np.array(femur_pts, dtype=object)
 
+def estimate_femur_midpoint_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np.ndarray:
+    """Estimates a point along the length of the femur, for every frame"""
+    if VERBOSE: print("estimate_femur_midpoint_boundary() called!")
+
+    sample_pts = sample_pts.copy()
+    nfs = sample_pts.shape[0]
+
+    femur_midpts = []
+    for cf in range(nfs):
+        pts = np.asarray(sample_pts[cf])
+        npts = pts.shape[0]
+
+        # Points are stored in pairs
+        midpt = int(npts/2*midpoint)*2
+
+        # Get the two adjacent points stored at the midpoint
+        femur_midpt = ((pts[midpt] + pts[midpt+1]) / 2).astype(int)
+
+        femur_midpts.append(femur_midpt)
+
+    return np.array(femur_midpts)
+
 def filter_outlier_points_dbscan(points: np.ndarray,
                           eps: float = 15.0,
                           min_samples: int = 5) -> np.ndarray:
@@ -487,13 +509,13 @@ def main():
     intr_mask = utils.morph_open(intr_mask, (31,31)) # clean small artifacts
     intr_mask = utils.morph_close(intr_mask, (15,15)) # try to remove the dip
 
-    views.show_frames(np.concatenate([mask, intr_mask], axis=2), "mask vs interior mask")
+    # views.show_frames(np.concatenate([mask, intr_mask], axis=2), "mask vs interior mask")
     # views.show_frames(np.concatenate([video, intr_mask, otsu_mask], axis=2), "video vs interior mask vs otsu boundary")
     # views.draw_mask_boundary(video, intr_mask)
 
     # Sample points along the interior of the mask 
     sample_pts = sample_femur_interior_pts(intr_mask, N_lns=128)
-    views.draw_points(video, sample_pts)
+    # views.draw_points(video, sample_pts)
 
     # Estimate the tip of the femur
     femur_bndry = estimate_femur_tip_boundary(sample_pts, 0.45)
@@ -511,7 +533,18 @@ def main():
     pvw1 = views.draw_points(video, femur_bndry); # All sampling points
     pvw = views.draw_points(video, femur_bndry_filtered, show_video=False); # Femur tip points only (already filtered)
     pvw = views.draw_points(pvw, femur_tip, show_video=False)
-    views.show_frames(np.concatenate([pvw1, pvw], axis=2))
+    # views.show_frames(np.concatenate([pvw1, pvw], axis=2))
+
+    # Estimate midpoint of femur
+    femur_midpoint = estimate_femur_midpoint_boundary(sample_pts, 0.3)
+    femur_midpoint = np.reshape(femur_midpoint, (-1, 2)) # Reshape for coordinate smoothing
+    femur_midpoint = rdl.smooth_points(femur_midpoint, window_size=7)
+    femur_midpoint = np.array(femur_midpoint)
+    femur_midpoint = np.reshape(femur_midpoint, (-1, 1, 2)) # Reshape back to expected format for views.draw_points()
+    
+    # print(femur_midpoint)
+    pvw2 = views.draw_points(pvw, femur_midpoint)
+    views.show_frames(np.concatenate([pvw, pvw2], axis=2))
 
     # Draw convex hull. TODO since refinement is less important
     # femur_convex_hull = get_pts_convex_hull(femur_bndry_filtered, video) # Not working
