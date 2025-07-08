@@ -183,6 +183,27 @@ def union_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
 
     return OR_frs
 
+def combine_masks(masks:np.ndarray) -> np.ndarray:
+    """Takes the frame-wise union of all input masks"""
+
+    # TODO: input validation
+
+    masks = masks.copy()
+    nmsks, nfrms, h, w = masks.shape
+    
+    combined_masks = []
+    for cf in range (nfrms):
+        
+        frame = np.zeros((h,w), dtype=np.uint8)
+
+        for mn in range(nmsks):
+            frame = frame | masks[mn, cf]
+
+        combined_masks.append(frame)
+
+    combined_masks = np.array(combined_masks)
+    return combined_masks
+
 def interior_mask(bndry_mask: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Returns the portion of the mask in the interior of the boundary mask, for every frame"""
     if VERBOSE: print("interior_mask() called!")

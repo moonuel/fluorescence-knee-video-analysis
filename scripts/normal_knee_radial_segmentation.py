@@ -542,7 +542,7 @@ def main():
     femur_midpts = get_centroid_pts(femur_midpoint_bndry)
 
     femur_midpts = np.reshape(femur_midpts, (-1, 2)) # Reshape for coordinate smoothing
-    femur_midpts = rdl.smooth_points(femur_midpts, window_size=15)
+    femur_midpts = rdl.smooth_points(femur_midpts, window_size=10)
     femur_midpts = np.array(femur_midpts)
     femur_midpts = np.reshape(femur_midpts, (-1, 1, 2)) # Reshape back to expected format for views.draw_points()
     
@@ -564,13 +564,12 @@ def main():
     femur_midpts = [tuple(pts) for pts in femur_midpts]
 
     views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
-
-    # Get circle points
-    circle_pts = rdl.get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5)
+    
+    # --- Get radial segments ---
+    circle_pts = rdl.get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5) 
     views.draw_points(video, circle_pts) # Validate points on circle
 
-    # Get radial segments
-    radial_regions, radial_masks = rdl.get_radial_segments(mask_src, femur_endpts, circle_pts, thresh_scale=0.5)
+    radial_regions, radial_masks = rdl.get_radial_segments(mask_src, femur_endpts, circle_pts, thresh_scale=0.4)
 
     video = mask_src # Switch the video used for display
     video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
@@ -580,6 +579,18 @@ def main():
 
     # io.save_avi("early_normal_knee_radial_segmentation.avi", video_demo)
 
+    # --- Get plots ---
+
+    # Manually assign left/middle/right knee
+    l_mask = rdl.combine_masks(np.concatenate([radial_masks[0:1], radial_masks[14:]], axis=0)) # 0 and 14-15
+    m_mask = rdl.combine_masks(radial_masks[9:14])
+    r_mask = rdl.combine_masks(radial_masks[2:9])
+    views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
+
+    l_region = rdl.combine_masks(np.concatenate([radial_regions[0:1], radial_regions[14:]], axis=0)) # 0 and 14-15
+    m_region = rdl.combine_masks(radial_regions[9:14])
+    r_region = rdl.combine_masks(radial_regions[2:9])
+    
 
     return
 
