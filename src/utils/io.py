@@ -5,6 +5,7 @@ from tifffile import imread as tif_imread
 from src.config import VERBOSE
 from typing import Tuple, Dict, Union
 import cv2
+from pathlib import Path
 
 
 def load_aging_knee_coords(filename:str, knee_id:Union[str, int]) -> Tuple[pd.DataFrame, Dict[str, int]]:
@@ -131,3 +132,51 @@ def load_avi(fn) -> np.ndarray:
     video = np.array(video)
     return video
 
+def save_avi(filepath: str, video: np.ndarray, fps: int = 30) -> None:
+    """Save a NumPy video array to disk as an .avi (MJPG) file.
+
+    Parameters
+    ----------
+    filepath : str
+        Target file path; relative paths are resolved against the CWD.
+    video : np.ndarray
+        Array of shape (n_frames, H, W)  or  (n_frames, H, W, 3).
+        dtype uint8 preferred; float 0‑1 will be auto‑scaled.
+    fps : int, optional
+        Frames per second for the output file (default 30).
+    """
+    # Resolve path and create parent dirs
+    filepath = Path(filepath).expanduser().resolve()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    # Validate video shape
+    if video.ndim not in (3, 4):
+        raise ValueError("video must have shape (n, H, W) or (n, H, W, 3)")
+    n_frames, h, w = video.shape[:3]
+    is_color = video.ndim == 4
+
+    # Ensure uint8
+    if video.dtype != np.uint8:
+        if np.issubdtype(video.dtype, np.floating):
+            video = np.clip(video * 255.0, 0, 255).astype(np.uint8)
+        else:
+            video = video.astype(np.uint8)
+
+    # MJPG is broadly supported
+    fourcc = cv2.VideoWriter_fourcc(*"XVID")
+    writer = cv2.VideoWriter(str(filepath), fourcc, fps, (w, h), isColor=is_color)
+
+    if not writer.isOpened():
+        raise IOError(f"Could not open VideoWriter for {filepath}")
+
+    for i in range(n_frames):
+        frame = video[i]
+        if is_color:
+            # CV expects BGR; assume input is already BGR
+            writer.write(frame)
+        else:
+            # For grayscale, VideoWriter still expects 3‑channel unless isColor=False
+            writer.write(frame)
+
+    writer.release()
+    print(f"Saved {n_frames} frames to {filepath}")

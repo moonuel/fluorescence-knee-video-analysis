@@ -271,7 +271,7 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     if VERBOSE: print("get_radial_segments() called!")
 
     video = video.copy()
-    circle_ctrs = np.array(circle_ctrs) # adhoc type cast since downstream operations are buggy without this
+    circle_ctrs = np.array(circle_ctrs) # type cast for downstream operations for safety
     circle_pts = np.array(circle_pts)
 
     # TODO: input validation
