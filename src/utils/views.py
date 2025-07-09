@@ -170,6 +170,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
         f0 = metadata["f0"]
         fN = metadata["fN"]
         frmns = np.arange(f0, fN+1)
+        print(k)
         axes[i].plot(frmns, intensities[k][f0:fN+1], color=clrs[k], label=f"{ttl_pfx[k]} knee")
 
         # Formatting

@@ -493,7 +493,7 @@ def main():
 
     # Get adaptive mean mask
     mask_src = utils.log_transform_video(video)
-    mask_src = utils.blur_video(video, (41,41), sigma=0) # sigma is variance
+    mask_src = utils.blur_video(video, (25,25), sigma=0) # sigma is variance
     mask = utils.mask_adaptive(mask_src, 141, 14) # increase thresholding to get better femur boundary
     # mask = utils.morph_open(mask, (31,31)) # clean small artifacts
     # views.show_frames(mask)
@@ -516,7 +516,7 @@ def main():
 
     # Sample points along the interior of the mask 
     sample_pts = sample_femur_interior_pts(intr_mask, N_lns=128)
-    # views.draw_points(video, sample_pts)
+    views.draw_points(video, sample_pts)
 
     # --- Estimate the tip of the femur ---
     femur_tip_bndry = estimate_femur_tip_boundary(sample_pts, 0.55)
@@ -547,8 +547,8 @@ def main():
     femur_midpts = np.reshape(femur_midpts, (-1, 1, 2)) # Reshape back to expected format for views.draw_points()
     
     # print(femur_midpoint)
-    pvw2 = views.draw_points(pvw, femur_midpts)
-    views.show_frames(np.concatenate([pvw, pvw2], axis=2))
+    # pvw2 = views.draw_points(pvw, femur_midpts)
+    # views.show_frames(np.concatenate([pvw, pvw2], axis=2))
 
     # Draw convex hull. TODO since refinement is less important
     # femur_convex_hull = get_pts_convex_hull(femur_bndry_filtered, video) # Not working
@@ -563,13 +563,13 @@ def main():
     femur_midpts = np.reshape(femur_midpts, (-1, 2))
     femur_midpts = [tuple(pts) for pts in femur_midpts]
 
-    views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
+    # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     
     # --- Get radial segments ---
     circle_pts = rdl.get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5) 
-    views.draw_points(video, circle_pts) # Validate points on circle
+    # views.draw_points(video, circle_pts) # Validate points on circle
 
-    radial_regions, radial_masks = rdl.get_radial_segments(mask_src, femur_endpts, circle_pts, thresh_scale=0.4)
+    radial_regions, radial_masks = rdl.get_radial_segments(mask_src, femur_endpts, circle_pts, thresh_scale=0.5)
 
     video = mask_src # Switch the video used for display
     video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
@@ -591,6 +591,27 @@ def main():
     m_region = rdl.combine_masks(radial_regions[9:14])
     r_region = rdl.combine_masks(radial_regions[2:9])
     
+    # Get metadata for comparison with normal knee manual segmentation
+    _, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=2)
+    masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
+    regions = {'l': l_region, 'm': m_region, 'r': r_region}
+    keys = ['l','m','r']
+
+    # Get intensity data
+    raw_intensities = dp.measure_region_intensities(regions, masks, keys)
+    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+    radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
+    # print(raw_intensities)
+    # print(metadata)
+
+    # Validate intensity data
+    show_figs=False
+    save_figs=False
+    figsize=(9,17)
+    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
+    # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
+
 
     return
 

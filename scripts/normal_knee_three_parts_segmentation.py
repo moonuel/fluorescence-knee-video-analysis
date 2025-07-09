@@ -20,7 +20,7 @@ def main():
     translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
 
     # Load and transform coords
-    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=0)
+    coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=1)
     coords = ks.translate_coords(translation_mxs, coords)
     coords = ks.smooth_coords(coords, 5) # Smooth coords
 
@@ -33,15 +33,20 @@ def main():
 
     # Plot intensities
     keys=['l','m','r']
-    show_figs=True
-    save_figs=True
+    views.show_regions(regions, keys)
+
+    show_figs=False
+    save_figs=False
     figsize=(9,17)
 
     raw_intensities = dp.measure_region_intensities(regions, masks, keys)
     # normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
 
+    print(raw_intensities)
+    # print(normalized_intensities)
+
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
-    # views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+    # views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
 
     # Plot rates of change
     # raw_deriv = dp.get_intensity_diffs(raw_intensities)
