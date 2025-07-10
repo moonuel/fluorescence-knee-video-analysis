@@ -258,6 +258,7 @@ def main():
     # Load pre-processed video
     # video, _ = knee.centre_video(video) 
     video = io.load_nparray("../data/processed/aging_knee_processed.npy") # result of above function call
+    video = video[1:] # Crop out empty first frame
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
 
@@ -275,12 +276,13 @@ def main():
     # Get otsu mask
     otsu_mask = ks.get_otsu_masks(mask_src)
     # otsu_mask = utils.morph_close(otsu_mask, (15,15))
-    otsu_mask = utils.morph_erode(otsu_mask, (15,15))
+    otsu_mask = utils.morph_erode(otsu_mask, (19,19))
     # views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask") # Validate 
 
     # Exclude adaptive mean mask outside of otsu mask
     intr_mask = rdl.interior_mask(otsu_mask, mask)
-    # views.show_frames([mask, intr_mask], "mask vs interior mask") 
+    intr_mask = utils.morph_close(intr_mask, (11,11))
+    views.show_frames([mask, intr_mask], "mask vs interior mask") 
     # views.draw_mask_boundary(mask_src, intr_mask)
 
     # Estimate the interior boundary
@@ -288,8 +290,16 @@ def main():
     views.draw_points(video, sample_pts)
 
     # Estimate the femur tip
-    tip_bndry = rdl.estimate_femur_tip_boundary(sample_pts, 0.5)
+    tip_bndry = rdl.estimate_femur_tip_boundary(sample_pts, 0.45)
     views.draw_points(video, tip_bndry)
+
+    tip_bndry = rdl.filter_outlier_points_centroid(tip_bndry, 23)
+    views.draw_points(video, tip_bndry)
+
+    tip_pts = rdl.get_centroid_pts(tip_bndry)
+    tip_pts = rdl.smooth_points(np.reshape(tip_pts, (-1, 2)), window_size=15)
+    tip_pts = np.reshape(tip_pts, (-1, 1, 2))
+    views.draw_points(video, tip_pts)
 
     return
 

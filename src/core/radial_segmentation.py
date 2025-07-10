@@ -365,6 +365,74 @@ def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np
 
     return np.array(femur_pts, dtype=object)
 
+def get_centroid_pts(femur_pts: np.ndarray) -> np.ndarray:
+    "Calculates centroid of all points, per frame."
+
+    if VERBOSE: print("get_centroid_pts() called!")
+
+    femur_pts = femur_pts.copy()
+    nfs = femur_pts.shape[0] # Ragged array. intended dimensions (nfs, npts, 2_
+
+    centroids = []
+    for cf in range(nfs):
+        
+        pts = np.asarray(femur_pts[cf])
+        # n = pts.shape[0]
+
+        # Compute centroid of points
+        cntrd = np.mean(pts, axis=0, dtype=int)
+
+        # Filter out points outside 
+        centroids.append([cntrd])
+
+    return np.array(centroids, dtype=object)
+
+def filter_outlier_points_centroid(points: np.ndarray, eps: float) -> np.ndarray:
+    """Exclude points farther than `eps` from the centroid in each frame.
+
+    Parameters
+    ----------
+    points : np.ndarray (dtype=object)
+        Jagged array of shape (n_frames,), with each element an (n_pts_i, 2) array.
+    eps : float
+        Radius threshold; points with distance > eps are dropped.
+
+    Returns
+    -------
+    np.ndarray (dtype=object)
+        Jagged array of filtered point sets, shape (n_frames,).
+    """
+    if VERBOSE:
+        print("filter_outlier_points_centroid() called!")
+
+    points = points.copy()                     # keep original intact
+    nfs = points.shape[0]
+
+    centroids = get_centroid_pts(points)       # shape (n_frames, 2)
+    filtered = []
+
+    for cf in range(nfs):
+
+        # print(points[cf]) # Debug
+        # print(centroids[cf])
+        pts = np.asarray(points[cf], dtype=float)                       # (n_pts_i, 2)
+        ctr = np.asarray(centroids[cf], dtype=float)                    # (2,)
+
+        if pts.size == 0:
+            filtered.append(pts)               # keep empty frame as‑is
+            continue
+
+        # Euclidean distance to centroid
+        dists = pts - ctr
+        dists = np.linalg.norm(dists, axis=1)
+        keep_mask = dists <= eps
+
+        print(cf, np.max(dists))
+
+        filtered.append(pts[keep_mask].astype(int))
+
+    return np.array(filtered, dtype=object)
+
 def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
     """Gets the radial segments for the video. """
     if VERBOSE: print("get_radial_segments() called!")
