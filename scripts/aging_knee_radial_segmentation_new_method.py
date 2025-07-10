@@ -74,7 +74,7 @@ def _get_N_points_on_circle(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N:
     
     return circle_pts
 
-def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[int,int]], N:int, radius_scale:int=1) -> np.ndarray:
+def get_N_points_on_circle(circle_ctrs:np.ndarray, ref_pts:np.ndarray, N:int, radius_scale:int=1) -> np.ndarray:
     """Gets N points on a circle for an entire video.
     
     Returns:
@@ -84,17 +84,24 @@ def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[
     if VERBOSE: 
         print("get_N_points_on_circle() called!")
 
-    if len(circle_ctrs) != len(ref_pts):
-        raise ValueError("Input lists must have the same length")
+    nfs = circle_ctrs.shape[0] # Shape (nfs, npts, 2)
+    if nfs != ref_pts.shape[0]: 
+        raise ValueError(f"Input args must have the same number of rows. Given: {nfs} and {ref_pts.shape[0]}")
 
     circle_points = []
-    for i in range(len(circle_ctrs)):
-        if circle_ctrs[i] is None or ref_pts[i] is None:
+    for cf in range(nfs):
+
+        ctr = np.asarray(circle_ctrs[cf])[0]
+        pts = np.asarray(ref_pts[cf])[0]
+
+        print(ctr, pts)
+
+        if ctr is None or pts is None:
             # Use zeros for missing frames to maintain array structure
             circle_points.append(np.zeros((N, 2), dtype=np.int32))
             continue
         
-        circ_pts = _get_N_points_on_circle(circle_ctrs[i], ref_pts[i], N, radius_scale)
+        circ_pts = _get_N_points_on_circle(ctr, pts, N, radius_scale)
         circle_points.append(circ_pts)
     circle_points = np.array(circle_points)
 
@@ -302,24 +309,25 @@ def main():
     views.draw_points(video, tip_pts)
 
     # Estimate the femur midpoint
-    midpt_bndry = rdl.estimate_femur_midpoint_boundary(sample_pts, 0.05, 0.3)
+    midpt_bndry = rdl.estimate_femur_midpoint_boundary(sample_pts, 0.05, 0.5)
     midpt_pts = rdl.get_centroid_pts(midpt_bndry)
     midpt_pts = rdl.smooth_points(np.reshape(midpt_pts, (-1, 2)), window_size=15)
     midpt_pts = np.reshape(midpt_pts, (-1, 1, 2))
     views.draw_points(video, midpt_bndry)
     views.draw_points(video, midpt_pts)
 
-    return
-
     # Get radial segmentation
-    femur_endpts, femur_midpts = estimate_femur_position(mask)
-    views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5)
-    # views.draw_points(video, circle_pts) # Validate points on circle
-    radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts, thresh_scale=0.6)
+    tip_pts = np.reshape(tip_pts, (-1, 2)) # Reshape for interfacing with rdl.get_N_points_on_circle()
+    tip_pts = [tuple(pts) for pts in tip_pts]
+    midpt_pts = np.reshape(midpt_pts, (-1, 2))
+    midpt_pts = [tuple(pts) for pts in midpt_pts]
+
+    circle_pts = rdl.get_N_points_on_circle(tip_pts, midpt_pts, N=16, radius_scale=1.5)
+    views.draw_points(video, circle_pts) # Validate points on circle
+    radial_regions, radial_masks = get_radial_segments(video, tip_pts, circle_pts, thresh_scale=0.6)
     
     video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
-    video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
+    video_demo = views.draw_line(video_demo, tip_pts, midpt_pts, show_video=False)
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
