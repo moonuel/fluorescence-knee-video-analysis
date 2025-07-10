@@ -301,6 +301,14 @@ def main():
     tip_pts = np.reshape(tip_pts, (-1, 1, 2))
     views.draw_points(video, tip_pts)
 
+    # Estimate the femur midpoint
+    midpt_bndry = rdl.estimate_femur_midpoint_boundary(sample_pts, 0.05, 0.3)
+    midpt_pts = rdl.get_centroid_pts(midpt_bndry)
+    midpt_pts = rdl.smooth_points(np.reshape(midpt_pts, (-1, 2)), window_size=15)
+    midpt_pts = np.reshape(midpt_pts, (-1, 1, 2))
+    views.draw_points(video, midpt_bndry)
+    views.draw_points(video, midpt_pts)
+
     return
 
     # Get radial segmentation

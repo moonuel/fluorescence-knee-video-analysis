@@ -433,6 +433,29 @@ def filter_outlier_points_centroid(points: np.ndarray, eps: float) -> np.ndarray
 
     return np.array(filtered, dtype=object)
 
+def estimate_femur_midpoint_boundary(sample_pts:np.ndarray, start:float = 0.0, end:float=0.5) -> np.ndarray:
+    """Gets the points on the boundary around a point along the length of the femur, for every frame"""
+    if VERBOSE: print("estimate_femur_midpoint_boundary() called!")
+
+    sample_pts = sample_pts.copy()
+    nfs = sample_pts.shape[0] # shape (nfs, npts*, 2), where * indicates the jagged dimension
+
+    midpoint_boundary = []
+    for cf in range(nfs):
+        pts = np.asarray(sample_pts[cf])
+        npts = pts.shape[0] # shape (npts, 2)
+
+        # Top and bottom boundary points are stored in pairs
+        strt_idx = int(npts/2*start)*2
+        end_idx = int(npts/2*end)*2
+
+        # Get the boundary points between the start and end indices
+        midpt_bndry = pts[strt_idx:end_idx]
+
+        midpoint_boundary.append(midpt_bndry)
+
+    return np.array(midpoint_boundary, dtype=object)
+
 def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
     """Gets the radial segments for the video. """
     if VERBOSE: print("get_radial_segments() called!")
