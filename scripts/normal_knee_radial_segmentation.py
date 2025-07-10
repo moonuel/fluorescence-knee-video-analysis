@@ -158,7 +158,7 @@ def sample_femur_interior_pts(video: np.ndarray, N_lns: int) -> np.ndarray:
 def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np.ndarray:
     """Filters for only the points corresponding to the interior boundary of the femur"""
 
-    print(sample_pts.shape)
+    # print(sample_pts.shape)
     # print(sample_pts)
 
     sample_pts = sample_pts.copy()
@@ -470,9 +470,9 @@ def main():
     - Discretize the boundary around the femur tip by sampling points along the interior of the resulting mask 
     - Remove outliers and calculate the centroid of the points around the femur tip 
 
-    x Estimate a point along the length of the femur 
-    x Estimate a line representing the position of the femur 
-    x Perform the radial segmentation analysis
+    > Estimate a point along the length of the femur 
+    > Estimate a line representing the position of the femur 
+    > Perform the radial segmentation analysis
 
     """
 
@@ -486,13 +486,8 @@ def main():
     video = utils.rotate_video(video, angle)
     video = utils.crop_video_square(video, 500, 450)
 
-    # Remove first 44 frames
-    srt_fm = 45
-    # video = video[srt_fm:]
-    # views.show_frames(video)
-
     # Get adaptive mean mask
-    mask_src = utils.log_transform_video(video)
+    mask_src = utils.log_transform_video(video) # TODO dude this doesn't do anything lol
     mask_src = utils.blur_video(video, (25,25), sigma=0) # sigma is variance
     mask = utils.mask_adaptive(mask_src, 141, 14) # increase thresholding to get better femur boundary
     # mask = utils.morph_open(mask, (31,31)) # clean small artifacts

@@ -9,6 +9,7 @@ from typing import Tuple, List
 from src.utils import io, views, utils
 from src.config import VERBOSE
 from src.core import data_processing as dp
+import src.core.radial_segmentation as rdl
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -257,24 +258,40 @@ def main():
     # Load pre-processed video
     # video, _ = knee.centre_video(video) 
     video = io.load_nparray("../data/processed/aging_knee_processed.npy") # result of above function call
-
-    # Pre-process video
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
-    video = utils.blur_video(video)
-    # video = utils.log_transform_video(video, 1)
 
     # Slight rotation
-    angle = -29
+    angle = -15
     video = utils.rotate_video(video, angle)
     video = utils.crop_video_square(video, 350) # crop out black borders
 
     # Get adaptive mean mask
-    video_blr = utils.blur_video(video, (31,31), 0)
-    mask = utils.mask_adaptive(video_blr, 71, -2)
-    mask = utils.morph_open(mask, (15,15)) # clean small artifacts
-    views.show_frames(mask) # Validate mask    
-    # views.draw_middle_lines(mask, show_video=True) # Validate rotation
+    mask_src = utils.log_transform_video(video, 1)
+    mask_src = utils.blur_video(mask_src, (13,13), sigma=0)
+    mask = utils.mask_adaptive(mask_src, 71, 10)
+    # views.show_frames(mask) # Validate mask    
+
+    # Get otsu mask
+    otsu_mask = ks.get_otsu_masks(mask_src)
+    # otsu_mask = utils.morph_close(otsu_mask, (15,15))
+    otsu_mask = utils.morph_erode(otsu_mask, (15,15))
+    # views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask") # Validate 
+
+    # Exclude adaptive mean mask outside of otsu mask
+    intr_mask = rdl.interior_mask(otsu_mask, mask)
+    # views.show_frames([mask, intr_mask], "mask vs interior mask") 
+    # views.draw_mask_boundary(mask_src, intr_mask)
+
+    # Estimate the interior boundary
+    sample_pts = rdl.sample_femur_interior_pts(intr_mask, 128)
+    views.draw_points(video, sample_pts)
+
+    # Estimate the femur tip
+    tip_bndry = rdl.estimate_femur_tip_boundary(sample_pts, 0.5)
+    views.draw_points(video, tip_bndry)
+
+    return
 
     # Get radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
@@ -288,7 +305,7 @@ def main():
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
-    exit(0) # End early 
+    return
 
     """Reproducing manual segmentation experiment"""
 

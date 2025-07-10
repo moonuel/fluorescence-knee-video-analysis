@@ -277,8 +277,8 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit"""
     if VERBOSE: print("show_frames() called!")
 
-    # if isinstance(video, List):
-    #     video = np.concatenate(video, axis=2)
+    if isinstance(video, List): # TODO: Dynamically accept a list of videos and automatically display them side by side 
+        video = np.concatenate(video, axis=2)
 
     video = video.copy() # don't modify original
     nfs, h,w = video.shape
@@ -440,7 +440,7 @@ def _draw_points(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
     """Helper func to draw_points(). Draws a set of points in pts directly on the frame."""
     pts = np.array(pts)
     if pts.ndim != 2 or pts.shape[1] != 2: 
-        raise ValueError(f"draw_points_(): 'pts' must be 2D array with shape (N, 2). Shape {pts.shape} was given")
+        raise ValueError(f"_draw_points(): 'pts' must be 2D array with shape (N, 2). Shape {pts.shape} was given")
     
     for pt in pts:
         cv2.circle(frame, tuple(pt), 1, (255,255,255))
@@ -456,7 +456,12 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=True) -> np.nd
     pts = pts.copy()
 
     for cf in range(video.shape[0]):
-        _draw_points(video[cf], pts[cf])
+        cpts = np.asarray(pts[cf])
+        frame = np.asarray(video[cf])
+        # print(cpts) # debug
+        # print(cpts.size) # debug
+        if cpts.size == 0: continue
+        _draw_points(frame, cpts)
 
     if show_video: show_frames(video)
     

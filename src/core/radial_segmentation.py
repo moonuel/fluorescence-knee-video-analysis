@@ -286,6 +286,84 @@ def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[
 
     return circle_points
 
+def sample_femur_interior_pts(mask: np.ndarray, N_lns: int) -> np.ndarray:
+    """Sample interior-boundary points of a binary femur-mask video.
+
+    Parameters
+    ----------
+    mask   : np.ndarray
+        Binary fluorescence video mask, shape (n_frames, H, W) with pixel
+        values 0 or 255.
+    N_lns   : int
+        Number of equally-spaced vertical scan lines (columns) to use.
+
+    Returns
+    -------
+    np.ndarray (dtype=object)
+        Length-n_frames object array.  Each element is a Python list of
+        (x, y) tuples giving the coordinates of zero-crossing points along
+        scan lines *that exhibit exactly four crossings* in that frame.
+    """
+    if VERBOSE: print("sample_femur_interior_pts() called!")
+
+    mask = mask.copy()
+    nframes, h, w = mask.shape
+
+    # Step 1 – choose equally-spaced column indices (x-coords)
+    scan_cols = np.linspace(0, w, N_lns+2)
+    scan_cols = scan_cols[1:-1] # interior lines only
+    scan_cols = np.rint(scan_cols).astype(int) # Round to int column indices
+
+    femur_pts_per_frame = []
+
+    # Step 2 – per-frame scan
+    for cf in range(nframes):
+        frame = mask[cf] # (H, W) binary mask
+        valid_pts = []
+
+        for x in scan_cols:
+            col = frame[:, x] # 1-D array length H
+            # Indices where pixel value changes (0 <-> 255)
+            crossings = np.where(col[:-1] != col[1:])[0] + 1  # +1 -> row of change
+            if crossings.size == 4:                  # accept columns with 4 crossings
+                for y in crossings[1:-1]:
+                    valid_pts.append([int(x), int(y)])
+
+        femur_pts_per_frame.append(valid_pts)
+
+    # Step 3 – return as object array (ragged structure)
+    femur_pts_per_frame = np.array(femur_pts_per_frame, dtype=object)
+    return femur_pts_per_frame
+
+def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np.ndarray:
+    """Filters for only the points corresponding to the interior boundary of the femur"""
+
+    # print(sample_pts.shape)
+    # print(sample_pts)
+
+    sample_pts = sample_pts.copy()
+    nfs = sample_pts.shape[0]
+
+    # Select only right half of points 
+    femur_pts = []
+    for cf in range(nfs):
+        pts = np.asarray(sample_pts[cf])
+
+        if pts.size == 0: 
+            femur_pts.append([]) # append empty
+            continue
+
+        npts, _ = pts.shape
+
+        # points are stored in pairs
+        # divide by 2, then divide by 2, and round 
+        # take midpoint to be twice the previous number
+        midpt = int(npts/2*midpoint)*2 # TODO: parameterize to use something like right 1/3 of points?
+
+        femur_pt = pts[midpt:, :]
+        femur_pts.append(femur_pt)
+
+    return np.array(femur_pts, dtype=object)
 
 def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
     """Gets the radial segments for the video. """
