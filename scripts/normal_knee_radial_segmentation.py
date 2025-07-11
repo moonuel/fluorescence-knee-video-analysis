@@ -579,12 +579,12 @@ def main():
     # Manually assign left/middle/right knee
     l_mask = rdl.combine_masks(np.concatenate([radial_masks[0:1], radial_masks[14:]], axis=0)) # 0 and 14-15
     m_mask = rdl.combine_masks(radial_masks[9:14])
-    r_mask = rdl.combine_masks(radial_masks[2:9])
+    r_mask = rdl.combine_masks(radial_masks[1:9])
     views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
 
     l_region = rdl.combine_masks(np.concatenate([radial_regions[0:1], radial_regions[14:]], axis=0)) # 0 and 14-15
     m_region = rdl.combine_masks(radial_regions[9:14])
-    r_region = rdl.combine_masks(radial_regions[2:9])
+    r_region = rdl.combine_masks(radial_regions[1:9])
     
     # Get metadata for comparison with normal knee manual segmentation
     _, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=2)

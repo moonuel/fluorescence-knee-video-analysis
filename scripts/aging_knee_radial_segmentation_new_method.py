@@ -7,7 +7,7 @@ import math
 import src.core.knee_segmentation as ks
 from typing import Tuple, List
 from src.utils import io, views, utils
-from src.config import VERBOSE
+from src.config import VERBOSE, OUTPUT
 from src.core import data_processing as dp
 import src.core.radial_segmentation as rdl
 import copy
@@ -270,17 +270,17 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", aging_label)
 
         # Manually assign left/middle/right knee
-        l_mask = combine_masks(np.concatenate([radial_masks[10:], radial_masks[0:1]], axis=0)) # 12-15 and 0
-        m_mask = combine_masks(radial_masks[8:10])
+        l_mask = combine_masks(np.concatenate([radial_masks[11:], radial_masks[0:1]], axis=0)) # 12-15 and 0
+        m_mask = combine_masks(radial_masks[8:11])
         r_mask = combine_masks(radial_masks[1:8])
 
-        l_region = combine_masks(np.concatenate([radial_regions[10:], radial_regions[0:1]], axis=0)) # 12-15 and 0
-        m_region = combine_masks(radial_regions[8:10])
+        l_region = combine_masks(np.concatenate([radial_regions[11:], radial_regions[0:1]], axis=0)) # 12-15 and 0
+        m_region = combine_masks(radial_regions[8:11])
         r_region = combine_masks(radial_regions[1:8])
 
         # Validate segments
         v_out = views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]), show_video=False)
-        io.save_avi("aging_knee_radial_seg_LMR_(new_method).avi", v_out)
+        if OUTPUT: io.save_avi("aging_knee_radial_seg_LMR_(new_method).avi", v_out)
 
         masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
         regions = {'l': l_region, 'm': m_region, 'r': r_region}
@@ -373,7 +373,7 @@ def main():
 
     # return
 
-    # io.save_avi("aging_knee_radial_seg_(new_method).avi", video_demo)
+    if OUTPUT: io.save_avi("aging_knee_radial_seg_(new_method).avi", video_demo)
 
     """Reproducing manual segmentation experiment"""
 

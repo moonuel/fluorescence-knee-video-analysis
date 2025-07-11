@@ -7,7 +7,7 @@ import math
 import src.core.knee_segmentation as ks
 from typing import Tuple, List
 from src.utils import io, views, utils
-from src.config import VERBOSE
+from src.config import VERBOSE, OUTPUT
 from src.core import data_processing as dp
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
@@ -264,15 +264,15 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         
         l_mask = combine_masks(np.concatenate([radial_masks[12:], radial_masks[0:1]], axis=0)) # 12-15 and 0
         m_mask = combine_masks(radial_masks[8:12])
-        r_mask = combine_masks(radial_masks[2:8])
+        r_mask = combine_masks(radial_masks[1:8])
 
         l_region = combine_masks(np.concatenate([radial_regions[12:], radial_regions[0:1]], axis=0)) # 12-15 and 0
         m_region = combine_masks(radial_regions[8:12])
-        r_region = combine_masks(radial_regions[2:8])
+        r_region = combine_masks(radial_regions[1:8])
 
         # Validate segments 
         v_out = views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]), show_video=False)
-        io.save_avi("aging_knee_radial_seg_LMR_(old_method).avi", v_out)
+        if OUTPUT: io.save_avi("aging_knee_radial_seg_LMR_(old_method).avi", v_out)
 
         masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
         regions = {'l': l_region, 'm': m_region, 'r': r_region}
@@ -326,7 +326,7 @@ def main():
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
-    # io.save_avi("aging_knee_radial_seg_(old_method).avi", video_demo)
+    if OUTPUT: io.save_avi("aging_knee_radial_seg_(old_method).avi", video_demo)
 
     """Reproducing manual segmentation experiment"""
 

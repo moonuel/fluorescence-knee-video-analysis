@@ -1,1 +1,2 @@
 VERBOSE = True
+OUTPUT = False
