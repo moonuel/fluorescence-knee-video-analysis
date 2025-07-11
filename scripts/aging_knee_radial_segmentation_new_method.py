@@ -10,6 +10,7 @@ from src.utils import io, views, utils
 from src.config import VERBOSE
 from src.core import data_processing as dp
 import src.core.radial_segmentation as rdl
+import copy
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -259,6 +260,43 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
 
     return radial_regions, radial_masks
 
+def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17)):
+    aging_versions = ["aging-1", "aging-2", "aging-3"]
+    
+    for aging_label in aging_versions:
+        print(f"\n=== Processing {aging_label} ===")
+
+        # Load metadata 
+        _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", aging_label)
+
+        # Manually assign left/middle/right knee
+        l_mask = combine_masks(np.concatenate([radial_masks[10:], radial_masks[0:1]], axis=0)) # 12-15 and 0
+        m_mask = combine_masks(radial_masks[8:10])
+        r_mask = combine_masks(radial_masks[1:8])
+
+        l_region = combine_masks(np.concatenate([radial_regions[10:], radial_regions[0:1]], axis=0)) # 12-15 and 0
+        m_region = combine_masks(radial_regions[8:10])
+        r_region = combine_masks(radial_regions[1:8])
+
+        views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
+
+        masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
+        regions = {'l': l_region, 'm': m_region, 'r': r_region}
+        keys = ['l','m','r']
+
+        # Get intensity data
+        raw_intensities = dp.measure_region_intensities(regions, masks, keys)
+        normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+        radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
+
+        # Validate intensity data
+        # show_figs=True
+        # save_figs=False
+        # figsize=(9,17)
+        views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+        views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
+        # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -297,7 +335,7 @@ def main():
     views.draw_points(video, sample_pts)
 
     # Estimate the femur tip
-    tip_bndry = rdl.estimate_femur_tip_boundary(sample_pts, 0.45)
+    tip_bndry = rdl.estimate_femur_tip_boundary(sample_pts, 0.5)
     views.draw_points(video, tip_bndry)
 
     tip_bndry = rdl.filter_outlier_points_centroid(tip_bndry, 23)
@@ -309,7 +347,7 @@ def main():
     views.draw_points(video, tip_pts)
 
     # Estimate the femur midpoint
-    midpt_bndry = rdl.estimate_femur_midpoint_boundary(sample_pts, 0.05, 0.5)
+    midpt_bndry = rdl.estimate_femur_midpoint_boundary(sample_pts, 0, 0.3)
     midpt_pts = rdl.get_centroid_pts(midpt_bndry)
     midpt_pts = rdl.smooth_points(np.reshape(midpt_pts, (-1, 2)), window_size=15)
     midpt_pts = np.reshape(midpt_pts, (-1, 1, 2))
@@ -331,53 +369,13 @@ def main():
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
-    return
+    # return
+
+    io.save_avi("aging_knee_radial_seg_(new_method).avi", video_demo)
 
     """Reproducing manual segmentation experiment"""
 
-    # Load metadata 
-    _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", "aging-3")
-
-    # Manually assign left/middle/right knee
-    l_mask = combine_masks(np.concatenate([radial_masks[12:], radial_masks[0:1]], axis=0)) # 12-15 and 0
-    m_mask = combine_masks(radial_masks[8:12])
-    r_mask = combine_masks(radial_masks[2:8])
-
-    l_region = combine_masks(np.concatenate([radial_regions[12:], radial_regions[0:1]], axis=0)) # 12-15 and 0
-    m_region = combine_masks(radial_regions[8:12])
-    r_region = combine_masks(radial_regions[2:8])
-    # views.show_frames(m_mask) # Validate combined masks/regions
-    # views.show_frames(m_region)
-    views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
-
-    masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
-    regions = {'l': l_region, 'm': m_region, 'r': r_region}
-    keys = ['l','m','r']
-
-    # Get intensity data
-    raw_intensities = dp.measure_region_intensities(regions, masks, keys)
-    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
-    radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
-    # print(raw_intensities)
-    # print(metadata)
-
-    # Validate intensity data
-    show_figs=False
-    save_figs=True
-    figsize=(9,17)
-    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
-    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
-    # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
-
-
-    # > Get the leftmost points
-    # > Get the basic femur estimation
-    # > Generate radial segmentation
-        # > Combine the radial slices into parts corresponding to the left/middle/right knee
-        # x Generate intensity plots -> see if its comparable to manual segmentation
-    # x Brainstorm femur endpoint estimation improvements
-        # x Get points on the interior of the mask region
-        # x Fit least-squares line through all points 
+    # analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True, figsize=(9,17))
 
 if __name__ == "__main__":
     main()

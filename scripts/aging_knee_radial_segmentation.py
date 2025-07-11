@@ -251,6 +251,46 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
 
     return radial_regions, radial_masks
 
+def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17)):
+    aging_versions = ["aging-1", "aging-2", "aging-3"]
+    
+    for aging_label in aging_versions:
+        print(f"\n=== Processing {aging_label} ===")
+
+        # Load metadata 
+        _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", aging_label)
+
+        # Manually assign left/middle/right knee
+        
+        l_mask = combine_masks(np.concatenate([radial_masks[12:], radial_masks[0:1]], axis=0)) # 12-15 and 0
+        m_mask = combine_masks(radial_masks[8:12])
+        r_mask = combine_masks(radial_masks[2:8])
+
+        l_region = combine_masks(np.concatenate([radial_regions[12:], radial_regions[0:1]], axis=0)) # 12-15 and 0
+        m_region = combine_masks(radial_regions[8:12])
+        r_region = combine_masks(radial_regions[2:8])
+
+        views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
+
+        masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
+        regions = {'l': l_region, 'm': m_region, 'r': r_region}
+        keys = ['l','m','r']
+
+        # Get intensity data
+        raw_intensities = dp.measure_region_intensities(regions, masks, keys)
+        normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+        radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
+
+        # Validate intensity data
+        # show_figs=True
+        # save_figs=False
+        # figsize=(9,17)
+        views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+        views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
+        # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
+
+
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -288,9 +328,13 @@ def main():
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
-    exit(0) # End early 
+    io.save_avi("aging_knee_radial_seg_(old_method).avi", video_demo)
 
     """Reproducing manual segmentation experiment"""
+
+    # analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False)
+
+    return
 
     # Load metadata 
     _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", "aging-3")
@@ -319,8 +363,8 @@ def main():
     # print(metadata)
 
     # Validate intensity data
-    show_figs=False
-    save_figs=True
+    show_figs=True
+    save_figs=False
     figsize=(9,17)
     views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
     views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
