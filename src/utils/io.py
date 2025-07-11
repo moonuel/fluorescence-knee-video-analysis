@@ -180,3 +180,69 @@ def save_avi(filepath: str, video: np.ndarray, fps: int = 30) -> None:
 
     writer.release()
     print(f"Saved {n_frames} frames to {filepath}")
+
+def concatenate_avi(file1, file2, out_path="output_concat.avi"):
+    """
+    Horizontally concatenates two .avi video files, padding frames or lengths if necessary.
+
+    Parameters
+    ----------
+    file1 : str
+        Path to the first .avi video.
+    file2 : str
+        Path to the second .avi video.
+    out_path : str
+        Path to save the concatenated output video.
+    """
+
+    cap1 = cv2.VideoCapture(file1)
+    cap2 = cv2.VideoCapture(file2)
+
+    if not cap1.isOpened() or not cap2.isOpened():
+        raise IOError("One of the video files could not be opened.")
+
+    fps = int(cap1.get(cv2.CAP_PROP_FPS))
+    length1 = int(cap1.get(cv2.CAP_PROP_FRAME_COUNT))
+    length2 = int(cap2.get(cv2.CAP_PROP_FRAME_COUNT))
+    max_length = max(length1, length2)
+
+    w1 = int(cap1.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h1 = int(cap1.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    w2 = int(cap2.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h2 = int(cap2.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    H = max(h1, h2)
+    W = w1 + w2
+
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(out_path, fourcc, fps, (W, H))
+
+    def read_frame(cap, default_size):
+        ret, frame = cap.read()
+        if not ret:
+            return np.zeros(default_size, dtype=np.uint8)
+        if frame.shape[0] < default_size[0] or frame.shape[1] < default_size[1]:
+            padded = np.zeros(default_size, dtype=np.uint8)
+            padded[:frame.shape[0], :frame.shape[1], :] = frame
+            return padded
+        return frame
+
+    for _ in range(max_length):
+        frame1 = read_frame(cap1, (H, w1, 3))
+        frame2 = read_frame(cap2, (H, w2, 3))
+
+        # Pad height if needed
+        if frame1.shape[0] < H:
+            pad_h = H - frame1.shape[0]
+            frame1 = np.vstack([frame1, np.zeros((pad_h, w1, 3), dtype=np.uint8)])
+        if frame2.shape[0] < H:
+            pad_h = H - frame2.shape[0]
+            frame2 = np.vstack([frame2, np.zeros((pad_h, w2, 3), dtype=np.uint8)])
+
+        concat = np.hstack((frame1, frame2))
+        out.write(concat)
+
+    cap1.release()
+    cap2.release()
+    out.release()
+    print(f"Saved to: {os.path.abspath(out_path)}")
