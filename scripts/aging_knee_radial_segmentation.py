@@ -294,42 +294,40 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
 def main():
     if VERBOSE: print("main() called!")
 
-    # Load pre-processed video
-    # video, _ = knee.centre_video(video) 
-    video = io.load_nparray("../data/processed/aging_knee_processed.npy") # result of above function call
+    # Prepare video for lighter processing
+    video = io.load_nparray("../data/processed/aging_knee_processed.npy") # centroid-stabilized video with default settings
     video = video[1:] # Crop out empty first frame
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
     # video = utils.log_transform_video(video, 1)
 
-    # Slight rotation
-    angle = -29
-    video = utils.rotate_video(video, angle)
+    video = utils.rotate_video(video, angle=-29)
     video = utils.crop_video_square(video, 350) # crop out black borders
 
-    # Get adaptive mean mask
+    # Get adaptive mean mask to estimate the position of the femur
     mask = utils.blur_video(video, (31,31), 0)
     mask = utils.mask_adaptive(mask, 71, -2)
     mask = utils.morph_open(mask, (15,15)) # clean small artifacts
     views.show_frames(mask) # Validate mask    
     # views.draw_middle_lines(mask, show_video=True) # Validate rotation
 
-    # Get radial segmentation
+    # Perform radial segmentation
     femur_endpts, femur_midpts = estimate_femur_position(mask)
     views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5)
     # views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts, thresh_scale=0.6)
     
-    video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
+    # Validate radial segments
+    video_demo = views.draw_radial_masks(video, radial_masks, show_video=False)
     video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
+    # Optional video output for comparison with new method of femur estimation
     if OUTPUT: io.save_avi("aging_knee_radial_seg_(old_method).avi", video_demo)
 
-    """Reproducing manual segmentation experiment"""
-
+    # Perform intensity analysis to compare against manual segmentation ("aging-1/2/3" cycles)
     analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True)
 
     return
