@@ -270,7 +270,9 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         m_region = combine_masks(radial_regions[8:12])
         r_region = combine_masks(radial_regions[2:8])
 
-        views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
+        # Validate segments 
+        v_out = views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]), show_video=False)
+        io.save_avi("aging_knee_radial_seg_LMR_(old_method).avi", v_out)
 
         masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
         regions = {'l': l_region, 'm': m_region, 'r': r_region}
@@ -289,19 +291,15 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
         # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
-
-
 def main():
     if VERBOSE: print("main() called!")
 
     # Load pre-processed video
     # video, _ = knee.centre_video(video) 
     video = io.load_nparray("../data/processed/aging_knee_processed.npy") # result of above function call
-
-    # Pre-process video
+    video = video[1:] # Crop out empty first frame
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
-    video = utils.blur_video(video)
     # video = utils.log_transform_video(video, 1)
 
     # Slight rotation
@@ -310,8 +308,8 @@ def main():
     video = utils.crop_video_square(video, 350) # crop out black borders
 
     # Get adaptive mean mask
-    video_blr = utils.blur_video(video, (31,31), 0)
-    mask = utils.mask_adaptive(video_blr, 71, -2)
+    mask = utils.blur_video(video, (31,31), 0)
+    mask = utils.mask_adaptive(mask, 71, -2)
     mask = utils.morph_open(mask, (15,15)) # clean small artifacts
     views.show_frames(mask) # Validate mask    
     # views.draw_middle_lines(mask, show_video=True) # Validate rotation
@@ -328,11 +326,11 @@ def main():
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     video_demo = views.rescale_video(video_demo, 2, True)
 
-    io.save_avi("aging_knee_radial_seg_(old_method).avi", video_demo)
+    # io.save_avi("aging_knee_radial_seg_(old_method).avi", video_demo)
 
     """Reproducing manual segmentation experiment"""
 
-    # analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False)
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True)
 
     return
 

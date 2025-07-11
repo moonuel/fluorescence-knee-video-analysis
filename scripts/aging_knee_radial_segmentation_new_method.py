@@ -278,7 +278,9 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         m_region = combine_masks(radial_regions[8:10])
         r_region = combine_masks(radial_regions[1:8])
 
-        views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
+        # Validate segments
+        v_out = views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]), show_video=False)
+        io.save_avi("aging_knee_radial_seg_LMR_(new_method).avi", v_out)
 
         masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
         regions = {'l': l_region, 'm': m_region, 'r': r_region}
@@ -313,8 +315,8 @@ def main():
     video = utils.crop_video_square(video, 350) # crop out black borders
 
     # Get adaptive mean mask
-    mask_src = utils.log_transform_video(video, 1)
-    mask_src = utils.blur_video(mask_src, (13,13), sigma=0)
+    mask_src = utils.blur_video(video, (31,31), sigma=0)
+    # mask_src = utils.log_transform_video(mask_src, 1)
     mask = utils.mask_adaptive(mask_src, 71, 10)
     # views.show_frames(mask) # Validate mask    
 
@@ -371,11 +373,11 @@ def main():
 
     # return
 
-    io.save_avi("aging_knee_radial_seg_(new_method).avi", video_demo)
+    # io.save_avi("aging_knee_radial_seg_(new_method).avi", video_demo)
 
     """Reproducing manual segmentation experiment"""
 
-    # analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True, figsize=(9,17))
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True, figsize=(9,17))
 
 if __name__ == "__main__":
     main()
