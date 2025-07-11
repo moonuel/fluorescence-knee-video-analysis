@@ -334,49 +334,5 @@ def main():
 
     return
 
-    # Load metadata 
-    _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", "aging-3")
-
-    # Manually assign left/middle/right knee
-    l_mask = combine_masks(np.concatenate([radial_masks[12:], radial_masks[0:1]], axis=0)) # 12-15 and 0
-    m_mask = combine_masks(radial_masks[8:12])
-    r_mask = combine_masks(radial_masks[2:8])
-
-    l_region = combine_masks(np.concatenate([radial_regions[12:], radial_regions[0:1]], axis=0)) # 12-15 and 0
-    m_region = combine_masks(radial_regions[8:12])
-    r_region = combine_masks(radial_regions[2:8])
-    # views.show_frames(m_mask) # Validate combined masks/regions
-    # views.show_frames(m_region)
-    views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
-
-    masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
-    regions = {'l': l_region, 'm': m_region, 'r': r_region}
-    keys = ['l','m','r']
-
-    # Get intensity data
-    raw_intensities = dp.measure_region_intensities(regions, masks, keys)
-    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
-    radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
-    # print(raw_intensities)
-    # print(metadata)
-
-    # Validate intensity data
-    show_figs=True
-    save_figs=False
-    figsize=(9,17)
-    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
-    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
-    # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
-
-
-    # > Get the leftmost points
-    # > Get the basic femur estimation
-    # > Generate radial segmentation
-        # > Combine the radial slices into parts corresponding to the left/middle/right knee
-        # x Generate intensity plots -> see if its comparable to manual segmentation
-    # x Brainstorm femur endpoint estimation improvements
-        # x Get points on the interior of the mask region
-        # x Fit least-squares line through all points 
-
 if __name__ == "__main__":
     main()
