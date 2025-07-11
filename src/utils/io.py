@@ -246,3 +246,48 @@ def concatenate_avi(file1, file2, out_path="output_concat.avi"):
     cap2.release()
     out.release()
     print(f"Saved to: {os.path.abspath(out_path)}")
+
+import cv2
+import os
+
+def convert_avi_to_mp4(input_path: str, output_path: str = None, codec: str = 'mp4v') -> None:
+    """
+    Converts an .avi video to .mp4 using OpenCV.
+
+    Parameters
+    ----------
+    input_path : str
+        Path to the input .avi video.
+
+    output_path : str, optional
+        Path to save the .mp4 output. If None, replaces .avi with .mp4 in the input path.
+
+    codec : str
+        Four-character code of codec to use (default is 'mp4v').
+    """
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    
+    if output_path is None:
+        output_path = os.path.splitext(input_path)[0] + ".mp4"
+
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        raise ValueError(f"Failed to open input video: {input_path}")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    fourcc = cv2.VideoWriter_fourcc(*codec)
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        out.write(frame)
+
+    cap.release()
+    out.release()
+    print(f"Saved MP4 to {output_path}")
