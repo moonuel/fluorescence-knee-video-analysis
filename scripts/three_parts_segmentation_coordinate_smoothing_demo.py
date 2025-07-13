@@ -1,7 +1,7 @@
-from src.utils import utils, io, views
-from src.core import knee_segmentation as ks
-from src.core import data_processing as dp
-from src.config import VERBOSE
+from utils import utils, io, views
+from core import knee_segmentation as ks
+from core import data_processing as dp
+from config import VERBOSE
 import numpy as np
 
 def main():

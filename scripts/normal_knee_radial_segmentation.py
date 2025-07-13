@@ -6,12 +6,12 @@ import cv2
 import sklearn.cluster as sklc 
 import hdbscan
 import math
-import src.core.knee_segmentation as ks
+import core.knee_segmentation as ks
 from typing import Tuple, List
-from src.utils import io, views, utils
-from src.config import VERBOSE
-from src.core import data_processing as dp
-import src.core.radial_segmentation as rdl
+from utils import io, views, utils
+from config import VERBOSE
+from core import data_processing as dp
+import core.radial_segmentation as rdl
 
 
 def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple[np.ndarray, np.ndarray]:
@@ -461,6 +461,44 @@ def generate_convex_hull_mask(points_per_frame, video):
 
     return mask
 
+def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17)):
+
+    sheet_nums = [0,1,2]
+
+    for num in sheet_nums:
+        print(f"\n=== Processing normal-{num} ===")
+
+        # Manually assign left/middle/right knee
+        lft = (14,1)
+        mdl = (9,14)
+        rgt = (1,9)
+
+        l_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, lft)) # 0 and 14-15
+        m_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, mdl))
+        r_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
+
+        l_region = rdl.combine_masks(rdl.circular_slice(radial_regions, lft)) # 0 and 14-15
+        m_region = rdl.combine_masks(rdl.circular_slice(radial_regions, mdl))
+        r_region = rdl.combine_masks(rdl.circular_slice(radial_regions, rgt))
+        
+        # Get metadata for comparison with normal knee manual segmentation
+        _, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=num)
+        masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
+        regions = {'l': l_region, 'm': m_region, 'r': r_region}
+        keys = ['l','m','r']
+
+        # Get intensity data
+        raw_intensities = dp.measure_region_intensities(regions, masks, keys)
+        normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
+        radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
+        # print(raw_intensities)
+        # print(metadata)
+
+        # Validate intensity data
+        views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
+        views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
+        # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
+
 def main():
     """Performs the radial segmentation analysis on the normal knee data. 
     
@@ -576,37 +614,7 @@ def main():
 
     # --- Get plots ---
 
-    # Manually assign left/middle/right knee
-    l_mask = rdl.combine_masks(np.concatenate([radial_masks[0:1], radial_masks[14:]], axis=0)) # 0 and 14-15
-    m_mask = rdl.combine_masks(radial_masks[9:14])
-    r_mask = rdl.combine_masks(radial_masks[1:9])
-    views.draw_radial_masks(video, np.array([l_mask, m_mask, r_mask]))
-
-    l_region = rdl.combine_masks(np.concatenate([radial_regions[0:1], radial_regions[14:]], axis=0)) # 0 and 14-15
-    m_region = rdl.combine_masks(radial_regions[9:14])
-    r_region = rdl.combine_masks(radial_regions[1:9])
-    
-    # Get metadata for comparison with normal knee manual segmentation
-    _, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=2)
-    masks = {'l': l_mask, 'm': m_mask, 'r': r_mask} 
-    regions = {'l': l_region, 'm': m_region, 'r': r_region}
-    keys = ['l','m','r']
-
-    # Get intensity data
-    raw_intensities = dp.measure_region_intensities(regions, masks, keys)
-    normalized_intensities = dp.measure_region_intensities(regions, masks, keys, normalized=True)
-    radial_intensities = dp.measure_radial_intensities(np.array([l_region, m_region, r_region]))
-    # print(raw_intensities)
-    # print(metadata)
-
-    # Validate intensity data
-    show_figs=False
-    save_figs=False
-    figsize=(9,17)
-    views.plot_three_intensities(raw_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize)
-    views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
-    # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
-
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True)
 
     return
 

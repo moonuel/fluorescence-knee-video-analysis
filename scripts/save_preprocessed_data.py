@@ -1,6 +1,6 @@
-from src.utils import io, utils, views
-from src.core import knee_segmentation as ks
-from src.core import data_processing as dp
+from utils import io, utils, views
+from core import knee_segmentation as ks
+from core import data_processing as dp
 
 def main():
 

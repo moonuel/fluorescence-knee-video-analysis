@@ -5,10 +5,10 @@ import pandas as pd
 import cv2
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
-import src.core.knee_segmentation as ks
-from src.utils import io, utils, views
-from src.core import data_processing as dp
-from src.config import VERBOSE
+import core.knee_segmentation as ks
+from utils import io, utils, views
+from core import data_processing as dp
+from config import VERBOSE
 
 def main():
     if VERBOSE: print("main() called!")

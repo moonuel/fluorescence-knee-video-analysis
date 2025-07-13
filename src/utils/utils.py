@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from typing import Tuple, List
 import math
-from src.config import VERBOSE
+from config import VERBOSE
 
 def print_last_modified(filepath):
     """

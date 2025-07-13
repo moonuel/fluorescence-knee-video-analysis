@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import cv2
 import math
-import src.core.knee_segmentation as ks
+import core.knee_segmentation as ks
 from typing import Tuple, List
-from src.utils import io, views, utils
-from src.config import VERBOSE
-from src.core import data_processing as dp
+from utils import io, views, utils
+from config import VERBOSE
+from core import data_processing as dp
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -213,6 +213,30 @@ def interior_mask(bndry_mask: np.ndarray, mask: np.ndarray) -> np.ndarray:
     intr_mask = mask * (bndry_mask > 0) # Zero-out all elements outside the boundary! 
 
     return intr_mask
+
+def circular_slice(arr: np.ndarray, bounds: Tuple[int, int]) -> np.ndarray:
+    """
+    Returns a circular slice from a 1D-like array (e.g., radial_masks or radial_regions),
+    where `bounds` is a tuple (start, stop), allowing wrap-around behavior.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array to slice from (e.g., shape (N, ...)).
+
+    bounds : Tuple[int, int]
+        Tuple (start, stop) indicating the slice bounds. Wraps around if stop < start.
+
+    Returns
+    -------
+    np.ndarray
+        Sliced array (possibly concatenated if wrapped).
+    """
+    start, stop = bounds
+    if stop >= start:
+        return arr[start:stop]
+    else:
+        return np.concatenate((arr[start:], arr[:stop]), axis=0)
 
 def combine_masks(masks:np.ndarray) -> np.ndarray:
     """Takes the frame-wise union of all input masks"""

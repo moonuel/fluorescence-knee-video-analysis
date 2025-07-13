@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 from tifffile import imread as tif_imread
-from src.config import VERBOSE
+from config import VERBOSE
 from typing import Tuple, Dict, Union
 import cv2
 from pathlib import Path

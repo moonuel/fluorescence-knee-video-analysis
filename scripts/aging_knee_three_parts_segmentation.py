@@ -1,8 +1,8 @@
 import os
 import sys
-from src.core import knee_segmentation as ks
-from src.core import data_processing as dp
-from src.utils import io, views, utils
+from core import knee_segmentation as ks
+from core import data_processing as dp
+from utils import io, views, utils
 import matplotlib.pyplot as plt
 import numpy as np
 

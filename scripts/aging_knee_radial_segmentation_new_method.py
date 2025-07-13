@@ -4,12 +4,12 @@ import numpy as np
 import pandas as pd
 import cv2
 import math
-import src.core.knee_segmentation as ks
+import core.knee_segmentation as ks
 from typing import Tuple, List
-from src.utils import io, views, utils
-from src.config import VERBOSE, OUTPUT
-from src.core import data_processing as dp
-import src.core.radial_segmentation as rdl
+from utils import io, views, utils
+from config import VERBOSE, OUTPUT
+from core import data_processing as dp
+import core.radial_segmentation as rdl
 import copy
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
@@ -377,7 +377,7 @@ def main():
 
     """Reproducing manual segmentation experiment"""
 
-    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True, figsize=(9,17))
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=False, figsize=(9,17))
 
 if __name__ == "__main__":
     main()

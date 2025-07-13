@@ -4,9 +4,9 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import math
-from src.config import VERBOSE
+from config import VERBOSE
 from typing import Dict, List, Tuple
-from src.utils import utils
+from utils import utils
 
 
 def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None, show_video:bool=True) -> np.ndarray:

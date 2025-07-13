@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from typing import Dict, List
-from src.config import VERBOSE
+from config import VERBOSE
 
 
 def _measure_region_intensity(region: np.ndarray) -> np.ndarray:

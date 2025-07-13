@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import cv2
 import math
-import src.core.knee_segmentation as ks
+import core.knee_segmentation as ks
 from typing import Tuple, List
-from src.utils import io, views, utils
-from src.config import VERBOSE, OUTPUT
-from src.core import data_processing as dp
+from utils import io, views, utils
+from config import VERBOSE, OUTPUT
+from core import data_processing as dp
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
