@@ -377,7 +377,7 @@ def main():
 
     """Reproducing manual segmentation experiment"""
 
-    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=False, figsize=(9,17))
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17))
 
 if __name__ == "__main__":
     main()

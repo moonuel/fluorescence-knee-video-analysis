@@ -286,8 +286,8 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", aging_label)
 
         # Manually assign left/middle/right knee
-        lft = (12,15)
-        mdl = (8-12)
+        lft = (12,1)
+        mdl = (8,12)
         rgt = (1,8)
         
         l_mask = combine_masks(circular_slice(radial_masks, (lft))) # N=16: 12-15, 0-1 --- N=64: 44-5
