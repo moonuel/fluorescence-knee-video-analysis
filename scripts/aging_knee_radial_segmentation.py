@@ -286,9 +286,9 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         _, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", aging_label)
 
         # Manually assign left/middle/right knee
-        lft = (44,1)
-        mdl = (30,44)
-        rgt = (1,30)
+        lft = (12,15)
+        mdl = (8-12)
+        rgt = (1,8)
         
         l_mask = combine_masks(circular_slice(radial_masks, (lft))) # N=16: 12-15, 0-1 --- N=64: 44-5
         m_mask = combine_masks(circular_slice(radial_masks, (mdl))) # N=16: 8-12 --- N=64: 30-44
@@ -340,7 +340,7 @@ def main():
     femur_endpts, femur_midpts = estimate_femur_position(mask)
     views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     
-    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=64, radius_scale=1.5)
+    circle_pts = get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5)
     # views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, femur_endpts, circle_pts, thresh_scale=0.6)
     
