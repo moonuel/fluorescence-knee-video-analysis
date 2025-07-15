@@ -131,7 +131,7 @@ def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=
     else:
         plt.close()
 
-    return
+    return fig, axes
 
 
 def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple = (20,7), normalized:bool=False) -> None: 

@@ -90,8 +90,9 @@ def measure_region_mean_intensities(regions: Dict[str, np.ndarray], masks: Dict[
 
 def measure_radial_intensities(regions: np.ndarray) -> np.ndarray:
     """
-    Returns the frame-wise sum of pixel intensities, for every slice.
+    Generalized function for calculating the frame-size pixel intensity sum for arbitrarily many radial slices. 
     Expects `regions` to be a NumPy array with shape (nslices, nframes, h, w).
+    Returns the frame-wise sum of pixel intensities for every slice in shape (nslices, ttl_px_sum).
     """
     if VERBOSE: print("measure_radial_intensities() called!")
 

@@ -299,6 +299,20 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
         # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
+def analyze_video(video, radial_masks, radial_regions, lft:Tuple[int,int], mdl:Tuple[int,int], rgt:Tuple[int,int], 
+                  show_figs:bool=True, save_figs:bool=False, fig_size:Tuple[int,int]=(17,9)) -> None:
+    """Analyzes all frames in a radially-segmented knee fluorescence video"""
+
+    video = video.copy()
+    nfs, h, w = video.shape
+
+    assert nfs == radial_masks.shape[0] and nfs == radial_regions.shape[0]
+
+    
+
+
+    return
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -378,6 +392,8 @@ def main():
     """Reproducing manual segmentation experiment"""
 
     analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17))
+
+    analyze_video(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=None)
 
 if __name__ == "__main__":
     main()
