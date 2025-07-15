@@ -560,7 +560,7 @@ def main():
     femur_endpts = get_centroid_pts(femur_bndry_filtered)
 
     # Smooth femur tip points
-    femur_endpts = np.reshape(femur_endpts, newshape=(-1, 2)) # Resize for rdl.smooth_points() 
+    femur_endpts = np.reshape(femur_endpts, shape=(-1, 2)) # Resize for rdl.smooth_points() 
     femur_endpts = rdl.smooth_points(femur_endpts, window_size=10) 
     femur_endpts = np.array(femur_endpts) # Cast back to array
     femur_endpts = np.reshape(femur_endpts, (-1, 1, 2)) # Reshape for views.draw_points()
@@ -614,7 +614,10 @@ def main():
 
     # --- Get plots ---
 
-    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True)
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False)
+
+    """Analyze intensity for whole video"""
+    # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
     return
 
