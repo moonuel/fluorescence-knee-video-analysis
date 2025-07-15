@@ -1,0 +1,22 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "terminal.integrated.profiles.windows": {
+      "Miniforge (knee-segmentation)": {
+        "path": "C:\\Windows\\System32\\cmd.exe",
+        "args": [
+          "/K",
+          "\"C:\\Users\\olimoon\\miniforge3\\Scripts\\activate.bat\" && conda activate knee-segmentation"
+        ]
+      }
+    },
+
+    "terminal.integrated.defaultProfile.windows": "Miniforge (knee-segmentation)",
+    
+    "python.defaultInterpreterPath": "C:\\Users\\olimoon\\miniforge3\\envs\\knee-segmentation\\python.exe"
+  }
+}
