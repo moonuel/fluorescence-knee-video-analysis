@@ -675,7 +675,7 @@ def main():
 
     # --- Get plots ---
 
-    # analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False)
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True)
 
     """Analyze intensity for whole video"""
     # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
@@ -685,7 +685,7 @@ def main():
     rgt = (2,9)
 
     total_sums, figs, axes = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt, 
-                                           show_figs=True, save_dir="../docs/meetings/16-Jul-2025/normal_intensity_plots/")
+                                           show_figs=False, save_dir="../docs/meetings/16-Jul-2025/normal_intensity_plots/")
 
     lft_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, lft))
     mdl_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, mdl))

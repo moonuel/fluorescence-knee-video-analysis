@@ -446,7 +446,7 @@ def main():
 
     """Reproducing manual segmentation experiment"""
 
-    # analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17))
+    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True, figsize=(9,17))
 
     # TODO: refactor this so bad lol 
 
@@ -455,7 +455,7 @@ def main():
     rgt=(1,8)
 
     total_sums, figs, axes = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt, 
-                                           show_figs=True, save_dir="../docs/meetings/16-Jul-2025/aging_intensity_plots/", fig_size=(17,9))
+                                           show_figs=False, save_dir="../docs/meetings/16-Jul-2025/aging_intensity_plots/", fig_size=(17,9))
 
     lft_mask = combine_masks(rdl.circular_slice(radial_masks, lft))
     mdl_mask = combine_masks(rdl.circular_slice(radial_masks, mdl))
