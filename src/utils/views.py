@@ -7,6 +7,7 @@ import math
 from config import VERBOSE
 from typing import Dict, List, Tuple
 from utils import utils
+from pathlib import Path
 
 
 def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None, show_video:bool=True) -> np.ndarray:
@@ -128,6 +129,90 @@ def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=
         save_path = "../figures/radial_intensity_subplots.png"
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    if show_figs:
+        plt.show()
+    else:
+        plt.close()
+
+    return fig, axes
+
+def plot_radial_segment_intensities_2(intensities: np.ndarray, f0: int = None, fN: int = None, 
+                                      show_figs: bool = True, save_dir: str = None, 
+                                      vert_layout: bool = False, figsize: Tuple[int, int] = (20, 7)) -> Tuple:
+    """
+    Different version so I don't break existing functions. Accepts 0-based frame indexing.
+    Alternate function intended for use with the radial segmentation scheme.
+    Plots all provided intensity figures. 
+
+    Pass f0 = fN = None for default settings (whole video).
+
+    Returns (fig, axes)
+    
+    Args:
+        intensities (np.ndarray): shape (n_slices, n_frames), intensity data
+        f0 (int): starting frame index (inclusive), defaults to 0
+        fN (int): ending frame index (inclusive), defaults to last frame
+        show_figs (bool): whether to show figures
+        save_dir (str): if provided, saves the figure to this directory
+        vert_layout (bool): vertical or horizontal subplots
+        figsize (tuple): figure size
+    """
+    if VERBOSE: print("plot_radial_segment_intensities_2() called!")
+
+    nslcs, nfrms = intensities.shape
+
+    if f0 is None:
+        f0 = 0
+    if fN is None:
+        fN = nfrms
+
+    intensities = intensities[:, f0:fN].copy()
+    frmns = np.arange(f0, fN)
+
+    # === Plot all slices on same figure ===
+    plt.figure(figsize=figsize)
+    for slc in range(nslcs):
+        plt.plot(frmns, intensities[slc], label=f"Slice {slc}")
+    plt.title("Radial Segment Intensities")
+    plt.xlabel("Frame")
+    plt.ylabel("Intensity")
+    plt.legend()
+    plt.tight_layout()
+
+    if save_dir is not None:
+        save_path = Path(save_dir).expanduser().resolve()
+        save_path.mkdir(parents=True, exist_ok=True)
+        filepath_combined = save_path / "radial_intensity_combined.png"
+        plt.savefig(filepath_combined, dpi=300, bbox_inches="tight")
+        print(f"Saved combined intensity plot to {filepath_combined}")
+
+    if show_figs:
+        plt.show()
+    else:
+        plt.close()
+
+    # === Plot each slice on its own subplot ===
+    if vert_layout:
+        fig, axes = plt.subplots(nslcs, 1, figsize=(figsize[0], figsize[1] * nslcs), squeeze=False)
+        axes = axes.flatten()
+    else:
+        fig, axes = plt.subplots(1, nslcs, figsize=(figsize[0] * nslcs, figsize[1]), squeeze=False)
+        axes = axes.flatten()
+
+    for slc in range(nslcs):
+        axes[slc].plot(frmns, intensities[slc], label=f"Slice {slc}")
+        axes[slc].set_title(f"Slice {slc} Intensity")
+        axes[slc].set_xlabel("Frame")
+        axes[slc].set_ylabel("Intensity")
+        axes[slc].legend()
+
+    plt.tight_layout()
+
+    if save_dir is not None:
+        filepath_subplots = save_path / "radial_intensity_subplots.png"
+        plt.savefig(filepath_subplots, dpi=300, bbox_inches="tight")
+        print(f"Saved subplot intensity plot to {filepath_subplots}")
 
     if show_figs:
         plt.show()

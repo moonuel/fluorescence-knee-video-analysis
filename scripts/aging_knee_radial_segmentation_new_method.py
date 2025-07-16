@@ -11,6 +11,9 @@ from config import VERBOSE, OUTPUT
 from core import data_processing as dp
 import core.radial_segmentation as rdl
 import copy
+from pathlib import Path
+import matplotlib.pyplot as plt
+
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -299,19 +302,71 @@ def analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True,
         views.plot_three_intensities(normalized_intensities, metadata, show_figs, save_figs, vert_layout=True, figsize=figsize, normalized=True)
         # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
-def analyze_video(video, radial_masks, radial_regions, lft:Tuple[int,int], mdl:Tuple[int,int], rgt:Tuple[int,int], 
-                  show_figs:bool=True, save_figs:bool=False, fig_size:Tuple[int,int]=(17,9)) -> None:
-    """Analyzes all frames in a radially-segmented knee fluorescence video"""
+def analyze_video(video, radial_masks, radial_regions, 
+                  lft: Tuple[int, int], mdl: Tuple[int, int], rgt: Tuple[int, int], 
+                  show_figs: bool = True, save_dir: str = None, 
+                  fig_size: Tuple[int, int] = (17, 9)) -> None:
+    """Analyzes all frames in a radially-segmented knee fluorescence video.
+
+    Parameters
+    ----------
+    video : np.ndarray
+        Input video of shape (n_frames, H, W)
+    radial_masks : np.ndarray
+        Binary mask array of shape (n_slices, n_frames, H, W)
+    radial_regions : np.ndarray
+        Binary region array of same shape as radial_masks
+    lft, mdl, rgt : Tuple[int, int]
+        Circular slice ranges for left/middle/right knees
+    show_figs : bool, optional
+        Whether to display the figure
+    save_dir : str, optional
+        Directory to save output figure. If None, the figure is not saved.
+    fig_size : Tuple[int, int], optional
+        Size of the matplotlib figure
+
+    Returns
+    -------
+    total_sums : np.ndarray
+        Measured intensities
+    fig : matplotlib.figure.Figure
+        The generated figure
+    axes : np.ndarray
+        The figure's axes
+    """
+    if VERBOSE: print("analyze_video() called!")
 
     video = video.copy()
     nfs, h, w = video.shape
 
-    assert nfs == radial_masks.shape[0] and nfs == radial_regions.shape[0]
+    assert nfs == radial_masks.shape[1] 
+    assert nfs == radial_regions.shape[1]
 
+    masks = {
+        'l': rdl.combine_masks(rdl.circular_slice(radial_masks, lft)), 
+        'm': rdl.combine_masks(rdl.circular_slice(radial_masks, mdl)),
+        'r': rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
+    }
     
+    regions = {
+        'l': rdl.combine_masks(rdl.circular_slice(radial_regions, lft)), 
+        'm': rdl.combine_masks(rdl.circular_slice(radial_regions, mdl)),
+        'r': rdl.combine_masks(rdl.circular_slice(radial_regions, rgt))
+    }
+    
+    keys = ['l','m','r']
+    
+    total_sums = dp.measure_radial_intensities(np.asarray([
+        regions["l"], regions["m"], regions["r"]
+    ]))
 
+    fig, axes = views.plot_radial_segment_intensities_2(
+        total_sums, save_dir=save_dir, vert_layout=True, figsize=(17,9))
 
-    return
+    if show_figs:
+        plt.show()
+
+    return total_sums, fig, axes
 
 def main():
     if VERBOSE: print("main() called!")
@@ -343,32 +398,32 @@ def main():
     # Exclude adaptive mean mask outside of otsu mask
     intr_mask = rdl.interior_mask(otsu_mask, mask)
     intr_mask = utils.morph_close(intr_mask, (11,11))
-    views.show_frames([mask, intr_mask], "mask vs interior mask") 
+    # views.show_frames([mask, intr_mask], "mask vs interior mask") 
     # views.draw_mask_boundary(mask_src, intr_mask)
 
     # Estimate the interior boundary
     sample_pts = rdl.sample_femur_interior_pts(intr_mask, 128)
-    views.draw_points(video, sample_pts)
+    # views.draw_points(video, sample_pts)
 
     # Estimate the femur tip
     tip_bndry = rdl.estimate_femur_tip_boundary(sample_pts, 0.5)
-    views.draw_points(video, tip_bndry)
+    # views.draw_points(video, tip_bndry)
 
     tip_bndry = rdl.filter_outlier_points_centroid(tip_bndry, 23)
-    views.draw_points(video, tip_bndry)
+    # views.draw_points(video, tip_bndry)
 
     tip_pts = rdl.get_centroid_pts(tip_bndry)
     tip_pts = rdl.smooth_points(np.reshape(tip_pts, (-1, 2)), window_size=15)
     tip_pts = np.reshape(tip_pts, (-1, 1, 2))
-    views.draw_points(video, tip_pts)
+    # views.draw_points(video, tip_pts)
 
     # Estimate the femur midpoint
     midpt_bndry = rdl.estimate_femur_midpoint_boundary(sample_pts, 0, 0.3)
     midpt_pts = rdl.get_centroid_pts(midpt_bndry)
     midpt_pts = rdl.smooth_points(np.reshape(midpt_pts, (-1, 2)), window_size=15)
     midpt_pts = np.reshape(midpt_pts, (-1, 1, 2))
-    views.draw_points(video, midpt_bndry)
-    views.draw_points(video, midpt_pts)
+    # views.draw_points(video, midpt_bndry)
+    # views.draw_points(video, midpt_pts)
 
     # Get radial segmentation
     tip_pts = np.reshape(tip_pts, (-1, 2)) # Reshape for interfacing with rdl.get_N_points_on_circle()
@@ -377,13 +432,13 @@ def main():
     midpt_pts = [tuple(pts) for pts in midpt_pts]
 
     circle_pts = rdl.get_N_points_on_circle(tip_pts, midpt_pts, N=16, radius_scale=1.5)
-    views.draw_points(video, circle_pts) # Validate points on circle
+    # views.draw_points(video, circle_pts) # Validate points on circle
     radial_regions, radial_masks = get_radial_segments(video, tip_pts, circle_pts, thresh_scale=0.6)
     
     video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
     video_demo = views.draw_line(video_demo, tip_pts, midpt_pts, show_video=False)
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
-    video_demo = views.rescale_video(video_demo, 2, True)
+    # video_demo = views.rescale_video(video_demo, 2, True)
 
     # return
 
@@ -391,9 +446,22 @@ def main():
 
     """Reproducing manual segmentation experiment"""
 
-    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17))
+    # analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=(9,17))
 
-    analyze_video(video, radial_masks, radial_regions, show_figs=True, save_figs=False, figsize=None)
+    # TODO: refactor this so bad lol 
+
+    lft=(11,1)
+    mdl=(8,11)
+    rgt=(1,8)
+
+    total_sums, figs, axes = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt, 
+                                           show_figs=True, save_dir="../docs/meetings/16-Jul-2025/aging_intensity_plots/", fig_size=(17,9))
+
+    lft_mask = combine_masks(rdl.circular_slice(radial_masks, lft))
+    mdl_mask = combine_masks(rdl.circular_slice(radial_masks, mdl))
+    rgt_mask = combine_masks(rdl.circular_slice(radial_masks, rgt))
+    v_out = views.draw_radial_masks(video, [lft_mask, mdl_mask, rgt_mask])
+    io.save_avi("../docs/meetings/16-Jul-2025/aging_knee_new_method.avi", v_out)
 
 if __name__ == "__main__":
     main()

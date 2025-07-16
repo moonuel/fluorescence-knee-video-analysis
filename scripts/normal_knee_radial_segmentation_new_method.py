@@ -558,15 +558,7 @@ def analyze_video(video, radial_masks, radial_regions,
         regions["l"], regions["m"], regions["r"]
     ]))
 
-    fig, axes = views.plot_radial_segment_intensities(total_sums, vert_layout=True, figsize=fig_size)
-
-    # Save figure if save_dir is provided
-    if save_dir is not None:
-        save_path = Path(save_dir).expanduser().resolve()
-        save_path.mkdir(parents=True, exist_ok=True)
-        fig_fp = save_path / "radial_segment_intensity_plot.png"
-        fig.savefig(fig_fp, dpi=300, bbox_inches="tight")
-        print(f"Saved figure to {fig_fp}")
+    fig, axes = views.plot_radial_segment_intensities_2(total_sums, vert_layout=True, save_dir=save_dir, figsize=(17,9))
 
     if show_figs:
         import matplotlib.pyplot as plt
@@ -693,7 +685,7 @@ def main():
     rgt = (2,9)
 
     total_sums, figs, axes = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt, 
-                                           show_figs=True, save_dir="../docs/meetings/16-Jul-2025/intensity_plots/")
+                                           show_figs=True, save_dir="../docs/meetings/16-Jul-2025/normal_intensity_plots/")
 
     lft_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, lft))
     mdl_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, mdl))
