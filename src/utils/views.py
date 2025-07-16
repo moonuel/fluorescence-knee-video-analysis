@@ -57,12 +57,15 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None, show_vide
 
     return video
 
-def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=None, show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple=(20,7)) -> None:
+def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=None, 
+                                    show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple=(20,7)) -> Tuple:
     """
     Alternate function intended for use with the radial segmentation scheme.
     Plots all provided intensity figures.
 
     Pass f0 = fN = None for default settings (whole video).
+
+    Returns (fig, axes)
     
     Args:
         intensities (np.ndarray): shape (n_slices, n_frames, h, w), intensity data
@@ -388,7 +391,7 @@ def draw_current_frame_num(frame:np.ndarray, frame_num:int) -> None:
 def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray, show_video:bool=True) -> None:
     if VERBOSE: print("draw_radial_masks() called!")
 
-    radial_masks = radial_masks.copy()
+    radial_masks = np.array(radial_masks)
     video = video.copy()
 
     nsegs, nfrs, h, w = radial_masks.shape

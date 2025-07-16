@@ -181,6 +181,51 @@ def save_avi(filepath: str, video: np.ndarray, fps: int = 30) -> None:
     writer.release()
     print(f"Saved {n_frames} frames to {filepath}")
 
+def save_mp4(filepath: str, video: np.ndarray, fps: int = 30) -> None:
+    """Save a NumPy video array to disk as an .mp4 (H.264) file.
+
+    Parameters
+    ----------
+    filepath : str
+        Target file path; relative paths are resolved against the CWD.
+    video : np.ndarray
+        Array of shape (n_frames, H, W)  or  (n_frames, H, W, 3).
+        dtype uint8 preferred; float 0‑1 will be auto‑scaled.
+    fps : int, optional
+        Frames per second for the output file (default 30).
+    """
+    filepath = Path(filepath).expanduser().resolve()
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+
+    if video.ndim not in (3, 4):
+        raise ValueError("video must have shape (n, H, W) or (n, H, W, 3)")
+    n_frames, h, w = video.shape[:3]
+    is_color = video.ndim == 4
+
+    # Normalize to uint8
+    if video.dtype != np.uint8:
+        if np.issubdtype(video.dtype, np.floating):
+            video = np.clip(video * 255.0, 0, 255).astype(np.uint8)
+        else:
+            video = video.astype(np.uint8)
+
+    # Choose codec – mp4v is broadly supported for MP4 container
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(str(filepath), fourcc, fps, (w, h), isColor=is_color)
+
+    if not writer.isOpened():
+        raise IOError(f"Could not open VideoWriter for {filepath}")
+
+    for i in range(n_frames):
+        frame = video[i]
+        if not is_color:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        writer.write(frame)
+
+    writer.release()
+    print(f"Saved {n_frames} frames to {filepath}")
+
+
 def concatenate_avi(file1, file2, out_path="output_concat.avi"):
     """
     Horizontally concatenates two .avi video files, padding frames or lengths if necessary.
