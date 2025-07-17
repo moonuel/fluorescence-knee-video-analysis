@@ -677,6 +677,13 @@ def main():
 
     analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True)
 
+
+    io.save_nparray(video, "../data/processed/normal_knee_radial_video_N16.npy")
+    io.save_nparray(radial_masks, "../data/processed/normal_knee_radial_masks_N16.npy")
+    io.save_nparray(radial_regions, "../data/processed/normal_knee_radial_regions_N16.npy")
+
+    return
+
     """Analyze intensity for whole video"""
     # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
