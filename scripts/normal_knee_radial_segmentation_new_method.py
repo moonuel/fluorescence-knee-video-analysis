@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import cv2
 import sklearn.cluster as sklc 
-import hdbscan
+# import hdbscan # Outdated on env version 1.1
 import math
 import core.knee_segmentation as ks
 from typing import Tuple, List
@@ -244,45 +244,45 @@ def filter_outlier_points_dbscan(points: np.ndarray,
     # Return as an object-dtype array to keep jagged structure
     return np.array(filtered_frames, dtype=object)
 
-def filter_outlier_points_hdbscan(points: np.ndarray,
-                          min_cluster_size:int = 5,
-                          allow_single_cluster:bool = False) -> np.ndarray:
-    """Remove outlier 2-D points in each frame via HDBSCAN.
+# def filter_outlier_points_hdbscan(points: np.ndarray,
+#                           min_cluster_size:int = 5,
+#                           allow_single_cluster:bool = False) -> np.ndarray:
+#     """Remove outlier 2-D points in each frame via HDBSCAN.
 
-    Parameters
-    ----------
-    points : np.ndarray (jagged, dtype=object or list-like)
-        Shape (n_frames,), each element a (n_pts_i, 2) float/-int array.
-    eps : float
-        DBSCAN `eps` radius (default 15 px).
-    min_samples : int
-        DBSCAN `min_samples` (default 5).
+#     Parameters
+#     ----------
+#     points : np.ndarray (jagged, dtype=object or list-like)
+#         Shape (n_frames,), each element a (n_pts_i, 2) float/-int array.
+#     eps : float
+#         DBSCAN `eps` radius (default 15 px).
+#     min_samples : int
+#         DBSCAN `min_samples` (default 5).
 
-    Returns
-    -------
-    np.ndarray (dtype=object)
-        Filtered per-frame arrays; still jagged: (n_frames,) where
-        each entry is (n_kept_i, 2).
-    """
-    print("filter_outlier_points_hdbscan() called!")
+#     Returns
+#     -------
+#     np.ndarray (dtype=object)
+#         Filtered per-frame arrays; still jagged: (n_frames,) where
+#         each entry is (n_kept_i, 2).
+#     """
+#     print("filter_outlier_points_hdbscan() called!")
 
-    filtered_frames = []
+#     filtered_frames = []
 
-    for cpts in points:
-        # Guard: empty frame
-        if cpts.size == 0:
-            filtered_frames.append(np.empty((0, 2), dtype=cpts.dtype))
-            continue
+#     for cpts in points:
+#         # Guard: empty frame
+#         if cpts.size == 0:
+#             filtered_frames.append(np.empty((0, 2), dtype=cpts.dtype))
+#             continue
 
-        # Run HDBSCAN
-        labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, allow_single_cluster=allow_single_cluster).fit_predict(cpts)
+#         # Run HDBSCAN
+#         labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, allow_single_cluster=allow_single_cluster).fit_predict(cpts)
 
-        # Keep only core/edge points (label != -1)
-        keep_mask = labels != -1
-        filtered_frames.append(cpts[keep_mask])
+#         # Keep only core/edge points (label != -1)
+#         keep_mask = labels != -1
+#         filtered_frames.append(cpts[keep_mask])
 
-    # Return as an object-dtype array to keep jagged structure
-    return np.array(filtered_frames, dtype=object)
+#     # Return as an object-dtype array to keep jagged structure
+#     return np.array(filtered_frames, dtype=object)
 
 def filter_outlier_points_centroid(points: np.ndarray, eps: float) -> np.ndarray:
     """Exclude points farther than `eps` from the centroid in each frame.
