@@ -6,6 +6,9 @@ from config import VERBOSE
 from typing import Tuple, Dict, Union
 import cv2
 from pathlib import Path
+import cv2
+import h5py
+from typing import Optional
 
 
 def load_aging_knee_coords(filename:str, knee_id:Union[str, int]) -> Tuple[pd.DataFrame, Dict[str, int]]:
@@ -336,3 +339,138 @@ def convert_avi_to_mp4(input_path: str, output_path: str = None, codec: str = 'm
     cap.release()
     out.release()
     print(f"Saved MP4 to {output_path}")
+
+
+
+def convert_avi_to_hdf5_grayscale(
+    avi_path: str,
+    output_dir: str,
+    chunk_size: int = 200,
+    overwrite: bool = True,
+    verbose: bool = True
+) -> str:
+    """
+    Converts a color .avi video to grayscale and stores it in HDF5 format.
+
+    Parameters
+    ----------
+    avi_path : str
+        Path to the input .avi video file.
+    output_dir : str
+        Target directory to save the .h5 file.
+    chunk_size : int, optional
+        Number of frames per chunk in the HDF5 dataset (default is 200).
+    overwrite : bool, optional
+        Whether to overwrite an existing .h5 file (default True).
+    verbose : bool, optional
+        Whether to print progress messages (default True).
+
+    Returns
+    -------
+    str
+        Path to the created HDF5 file.
+    """
+    avi_path = Path(avi_path).expanduser().resolve()
+    output_dir = Path(output_dir).expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    output_file = output_dir / (avi_path.stem + "_grayscale.h5")
+
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(f"{output_file} already exists and overwrite=False.")
+
+    if verbose:
+        print(f"Opening video: {avi_path}")
+
+    cap = cv2.VideoCapture(str(avi_path))
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video file: {avi_path}")
+
+    n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+
+    if verbose:
+        print(f"Video has {n_frames} frames of size ({h}, {w})")
+
+    # Prepare HDF5 file
+    with h5py.File(output_file, "w") as h5f:
+        print("Creating .hdf5 file...")
+        dset = h5f.create_dataset(
+            "video",
+            shape=(n_frames, h, w),
+            dtype=np.uint8,
+            chunks=(chunk_size, h, w),
+            compression="gzip"
+        )
+
+        print("Reading video...")
+        frame_idx = 0
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            print(frame_idx)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            dset[frame_idx] = gray
+            frame_idx += 1
+
+            if verbose and frame_idx % 200 == 0:
+                print(f"Processed {frame_idx}/{n_frames} frames...")
+
+        cap.release()
+
+    if verbose:
+        print(f"Saved grayscale video to: {output_file}")
+
+    return str(output_file)
+
+def load_hdf5_video_chunk(
+    h5_path: str,
+    frame_slice: Optional[Tuple[int, int]] = None,
+    verbose: bool = False
+) -> np.ndarray:
+    """
+    Loads a chunk or the entire grayscale video stored in HDF5 format.
+
+    Parameters
+    ----------
+    h5_path : str
+        Path to the HDF5 file containing the video dataset under "video".
+    frame_slice : tuple(int, int), optional
+        Tuple (start_frame, end_frame) specifying frames to load (inclusive start, exclusive end).
+        If None, loads entire video.
+    verbose : bool, optional
+        Whether to print loading info (default False).
+
+    Returns
+    -------
+    np.ndarray
+        Loaded grayscale video chunk with shape (n_frames, height, width).
+    """
+    h5_path = Path(h5_path).expanduser().resolve()
+
+    if verbose:
+        print(f"Opening HDF5 file: {h5_path}")
+
+    with h5py.File(h5_path, "r") as h5f:
+        if "video" not in h5f:
+            raise KeyError(f"'video' dataset not found in {h5_path}")
+
+        dset = h5f["video"]
+        total_frames = dset.shape[0]
+
+        if frame_slice is None:
+            start, end = 0, total_frames
+        else:
+            start, end = frame_slice
+            if start < 0 or end > total_frames or start >= end:
+                raise ValueError(f"Invalid frame_slice {frame_slice} for dataset with {total_frames} frames")
+
+        if verbose:
+            print(f"Loading frames {start} to {end-1} (total {end-start})")
+
+        video_chunk = dset[start:end]
+
+    return np.array(video_chunk)
