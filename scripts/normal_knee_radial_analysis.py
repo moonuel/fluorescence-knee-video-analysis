@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import cv2
 import utils.io as io
 import utils.views as views
@@ -103,25 +104,47 @@ def main():
     radial_masks = io.load_nparray("../data/processed/normal_knee_radial_masks_N16.npy")
     radial_regions = io.load_nparray("../data/processed/normal_knee_radial_regions_N16.npy")
 
+    # Get total pixel intensity per slice
     rgt, mdl, lft = (2,9), (9,14), (14,2)
 
     save_dir = "../docs/meetings/16-Jul-2025/normal_intensity_plots/"
     save_dir = None # Disable save
     total_sums = sum_region_intensities(radial_regions, lft, mdl, rgt)
     
-    print(total_sums.shape)
-
+    # Plot figures
+    cols = ['r', 'g', 'b'] # Hard code RGB colors for LMR
+    lbls = ["Left", "Middle", "Right"]
     plt.figure(figsize=(17,9))
-    
     nslices = total_sums.shape[0]
     for slc in range(nslices):
-        plt.plot(total_sums[slc])
+        plt.plot(total_sums[slc], color=cols[slc], label=lbls[slc])
 
+    # Shade regions between line pairs
+    lns = np.array([71, 116, 117, 155, 253, 298, 299, 335, 585, 618, 630, 669]) - 1 # -1 for 0-based indexing
+    for i in range(0, len(lns), 2):
+        cyc_n = i//2 + 1
+        plt.axvspan(lns[i], lns[i+1], color='gray', alpha=0.2)
+
+    for i in range(0, len(lns), 4):
+        mid = (lns[i] + lns[i+3]) / 2
+        plt.text(mid, plt.ylim()[1] * 0.98, f"Cycle {i//4 + 1}",
+             ha='center', va='top', fontsize=12, color='black')
+
+    plt.title("Normal (308) knee total pixel intensities")
+    plt.legend()
+
+    xticks = plt.xticks()[0]
+    plt.xticks(xticks, [str(int(x+1)) for x in xticks]) # Display as 1-based indexing
     plt.show()
 
-    # plt.axvline(71, color='b', linestyle="-")
+    # Write data to spreadsheet
+    nfs = total_sums.shape[1]
+    fns = np.arange(1, nfs + 1)
+    df = pd.DataFrame(np.column_stack([fns, total_sums.T]), columns=["Frame Number", "Left", "Middle", "Right"])
 
-    # plt.show()
+    df.to_excel("../docs/meetings/16-Jul-2025/Normal_308_knee_total_intensities.xlsx", index=False)
+    
+
 
     exit(420)
 
