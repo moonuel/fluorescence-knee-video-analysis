@@ -67,70 +67,34 @@ def plot_radial_segment_intensities_combined(intensities: np.ndarray, f0: int = 
 
     return fig
 
-def analyze_video(video, radial_masks, radial_regions, 
-                  lft: Tuple[int, int], mdl: Tuple[int, int], rgt: Tuple[int, int], 
-                  show_figs: bool = True, save_dir: str = None, 
-                  fig_size: Tuple[int, int] = (17, 9)) -> Tuple[np.ndarray, matplotlib.figure.Figure, plt.Axes]:
-    """Analyzes all frames in a radially-segmented knee fluorescence video.
+def sum_region_intensities(radial_regions, 
+                           lft: Tuple[int, int], 
+                           mdl: Tuple[int, int], 
+                           rgt: Tuple[int, int]
+                           ) -> Tuple[np.ndarray, matplotlib.figure.Figure, plt.Axes]:
+    """Analyzes all frames in a radially-segmented 3 part knee fluorescence video.
 
     Parameters
     ----------
-    video : np.ndarray
-        Input video of shape (n_frames, H, W)
-    radial_masks : np.ndarray
-        Binary mask array of shape (n_slices, n_frames, H, W)
     radial_regions : np.ndarray
         Binary region array of same shape as radial_masks
     lft, mdl, rgt : Tuple[int, int]
         Circular slice ranges for left/middle/right knees
-    show_figs : bool, optional
-        Whether to display the figure
-    save_dir : str, optional
-        Directory to save output figure. If None, the figure is not saved.
-    fig_size : Tuple[int, int], optional
-        Size of the matplotlib figure
 
     Returns
     -------
     total_sums : np.ndarray
         Measured intensities
-    fig : matplotlib.figure.Figure
-        The generated figure
-    axes : np.ndarray
-        The figure's axes
     """
     if VERBOSE: print("analyze_video() called!")
 
-    video = video.copy()
-    nfs, h, w = video.shape
-
-    assert nfs == radial_masks.shape[1] 
-    assert nfs == radial_regions.shape[1]
-
-    masks = {
-        'l': rdl.combine_masks(rdl.circular_slice(radial_masks, lft)), 
-        'm': rdl.combine_masks(rdl.circular_slice(radial_masks, mdl)),
-        'r': rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
-    }
+    l = rdl.combine_masks(rdl.circular_slice(radial_regions, lft))
+    m = rdl.combine_masks(rdl.circular_slice(radial_regions, mdl))
+    r = rdl.combine_masks(rdl.circular_slice(radial_regions, rgt))
     
-    regions = {
-        'l': rdl.combine_masks(rdl.circular_slice(radial_regions, lft)), 
-        'm': rdl.combine_masks(rdl.circular_slice(radial_regions, mdl)),
-        'r': rdl.combine_masks(rdl.circular_slice(radial_regions, rgt))
-    }
-    
-    keys = ['l','m','r']
-    
-    total_sums = dp.measure_radial_intensities(np.asarray([
-        regions["l"], regions["m"], regions["r"]
-    ]))
+    total_sums = dp.measure_radial_intensities(np.asarray([l,m,r]))
 
-    fig = plot_radial_segment_intensities_combined(total_sums, vert_layout=True, show_figs=show_figs, save_dir=save_dir, figsize=(17,9))
-
-    if show_figs:
-        plt.show()
-
-    return total_sums, fig
+    return total_sums
 
 def main():
     if VERBOSE: print("main() called!")
@@ -139,19 +103,25 @@ def main():
     radial_masks = io.load_nparray("../data/processed/normal_knee_radial_masks_N16.npy")
     radial_regions = io.load_nparray("../data/processed/normal_knee_radial_regions_N16.npy")
 
-    lft = (14,2)
-    mdl = (9,14)
-    rgt = (2,9)
+    rgt, mdl, lft = (2,9), (9,14), (14,2)
 
     save_dir = "../docs/meetings/16-Jul-2025/normal_intensity_plots/"
-    save_dir = None 
-    total_sums, figs = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt, 
-                                           show_figs=False, save_dir=save_dir)
+    save_dir = None # Disable save
+    total_sums = sum_region_intensities(radial_regions, lft, mdl, rgt)
     
+    print(total_sums.shape)
 
-    plt.axvline(71, color='b', linestyle="-")
+    plt.figure(figsize=(17,9))
+    
+    nslices = total_sums.shape[0]
+    for slc in range(nslices):
+        plt.plot(total_sums[slc])
 
     plt.show()
+
+    # plt.axvline(71, color='b', linestyle="-")
+
+    # plt.show()
 
     exit(420)
 
