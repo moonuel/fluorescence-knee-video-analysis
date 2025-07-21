@@ -57,18 +57,22 @@ def get_mask_around_femur(video:np.ndarray) -> np.ndarray:
     video_blrd = utils.blur_video(video)
     video_blrd_hist = match_histograms_video(video_blrd) # For consistency of Otsu segmentation
 
+    # Get outer mask
     otsu_mask = ks.get_otsu_masks(video_blrd_hist, 0.6)
     otsu_mask = utils.morph_erode(otsu_mask, (41,41))
     
     # views.show_frames(otsu_mask, "debugging otsu mask params")
-    views.draw_mask_boundary(video_blrd_hist, otsu_mask)
+    # views.draw_mask_boundary(video_blrd_hist, otsu_mask)
 
+    # Get inner mask
     femur_mask = ks.mask_adaptive(video_blrd, 151, 8)
 
+    # Get mask for femur estimation
     femur_mask = rdl.interior_mask(otsu_mask, femur_mask)
 
-    # femur_mask = utils.blur_video(femur_mask, (11,11))
-    # femur_mask = (femur_mask > 0).astype(np.uint8) * 255 # clip blurred mask to binary mask
+    # Refinements
+    femur_mask = utils.blur_video(femur_mask, (5,5)) 
+    femur_mask = (femur_mask > 0).astype(np.uint8) * 255 # clip blurred mask to binary mask
 
     return femur_mask
 
@@ -78,15 +82,25 @@ def main():
     video = load_1339_data()[289:608] # aka 210 - 609, when written in 1-based indexing
     nfs, h, w = video.shape
     
-    # agl = 25
-    # video = utils.rotate_video(video, agl)
+    agl = 22
+    video = utils.rotate_video(video, agl)
 
-    v_out = views.rescale_video(video, 1, False)
-
+    # Estimate femur position
     mask = get_mask_around_femur(video)
+    femur_bndry = rdl.sample_femur_interior_pts(mask, 128)
+    # views.draw_points(video, femur_bndry)
 
-    views.show_frames([video, mask])
-    views.draw_mask_boundary(video, mask)
+    # Estimate femur tip
+    femur_tip_pts = rdl.estimate_femur_tip_boundary(femur_bndry)
+    femur_tip_pts = rdl.filter_outlier_points_centroid(femur_tip_pts, eps=60)
+    v1 = views.draw_points(video, femur_tip_pts)
+
+    femur_tip = rdl.get_centroid_pts(femur_tip_pts)
+    femur_tip = rdl.smooth_points(femur_tip, 15)
+    views.draw_points(v1, femur_tip)
+
+    # views.show_frames([video, mask])
+    # views.draw_mask_boundary(video, mask)
 
     return
 
