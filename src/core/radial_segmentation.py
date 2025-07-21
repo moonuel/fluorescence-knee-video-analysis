@@ -126,9 +126,12 @@ def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[
 
     return circle_points
 
-def smooth_points(points:List[Tuple[int,int]], window_size:int) -> List[Tuple[int,int]]:
+def smooth_points(points:np.ndarray, window_size:int) -> np.ndarray:
     """Smooths a set of points using a moving average filter"""
     if VERBOSE: print("smooth_points() called!")
+
+    points = np.asarray(points) # (*) Reshaping for better interfacing with other radial segmentation funcs. No clue if this breaks anything
+    points = np.reshape(points, (-1, 2))
 
     # Compute rolling mean using pandas
     points = pd.DataFrame(points)
@@ -138,7 +141,7 @@ def smooth_points(points:List[Tuple[int,int]], window_size:int) -> List[Tuple[in
     # Cast back to list of tuples    
     points = list(points.itertuples(index=False, name=None))
 
-    return points
+    return np.reshape(points, (-1, 1, 2)) # See above (*) comment
 
 def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
     """Estimates the position of the femur based on an adaptive mean mask. Assumes femur is pointing to the left of the screen.
