@@ -321,17 +321,6 @@ def blur_video(video:np.ndarray, kernel_dims:Tuple[int,int]=(25,25), sigma:int=0
 
     return video_b
 
-def mask_adaptive(video:np.ndarray, block_size:int, adj_value:int) -> np.ndarray:
-    "Implements an adaptive thresholding mask over a grayscale video with dimensions (nframes,hgt,wth)"
-    if VERBOSE: print("mask_adaptive() called!")
-
-    masks = []
-    for _, frame in enumerate(video):
-        mask = cv2.adaptiveThreshold(frame,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,block_size, adj_value)
-        masks.append(mask)
-    masks = np.array(masks)
-    
-    return masks
 
 def morph_open(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
     "Implements a morphological opening operation over a grayscale video with dimensions (nframes,hgt,wth)"
