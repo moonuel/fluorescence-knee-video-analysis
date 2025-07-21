@@ -592,7 +592,7 @@ def main():
     video = utils.crop_video_square(video, 500, 450)
 
     # Get adaptive mean mask
-    mask_src = utils.log_transform_video(video) # TODO dude this doesn't do anything lol
+    # mask_src = utils.log_transform_video(video) # TODO dude this doesn't do anything lol
     mask_src = utils.blur_video(video, (25,25), sigma=0) # sigma is variance
     mask = utils.mask_adaptive(mask_src, 141, 14) # increase thresholding to get better femur boundary
     # mask = utils.morph_open(mask, (31,31)) # clean small artifacts
