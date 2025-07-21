@@ -1,0 +1,21 @@
+name: knee-seg-1.2
+channels:
+  - conda-forge
+dependencies:
+  - h5py
+  - matplotlib
+  - numpy
+  - opencv
+  - openpyxl
+  - pandas
+  - pip
+  - python=3.11
+  - scikit-image # Added in 1.2
+  - scikit-learn
+  - tifffile
+  - pip:
+    - knee-segmentation==0.1
+
+prefix: "C:\\Users\\olimoon\\.local\\share\\mamba\\envs\\knee-seg-1.2"
+
+# Export command: mamba env export --from-history > environment-1.2.yml

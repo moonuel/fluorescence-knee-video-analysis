@@ -1,6 +1,5 @@
 README.md
 pyproject.toml
-setup.py
 src/core/__init__.py
 src/core/data_processing.py
 src/core/knee_segmentation.py
