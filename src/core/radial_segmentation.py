@@ -204,13 +204,13 @@ def combine_masks(masks:np.ndarray) -> np.ndarray:
     combined_masks = np.array(combined_masks)
     return combined_masks
 
-def interior_mask(bndry_mask: np.ndarray, mask: np.ndarray) -> np.ndarray:
+def interior_mask(outer_mask: np.ndarray, inner_mask: np.ndarray) -> np.ndarray:
     """Returns the portion of the mask in the interior of the boundary mask, for every frame"""
     if VERBOSE: print("interior_mask() called!")
 
-    assert bndry_mask.shape == mask.shape
+    assert outer_mask.shape == inner_mask.shape
 
-    intr_mask = mask * (bndry_mask > 0) # Zero-out all elements outside the boundary! 
+    intr_mask = inner_mask * (outer_mask > 0) # Zero-out all elements outside the boundary! 
 
     return intr_mask
 

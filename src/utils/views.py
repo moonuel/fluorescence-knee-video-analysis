@@ -362,7 +362,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
 #     return
 # 
 def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
-    """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit"""
+    """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit. Accepts a list of videos as input for horizontal concatenation"""
     if VERBOSE: print("show_frames() called!")
 
     if isinstance(video, List): # TODO: Dynamically accept a list of videos and automatically display them side by side 

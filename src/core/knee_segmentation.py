@@ -1,3 +1,9 @@
+"""
+Functions for segmenting frames/videos should go in here, as well as functions related to combining or manipulating those segmented frames/video
+"""
+
+
+
 import os
 import sys
 import numpy as np
@@ -233,3 +239,15 @@ def get_bisecting_masks(video:np.ndarray, p1s:np.ndarray, p2s:np.ndarray) -> np.
     bsct_masks = np.array(bsct_masks)
 
     return bsct_masks
+
+def mask_adaptive(video:np.ndarray, block_size:int, adj_value:int) -> np.ndarray:
+    "Implements an adaptive thresholding mask over a grayscale video with dimensions (nframes,hgt,wth)"
+    if VERBOSE: print("mask_adaptive() called!")
+
+    masks = []
+    for _, frame in enumerate(video):
+        mask = cv2.adaptiveThreshold(frame,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,block_size, adj_value)
+        masks.append(mask)
+    masks = np.array(masks)
+    
+    return masks
