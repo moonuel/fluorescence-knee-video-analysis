@@ -74,58 +74,6 @@ def get_closest_pt_along_direction(mask: np.ndarray, edge: str, angle_d: int) ->
 
     return pt_orig
 
-
-def _get_N_points_on_circle(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N:int, radius_scale:int=1) -> np.ndarray:
-    """Returns N equally spaced points on a circle as a NumPy array.
-    
-    Args:
-        circle_ctr: (x, y) center of the circle.
-        ref_pt: (x, y) reference point on the circle.
-        N: Number of points to generate.
-
-    Returns:
-        NumPy array of shape (N, 2) containing the (x, y) points.
-    """
-    cx, cy = circle_ctr
-    rx, ry = ref_pt
-    radius = math.hypot(rx - cx, ry - cy)*radius_scale
-    start_angle = math.atan2(ry - cy, rx - cx)
-    
-    circle_pts = np.zeros((N, 2), dtype=np.int32)
-    for i in range(N):
-        angle = start_angle - 2 * math.pi * i / N
-        x = cx + radius * math.cos(angle)
-        y = cy + radius * math.sin(angle)
-        circle_pts[i] = [round(x), round(y)]
-    
-    return circle_pts
-
-def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[int,int]], N:int, radius_scale:int=1) -> np.ndarray:
-    """Gets N points on a circle for an entire video.
-    
-    Returns:
-        NumPy array of shape (frames, N, 2) containing all points,
-        or (frames, N, 2) zeros for None inputs.
-    """
-    if VERBOSE: 
-        print("get_N_points_on_circle() called!")
-
-    if len(circle_ctrs) != len(ref_pts):
-        raise ValueError("Input lists must have the same length")
-
-    circle_points = []
-    for i in range(len(circle_ctrs)):
-        if circle_ctrs[i] is None or ref_pts[i] is None:
-            # Use zeros for missing frames to maintain array structure
-            circle_points.append(np.zeros((N, 2), dtype=np.int32))
-            continue
-        
-        circ_pts = _get_N_points_on_circle(circle_ctrs[i], ref_pts[i], N, radius_scale)
-        circle_points.append(circ_pts)
-    circle_points = np.array(circle_points)
-
-    return circle_points
-
 def smooth_points(points:np.ndarray, window_size:int) -> np.ndarray:
     """Smooths a set of points using a moving average filter"""
     if VERBOSE: print("smooth_points() called!")
