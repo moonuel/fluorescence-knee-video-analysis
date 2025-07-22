@@ -91,13 +91,23 @@ def main():
     # views.draw_points(video, femur_bndry)
 
     # Estimate femur tip
-    femur_tip_pts = rdl.estimate_femur_tip_boundary(femur_bndry)
-    femur_tip_pts = rdl.filter_outlier_points_centroid(femur_tip_pts, eps=60)
-    v1 = views.draw_points(video, femur_tip_pts)
+    femur_tip_bndry = rdl.estimate_femur_tip_boundary(femur_bndry)
+    femur_tip_bndry = rdl.filter_outlier_points_centroid(femur_tip_bndry, eps=60)
+    v1 = views.draw_points(video, femur_tip_bndry)
 
-    femur_tip = rdl.get_centroid_pts(femur_tip_pts)
-    femur_tip = rdl.smooth_points(femur_tip, 15)
+    femur_tip = rdl.get_centroid_pts(femur_tip_bndry)
+    femur_tip = rdl.smooth_points(femur_tip, 10)
     views.draw_points(v1, femur_tip)
+
+    # Estimate femur midpoint
+    femur_mid_bndry = rdl.estimate_femur_midpoint_boundary(femur_bndry, 0.1, 0.4)
+    v2 = views.draw_points(video, femur_mid_bndry, False)
+    
+    femur_mid = rdl.get_centroid_pts(femur_mid_bndry)
+    femur_mid = rdl.smooth_points(femur_mid, 10)    
+    views.draw_points(v2, femur_mid)
+
+    
 
     # views.show_frames([video, mask])
     # views.draw_mask_boundary(video, mask)
