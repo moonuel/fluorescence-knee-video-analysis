@@ -80,51 +80,8 @@ def get_mask_around_femur(video:np.ndarray) -> np.ndarray:
 
     return femur_mask
 
-def analyze_video(video, radial_masks, radial_regions, 
-                  lft: Tuple[int, int], mdl: Tuple[int, int], rgt: Tuple[int, int]) -> None:
-    """Analyzes all frames in a radially-segmented knee fluorescence video.
 
-    Parameters
-    ----------
-    video : np.ndarray
-        Input video of shape (n_frames, H, W)
-    radial_masks : np.ndarray
-        Binary mask array of shape (n_slices, n_frames, H, W)
-    radial_regions : np.ndarray
-        Binary region array of same shape as radial_masks
-    lft, mdl, rgt : Tuple[int, int]
-        Circular slice ranges for left/middle/right knees
 
-    Returns
-    -------
-    total_sums : np.ndarray
-        Measured intensities in shape (3, nfs), where total_sums[i] for i=0,1,2 is the left/middle/right knee respectively
-    """
-    if VERBOSE: print("analyze_video() called!")
-
-    video = video.copy()
-    nfs, h, w = video.shape
-
-    assert nfs == radial_masks.shape[1] 
-    assert nfs == radial_regions.shape[1]
-
-    masks = {
-        'l': rdl.combine_masks(rdl.circular_slice(radial_masks, lft)), 
-        'm': rdl.combine_masks(rdl.circular_slice(radial_masks, mdl)),
-        'r': rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
-    }
-    
-    regions = {
-        'l': rdl.combine_masks(rdl.circular_slice(radial_regions, lft)), 
-        'm': rdl.combine_masks(rdl.circular_slice(radial_regions, mdl)),
-        'r': rdl.combine_masks(rdl.circular_slice(radial_regions, rgt))
-    }
-    
-    total_sums = dp.measure_radial_intensities(np.asarray([
-        regions["l"], regions["m"], regions["r"]
-    ]))
-
-    return total_sums
 def main():
     print("main() called!")
 
@@ -157,7 +114,7 @@ def main():
     femur_mid = rdl.smooth_points(femur_mid, 10)    
     # views.draw_points(v2, femur_mid)
 
-    # Estimate femur position
+    # Radially segment video
     circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_mid, N=16, radius_scale=2)
     # views.draw_points(v2, circle_pts)
 
@@ -165,27 +122,12 @@ def main():
     v1 = views.draw_radial_masks(video, radial_masks, False)
     # views.draw_radial_slice_numbers(v1, circle_pts)
 
+    return
+
     # Save segmentation data
     io.save_nparray(video, "../data/processed/1339_knee_radial_video_N16.npy")
     io.save_nparray(radial_masks, "../data/processed/1339_knee_radial_masks_N16.npy")
     io.save_nparray(radial_regions, "../data/processed/1339_knee_radial_regions_N16.npy")
-
-    return
-    # Knee analysis
-    lft = (11,1)
-    mdl = (7,11)
-    rgt = (1,7)
-    total_sums = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt)
-
-    plt.figure(figsize=(17,9))
-    plt.plot(total_sums[0], label="Left", color='r')
-    plt.plot(total_sums[1], label="Middle", color='g')
-    plt.plot(total_sums[2], label="Right", color='b')
-
-
-
-
-
 
     return
 
