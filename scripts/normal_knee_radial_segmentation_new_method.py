@@ -594,7 +594,7 @@ def main():
     # Get adaptive mean mask
     # mask_src = utils.log_transform_video(video) # TODO dude this doesn't do anything lol
     mask_src = utils.blur_video(video, (25,25), sigma=0) # sigma is variance
-    mask = utils.mask_adaptive(mask_src, 141, 14) # increase thresholding to get better femur boundary
+    mask = ks.mask_adaptive(mask_src, 141, 14) # increase thresholding to get better femur boundary
     # mask = utils.morph_open(mask, (31,31)) # clean small artifacts
     # views.show_frames(mask)
 
@@ -651,11 +651,11 @@ def main():
     # views.show_frames(np.concatenate([pvw, pvw2], axis=2))
 
     # Validate femur estimation
-    femur_endpts = np.reshape(femur_endpts, (-1, 2))
-    femur_endpts = [tuple(pts) for pts in femur_endpts]
+    # femur_endpts = np.reshape(femur_endpts, (-1, 2))
+    # femur_endpts = [tuple(pts) for pts in femur_endpts]
 
-    femur_midpts = np.reshape(femur_midpts, (-1, 2))
-    femur_midpts = [tuple(pts) for pts in femur_midpts]
+    # femur_midpts = np.reshape(femur_midpts, (-1, 2))
+    # femur_midpts = [tuple(pts) for pts in femur_midpts]
 
     # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
     
@@ -670,7 +670,7 @@ def main():
     video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
     video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
     # video_demo = views.rescale_video(video_demo, 1, True)
-
+    
     # io.save_avi("early_normal_knee_radial_segmentation.avi", video_demo)
 
     # --- Get plots ---
