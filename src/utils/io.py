@@ -174,12 +174,14 @@ def save_avi(filepath: str, video: np.ndarray, fps: int = 30) -> None:
 
     for i in range(n_frames):
         frame = video[i]
-        if is_color:
-            # CV expects BGR; assume input is already BGR
-            writer.write(frame)
-        else:
-            # For grayscale, VideoWriter still expects 3‑channel unless isColor=False
-            writer.write(frame)
+        writer.write(frame)
+
+        # if is_color:
+        #     # CV expects BGR; assume input is already BGR
+        #     writer.write(frame)
+        # else:
+        #     # For grayscale, VideoWriter still expects 3‑channel unless isColor=False
+        #     writer.write(frame)
 
     writer.release()
     print(f"Saved {n_frames} frames to {filepath}")
@@ -221,8 +223,8 @@ def save_mp4(filepath: str, video: np.ndarray, fps: int = 30) -> None:
 
     for i in range(n_frames):
         frame = video[i]
-        if not is_color:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        # if not is_color:
+        #     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
         writer.write(frame)
 
     writer.release()
