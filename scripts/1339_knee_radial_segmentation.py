@@ -7,12 +7,15 @@ Segments the knee into N equally-spaced radial slices, and then groups them into
 import utils.io as io
 import utils.views as views
 import utils.utils as utils
+import core.data_processing as dp
 import core.radial_segmentation as rdl
 import core.knee_segmentation as ks
 import numpy as np
 import cv2
 import numpy as np
 from skimage.exposure import match_histograms
+from config import VERBOSE
+from typing import Tuple
 
 def save_1339_data():
     """Imports, centers, crops, and saves frames 0-650 of the 1339 aging video data. Only needs to be used once"""
@@ -76,6 +79,71 @@ def get_mask_around_femur(video:np.ndarray) -> np.ndarray:
 
     return femur_mask
 
+def analyze_video(video, radial_masks, radial_regions, 
+                  lft: Tuple[int, int], mdl: Tuple[int, int], rgt: Tuple[int, int], 
+                  show_figs: bool = True, save_dir: str = None, 
+                  fig_size: Tuple[int, int] = (17, 9)) -> None:
+    """Analyzes all frames in a radially-segmented knee fluorescence video.
+
+    Parameters
+    ----------
+    video : np.ndarray
+        Input video of shape (n_frames, H, W)
+    radial_masks : np.ndarray
+        Binary mask array of shape (n_slices, n_frames, H, W)
+    radial_regions : np.ndarray
+        Binary region array of same shape as radial_masks
+    lft, mdl, rgt : Tuple[int, int]
+        Circular slice ranges for left/middle/right knees
+    show_figs : bool, optional
+        Whether to display the figure
+    save_dir : str, optional
+        Directory to save output figure. If None, the figure is not saved.
+    fig_size : Tuple[int, int], optional
+        Size of the matplotlib figure
+
+    Returns
+    -------
+    total_sums : np.ndarray
+        Measured intensities
+    fig : matplotlib.figure.Figure
+        The generated figure
+    axes : np.ndarray
+        The figure's axes
+    """
+    if VERBOSE: print("analyze_video() called!")
+
+    video = video.copy()
+    nfs, h, w = video.shape
+
+    assert nfs == radial_masks.shape[1] 
+    assert nfs == radial_regions.shape[1]
+
+    masks = {
+        'l': rdl.combine_masks(rdl.circular_slice(radial_masks, lft)), 
+        'm': rdl.combine_masks(rdl.circular_slice(radial_masks, mdl)),
+        'r': rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
+    }
+    
+    regions = {
+        'l': rdl.combine_masks(rdl.circular_slice(radial_regions, lft)), 
+        'm': rdl.combine_masks(rdl.circular_slice(radial_regions, mdl)),
+        'r': rdl.combine_masks(rdl.circular_slice(radial_regions, rgt))
+    }
+    
+    keys = ['l','m','r']
+    
+    total_sums = dp.measure_radial_intensities(np.asarray([
+        regions["l"], regions["m"], regions["r"]
+    ]))
+
+    fig, axes = views.plot_radial_segment_intensities_2(total_sums, vert_layout=True, save_dir=save_dir, figsize=(17,9))
+
+    if show_figs:
+        import matplotlib.pyplot as plt
+        plt.show()
+
+    return total_sums, fig, axes
 def main():
     print("main() called!")
 
@@ -109,11 +177,21 @@ def main():
     # views.draw_points(v2, femur_mid)
 
     # Estimate femur position
-    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_mid, N=16, radius_scale=1)
+    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_mid, N=16, radius_scale=2)
     # views.draw_points(v2, circle_pts)
 
     radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.6)
-    views.draw_radial_masks(video, radial_masks)
+    v1 = views.draw_radial_masks(video, radial_masks, False)
+    views.draw_radial_slice_numbers(v1, circle_pts)
+
+    # Knee analysis
+    lft = (11,1)
+    mdl = (7,11)
+    rgt = (1,7)
+    total_sums, fig, axes = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt)
+
+
+
 
     return
 
