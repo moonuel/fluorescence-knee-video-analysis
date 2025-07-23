@@ -235,7 +235,7 @@ def _get_N_points_on_circle(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N:
     
     return circle_pts
 
-def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[int,int]], N:int, radius_scale:int=1) -> np.ndarray:
+def get_N_points_on_circle(circle_ctrs:np.ndarray, ref_pts:np.ndarray, N:int, radius_scale:int=1) -> np.ndarray:
     """Gets N points on a circle for an entire video.
     
     Returns:
@@ -245,17 +245,23 @@ def get_N_points_on_circle(circle_ctrs:List[Tuple[int,int]], ref_pts:List[Tuple[
     if VERBOSE: 
         print("get_N_points_on_circle() called!")
 
-    if len(circle_ctrs) != len(ref_pts):
-        raise ValueError("Input lists must have the same length")
+    if circle_ctrs.shape != ref_pts.shape:
+        raise ValueError(f"Inputs must have the same shape. Shapes given: {circle_ctrs.shape} and {ref_pts.shape}")
+    
+    circle_ctrs = np.asarray(circle_ctrs)
+    ref_pts = np.asarray(ref_pts)
+
+    circle_ctrs = np.reshape(circle_ctrs, (-1, 2))
+    ref_pts = np.reshape(ref_pts, (-1, 2))
 
     circle_points = []
-    for i in range(len(circle_ctrs)):
-        if circle_ctrs[i] is None or ref_pts[i] is None:
+    for cf in range(circle_ctrs.shape[0]):
+        if circle_ctrs[cf] is None or ref_pts[cf] is None:
             # Use zeros for missing frames to maintain array structure
             circle_points.append(np.zeros((N, 2), dtype=np.int32))
             continue
         
-        circ_pts = _get_N_points_on_circle(circle_ctrs[i], ref_pts[i], N, radius_scale)
+        circ_pts = _get_N_points_on_circle(circle_ctrs[cf], ref_pts[cf], N, radius_scale)
         circle_points.append(circ_pts)
     circle_points = np.array(circle_points)
 
@@ -432,13 +438,16 @@ def estimate_femur_midpoint_boundary(sample_pts:np.ndarray, start:float = 0.0, e
     return np.array(midpoint_boundary, dtype=object)
 
 def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
-    """Gets the radial segments for the video. """
+    """Gets the radial segments for the video. Returns (radial_regions, radial_masks) """
     if VERBOSE: print("get_radial_segments() called!")
 
-    video = video.copy()
-    circle_ctrs = np.array(circle_ctrs) # type cast for downstream operations for safety
-    circle_pts = np.array(circle_pts)
+    video = np.asarray(video)
+    circle_ctrs = np.array(circle_ctrs) # Expected shape: (nfs, npts, 2)
+    circle_pts = np.array(circle_pts) # Expected shape: (nfs, 1, 2)
 
+    circle_ctrs = np.reshape(circle_ctrs, (-1, 2))
+
+    
     # TODO: input validation
 
     # Get Otsu masks
@@ -450,7 +459,9 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     _, N, _ = circle_pts.shape
     bsct_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
     for n in range(N):
-        bsct_masks[n] = ks.get_bisecting_masks(video, circle_pts[:,n], circle_ctrs) 
+        bsct_masks[n] = ks.get_bisecting_masks(video, 
+                                               circle_pts[:,n], # Pass (nfs, 2)
+                                               circle_ctrs) # Pass (nfs, 2)
         # views.show_frames(bsct_masks[n]) # Validate bisecting masks
 
     # Get radial slices
