@@ -379,7 +379,8 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
         frame = video[cf]
 
         if show_num:
-            cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
+            cv2.rectangle(frame, (0, h-32), (59, h), color=0, thickness=-1)
+            cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, color = 255, thickness = 1, lineType=cv2.LINE_AA)
         
         cv2.imshow(title, frame)
 
@@ -473,7 +474,7 @@ def draw_current_frame_num(frame:np.ndarray, frame_num:int) -> None:
     return
 
 
-def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray, show_video:bool=True) -> None:
+def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray, show_video:bool=True, frame_offset:int=0) -> None:
     if VERBOSE: print("draw_radial_masks() called!")
 
     radial_masks = np.array(radial_masks)
@@ -488,9 +489,9 @@ def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray, show_video:bool
         for seg in range(nsegs):
             video[cf] = _draw_mask_outline(frame, radial_masks[seg, cf])
 
-        draw_current_frame_num(frame, cf)
+        draw_current_frame_num(frame, cf+frame_offset)
 
-    if show_video: show_frames(video)
+    if show_video: show_frames(video, show_num=False)
 
     return video
 
