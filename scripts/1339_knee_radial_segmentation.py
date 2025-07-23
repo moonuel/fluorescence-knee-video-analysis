@@ -80,6 +80,7 @@ def main():
     print("main() called!")
 
     video = load_1339_data()[289:608] # aka 210 - 609, when written in 1-based indexing
+    video = utils.blur_video(video, kernel_dims=(11,11), sigma=3)
     nfs, h, w = video.shape
     
     agl = 22
@@ -93,24 +94,26 @@ def main():
     # Estimate femur tip
     femur_tip_bndry = rdl.estimate_femur_tip_boundary(femur_bndry)
     femur_tip_bndry = rdl.filter_outlier_points_centroid(femur_tip_bndry, eps=60)
-    v1 = views.draw_points(video, femur_tip_bndry)
+    # v1 = views.draw_points(video, femur_tip_bndry)
 
     femur_tip = rdl.get_centroid_pts(femur_tip_bndry)
     femur_tip = rdl.smooth_points(femur_tip, 10)
-    views.draw_points(v1, femur_tip)
+    # views.draw_points(v1, femur_tip)
 
     # Estimate femur midpoint
     femur_mid_bndry = rdl.estimate_femur_midpoint_boundary(femur_bndry, 0.1, 0.4)
-    v2 = views.draw_points(video, femur_mid_bndry, False)
+    # v2 = views.draw_points(video, femur_mid_bndry, False)
     
     femur_mid = rdl.get_centroid_pts(femur_mid_bndry)
     femur_mid = rdl.smooth_points(femur_mid, 10)    
-    views.draw_points(v2, femur_mid)
+    # views.draw_points(v2, femur_mid)
 
-    
+    # Estimate femur position
+    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_mid, N=16, radius_scale=1)
+    # views.draw_points(v2, circle_pts)
 
-    # views.show_frames([video, mask])
-    # views.draw_mask_boundary(video, mask)
+    radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.6)
+    views.draw_radial_masks(video, radial_masks)
 
     return
 

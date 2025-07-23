@@ -9,6 +9,7 @@ from typing import Tuple, List
 from utils import io, views, utils
 from config import VERBOSE
 from core import data_processing as dp
+from skimage.exposure import match_histograms
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -437,6 +438,26 @@ def estimate_femur_midpoint_boundary(sample_pts:np.ndarray, start:float = 0.0, e
 
     return np.array(midpoint_boundary, dtype=object)
 
+def match_histograms_video(video, reference_frame=None):
+    """
+    Apply histogram matching to each frame in the video.
+    
+    Args:
+        video: np.ndarray of shape (n_frames, height, width)
+        reference_frame: optional np.ndarray (height, width), default is video[0]
+
+    Returns:
+        matched_video: np.ndarray of same shape as input
+    """
+    if reference_frame is None:
+        reference_frame = video[0]
+        
+    matched_video = np.empty_like(video)
+    for i in range(video.shape[0]):
+        matched_video[i] = match_histograms(video[i], reference_frame)
+        
+    return matched_video
+
 def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
     """Gets the radial segments for the video. Returns (radial_regions, radial_masks) """
     if VERBOSE: print("get_radial_segments() called!")
@@ -451,7 +472,8 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
     # TODO: input validation
 
     # Get Otsu masks
-    otsu_masks = ks.get_otsu_masks(video, thresh_scale=thresh_scale)
+    video_hist = match_histograms_video(video) # For more consistent segmentation
+    otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale)
     # views.show_frames(otsu_masks) # Validate otsu masks
 
     # Get bisection mask for every point on the circle
