@@ -99,8 +99,23 @@ def get_top_boundary_points(sample_pts:np.ndarray) -> np.ndarray:
     return np.array(top_pts, dtype=object)
 
 def get_interior_points(points:np.ndarray, start:float, end:float) -> np.ndarray:
+    """Gets the points between the percentiles denoted by start and end"""
+    if VERBOSE: print("get_interior_points() called!")
 
-    return
+    points = np.asarray(points)
+    nfs = points.shape[0] # Expected shape: (nfs, npts*, 2), where * indicates jagged dimension
+
+    intr_pts = []
+    for cf in range(nfs):
+        cpts = np.asarray(points[cf])
+        N = cpts.shape[0]
+
+        ns = int(N*start)
+        ne = int(N*end)
+        
+        intr_pts.append(cpts[ns:ne])
+
+    return np.array(intr_pts, dtype=object)
 
 def main():
     print("main() called!")
