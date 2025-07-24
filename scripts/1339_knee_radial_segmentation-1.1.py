@@ -117,10 +117,103 @@ def get_interior_points(points:np.ndarray, start:float, end:float) -> np.ndarray
 
     return np.array(intr_pts, dtype=object)
 
+def fit_line_pca(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Fit a line using PCA (total least squares) to 2D points.
+
+    Parameters:
+        points: ndarray of shape (n_points, 2)
+
+    Returns:
+        mean: the centroid of the points
+        direction: unit vector in the direction of the best-fit line
+
+    """
+    mean = points.mean(axis=0)
+    centered = points - mean
+    _, _, vh = np.linalg.svd(centered)
+    direction = vh[0]  # First principal component
+    return mean, direction
+
+def fit_lines_pca(sample_pts:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Fits a PCA line through a set of points, for every frame
+
+    Args:
+        sample_pts (np.ndarray): array of shape (nfs, npts*, 2), where * indicates jagged dimension
+
+    Returns:
+        means (np.ndarray): array contaning the mean position of points for every frame
+        directions (np.ndarray): array containing unit vector in the direction of best-fit line
+    """
+
+    sample_pts = np.asarray(sample_pts)
+    nfs = sample_pts.shape[0]
+
+    means = []
+    directions = []
+    for cf in range(nfs):
+        pts = sample_pts[cf]
+        mu, dir = fit_line_pca(pts)
+
+        means.append(mu)
+        directions.append(dir)
+
+    means = np.array(means)
+    directions = np.array(directions)
+
+    return means, directions
+
+
+def project_point_to_line(q, mean, direction):
+    t = np.dot(q - mean, direction)
+    return mean + t * direction
+
+def project_points_to_line(points:np.ndarray, means:np.ndarray, directions:np.ndarray) -> np.ndarray:
+    """Projects a set of points to the PCA lines specified by means and directions, for every frame 
+    
+    Args:
+        points (np.ndarray): points to be projected to the PCA line
+        means (np.ndarray): means at the center of the PCA line
+        directions (np.ndarray): unit vectors specifying the orientation of the PCA line
+
+    Returns:
+        proj_pts (np.ndarray): points projected onto the PCA line 
+
+    """
+    if VERBOSE: print("project_points_to_line() called!")
+
+    points = np.asarray(points)
+    points = np.reshape(points, (-1, 2)) # for easier indexing 
+
+    means = np.asarray(means)
+    directions = np.asarray(directions)
+
+    assert points.shape == means.shape == directions.shape
+
+    nfs = points.shape[0]
+
+    proj_pts = []
+    for cf in range(nfs):
+        pt = points[cf]
+        mu = means[cf]
+        dir = directions[cf]
+
+        prj_pt = project_point_to_line(pt, mu, dir)
+
+        proj_pts.append(prj_pt)
+
+    proj_pts = np.round(proj_pts, 0)
+    proj_pts = np.array(proj_pts, dtype=int)
+    proj_pts = np.reshape(proj_pts, (-1, 1, 2))
+
+    return proj_pts
+
+
 def main():
     print("main() called!")
 
-    video = load_1339_data()[289:608] # aka 210 - 609, when written in 1-based indexing
+    video = load_1339_data()[289:608] # aka 290 - 609, when written in 1-based indexing
     video = utils.blur_video(video, kernel_dims=(11,11), sigma=3)
     nfs, h, w = video.shape
     
@@ -152,17 +245,32 @@ def main():
     # Midpoint refinement
     femur_top_bndry = get_top_boundary_points(femur_bndry)
     femur_top_bndry = get_interior_points(femur_top_bndry, 0.1, 0.9)
-    views.draw_points(video, femur_top_bndry)
+
+    means, directions = fit_lines_pca(femur_top_bndry)
     
-    return # Temporarily halt execution here 
+    proj_pts = project_points_to_line(femur_mid, means, directions)
+    proj_pts = rdl.smooth_points(proj_pts, 10)
+
+    refined_pts = rdl.get_centroid_pts(np.concatenate([femur_mid, proj_pts], axis=1)) # get midpoint of original and projected points
+    print(refined_pts)
+    print(refined_pts.shape)
+
+    v3 = views.draw_points(video, proj_pts, False)
+    v3 = views.draw_points(v3, femur_mid, False)
+    v3 = views.draw_points(v3, refined_pts)
+    # femur_mid_ref = 
+    # views.draw_points(video, femur_top_bndry)
+    
+    # return # Temporarily halt execution here 
     
     # Radially segment video
-    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_mid, N=16, radius_scale=2)
+    # circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_mid, N=16, radius_scale=2)
+    circle_pts = rdl.get_N_points_on_circle(femur_tip, refined_pts, N=16, radius_scale=2)
     # views.draw_points(v2, circle_pts)
 
     radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.6)
-    v1 = views.draw_radial_masks(video, radial_masks, False)
-    # views.draw_radial_slice_numbers(v1, circle_pts)
+    v1 = views.draw_radial_masks(v3, radial_masks, False)
+    views.draw_radial_slice_numbers(v1, circle_pts)
 
     return
 
