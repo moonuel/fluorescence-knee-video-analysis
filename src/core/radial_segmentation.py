@@ -1,3 +1,4 @@
+import time
 import os
 import sys
 import numpy as np
@@ -10,6 +11,7 @@ from utils import io, views, utils
 from config import VERBOSE
 from core import data_processing as dp
 from skimage.exposure import match_histograms
+from multiprocessing import Pool, cpu_count
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -506,3 +508,53 @@ def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.
         # views.show_frames(radial_masks[n]) # Validate radial regions
 
     return radial_regions, radial_masks
+
+
+def _process_batch(batch: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    start_time = time.time()
+    pid = os.getpid()
+    batch_size_mb = batch.nbytes / (1024 * 1024)
+
+    print(f"Process {pid} starting batch: {len(batch)} frames, ~{batch_size_mb:.2f} MB at {time.strftime('%X')}")
+
+    video_ctrd_batch = []
+    translation_mxs_batch = []
+    for frame in batch:
+        frame_out, tr_mx = utils.centroid_stabilization(frame)
+        video_ctrd_batch.append(frame_out)
+        translation_mxs_batch.append(tr_mx)
+
+    elapsed = time.time() - start_time
+    print(f"Process {pid} finished batch at {time.strftime('%X')} (elapsed {elapsed:.2f} sec)")
+    return np.array(video_ctrd_batch), np.array(translation_mxs_batch)
+
+
+def centre_video_mp(video: np.ndarray, n_workers: int = None) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Parallelized version of centre_video using multiprocessing.
+
+    Parameters:
+        video (np.ndarray): Input video, shape (nframes, H, W)
+        n_workers (int, optional): Number of worker processes (default: number of CPU cores)
+
+    Returns:
+        video_ctrd (np.ndarray): Centered video, same shape as input
+        translation_mxs (np.ndarray): Per-frame transformation matrices, shape (nframes, ...)
+    """
+    if VERBOSE: print("centre_video() called (parallelized)!")
+
+    n_workers = n_workers or cpu_count()
+    batches = np.array_split(video, n_workers)
+
+    print("Spawning processes...")
+    with Pool(processes=n_workers) as pool:
+        results = pool.map(_process_batch, batches)
+
+    # Unpack results
+    video_ctrd_list, translation_mxs_list = zip(*results)
+    video_ctrd = np.concatenate(video_ctrd_list, axis=0)
+    translation_mxs = np.concatenate(translation_mxs_list, axis=0)
+
+    print("Done centering video!")
+
+    return video_ctrd, translation_mxs
