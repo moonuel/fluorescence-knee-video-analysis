@@ -478,7 +478,16 @@ def parallel_process_video(
 
     Returns:
         np.ndarray: Processed video of same shape.
+
+    Example:
+        >>> import cv2
+        >>> from functools import partial
+        >>> def gaussian_blur(frame, ksize):
+        ...     return cv2.GaussianBlur(frame, ksize=ksize, sigmaX=0)
+        >>> blur_fn = partial(gaussian_blur, ksize=(5, 5))
+        >>> output = parallel_process_video(video, blur_fn)
     """
+
     n_frames = len(video)
 
     if batch_size is None:
