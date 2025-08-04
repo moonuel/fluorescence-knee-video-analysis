@@ -4,7 +4,10 @@ Segments the knee into N equally-spaced radial slices,
 and then groups them into chunks associated with the left/middle/right portions of the knee.
 
 Refinements made in new version:
-1.1 - Adjust the angle of the knee based on the tip boundary
+    1.1 - Adjust the angle of the knee based on the tip boundary.
+
+Comments:
+    Results are okay. Maybe these tools will be useful in the future - for now will stick to 1.0 method.
 """
 
 
@@ -272,7 +275,7 @@ def main():
     v1 = views.draw_radial_masks(v3, radial_masks, False)
     views.draw_radial_slice_numbers(v1, circle_pts)
 
-    return
+    # return
 
     # Save segmentation data
     io.save_nparray(video, "../data/processed/1339_knee_radial_video_N16.npy")
