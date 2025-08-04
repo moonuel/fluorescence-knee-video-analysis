@@ -438,3 +438,61 @@ def _log_transform_opencv(frame: np.ndarray, gain: float = 1.0) -> np.ndarray:
     out = np.clip(out, 0, 255)
     return out.astype(np.uint8)  # convert back for OpenCV display
 
+import numpy as np
+from multiprocessing import Pool, cpu_count
+from functools import partial
+from typing import Callable, Optional
+
+def split_into_batches(video: np.ndarray, batch_size: int) -> list[np.ndarray]:
+    """Split video into batches of frames."""
+    return [video[i:i+batch_size] for i in range(0, len(video), batch_size)]
+
+def concatenate_batches(batches: list[np.ndarray]) -> np.ndarray:
+    """Recombine processed frame batches into a full video."""
+    return np.concatenate(batches, axis=0)
+
+def process_batch(batch: np.ndarray, frame_function: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
+    """Apply frame_function to each frame in the batch."""
+    return np.stack([frame_function(frame) for frame in batch], axis=0)
+
+def choose_batch_size(n_frames: int, max_batch_size: int = 512) -> int:
+    """Determine a batch size based on CPU count and number of frames."""
+    num_cores = cpu_count()
+    estimated = (n_frames + num_cores - 1) // num_cores  # ceil division
+    return min(estimated, max_batch_size)
+
+def parallel_process_video(
+    video: np.ndarray,
+    frame_function: Callable[[np.ndarray], np.ndarray],
+    batch_size: Optional[int] = None,
+    num_workers: Optional[int] = None
+) -> np.ndarray:
+    """
+    Apply a frame-level pure function to a video in parallel, in batches.
+
+    Parameters:
+        video (np.ndarray): Input video of shape (N, H, W[, C]).
+        frame_function (Callable): A pure function that processes a single frame.
+        batch_size (int, optional): Number of frames per batch. If None, determined automatically.
+        num_workers (int, optional): Number of parallel processes. Defaults to number of CPU cores.
+
+    Returns:
+        np.ndarray: Processed video of same shape.
+    """
+    n_frames = len(video)
+
+    if batch_size is None:
+        batch_size = choose_batch_size(n_frames)
+
+    if num_workers is None:
+        num_workers = cpu_count()
+
+    batches = split_into_batches(video, batch_size)
+
+    # Bind the frame_function into the batch processor
+    batch_processor = partial(process_batch, frame_function=frame_function)
+
+    with Pool(processes=num_workers) as pool:
+        results = pool.map(batch_processor, batches)
+
+    return concatenate_batches(results)
