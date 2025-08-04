@@ -22,12 +22,20 @@ def main(file_path:str, frames:Tuple[int, int], save_path:str):
 
     views.show_frames(views.rescale_video(video, scale_factor=0.5, show_video=False, show_num=False))
 
-    # io.sa
+    io.save_nparray(video, save_path)
 
     return
 
+# Example usage:
+    # main(
+        # "1 con-0 min-fluid movement_00001190.h5", 
+        # frames, 
+        # "1190_knee_frames_ctrd.npy")
+
 if __name__ == "__main__":
-    file_path = "../data/raw/1 con-0 min-fluid movement_00001190.h5"
+    h5_path = "../data/raw/1 con-0 min-fluid movement over exposure_00001189.h5"
+    npy_path = "../data/processed/1189_knee_frames_ctrd.npy"
+
     frames = None # None defaults to all
 
-    main(file_path, frames, "")
+    main(h5_path, frames, npy_path)
