@@ -104,8 +104,8 @@ def main(video_path, output_path, chunk_size=100):
 
 if __name__ == "__main__":
 
-    avi_path = "../data/raw/1 con-0 min-fluid movement_00001190.avi"
-    output_path = "../data/raw/1 con-0 min-fluid movement_00001190.h5"
+    avi_path = "../data/raw/1 con-0 min-fluid movement over exposure_00001189.avi"
+    h5_out_path = "../data/raw/1 con-0 min-fluid movement over exposure_00001189.h5"
 
-    main(avi_path, output_path, chunk_size=200)
+    main(avi_path, h5_out_path, chunk_size=200)
 
