@@ -518,16 +518,41 @@ def parallel_process_video(
     num_workers: Optional[int] = None
 ) -> np.ndarray:
     """
-    Apply a batch-wise pure function to a video in parallel, in batches.
+    Apply a batch-wise pure function to a video in parallel, processing in batches.
+
+    This function splits the input video into batches of frames, applies the
+    provided batch-wise `video_function` to each batch in parallel using multiple
+    worker processes, and then recombines the processed batches into a single video.
 
     Parameters:
-        video (np.ndarray): Input video of shape (N, H, W[, C]).
-        video_function (Callable): A pure function that processes a batch of frames.
-        batch_size (int, optional): Number of frames per batch. If None, determined automatically.
-        num_workers (int, optional): Number of parallel processes. Defaults to number of CPU cores.
+        video (np.ndarray): Input video as a NumPy array of shape (N, H, W[, C]),
+            where N is the number of frames, H and W are height and width, and C is optional channels.
+        video_function (Callable[[np.ndarray], np.ndarray]): A pure function that
+            accepts a batch of frames (shape (batch_size, H, W[, C])) and returns
+            a processed batch of the same shape.
+        batch_size (int, optional): Number of frames per batch to process in each worker.
+            If None, the batch size is determined automatically based on the video length and CPU cores.
+        num_workers (int, optional): Number of parallel worker processes to use.
+            If None, defaults to the number of CPU cores.
 
     Returns:
-        np.ndarray: Processed video of same shape.
+        np.ndarray: The processed video, with the same shape as the input.
+
+    Example:
+        >>> import cv2
+        >>> import numpy as np
+        >>> from functools import partial
+        >>>
+        >>> # Example batch-wise function applying Gaussian blur to each frame
+        >>> def batch_gaussian_blur(batch: np.ndarray, ksize=(5, 5)) -> np.ndarray:
+        ...     # Apply OpenCV GaussianBlur frame-by-frame in the batch
+        ...     return np.array([cv2.GaussianBlur(frame, ksize, sigmaX=0) for frame in batch])
+        >>>
+        >>> # Create a partial with fixed kernel size
+        >>> blur_fn = partial(batch_gaussian_blur, ksize=(7, 7))
+        >>>
+        >>> # Assume `video` is a NumPy array of shape (N, H, W)
+        >>> processed_video = parallel_process_video(video, blur_fn, batch_size=64, num_workers=8)
     """
     n_frames = len(video)
 
@@ -546,3 +571,97 @@ def parallel_process_video(
         results = pool.map(batch_processor, batches)
 
     return concatenate_batches(results)
+
+
+import numpy as np
+import multiprocessing as mp
+import math
+import logging
+from typing import Callable, Optional
+
+def choose_batch_size_video(n_frames: int) -> int:
+    """Heuristic for selecting a default batch size."""
+    return 50 if n_frames >= 200 else max(10, n_frames // 4)
+
+def parallel_process_video(
+    video: np.ndarray,
+    func: Callable[[np.ndarray], np.ndarray],
+    batch_size: Optional[int] = None,
+    num_workers: Optional[int] = None,
+    max_workers: Optional[int] = None,
+    verbose: bool = False
+) -> np.ndarray:
+    """
+    Apply a batch-wise pure function to a video in parallel.
+
+    This function splits the input video into batches of frames, applies the
+    given batch-wise function in parallel using multiple processes, and 
+    returns the processed video with the same shape.
+
+    Parameters:
+        video (np.ndarray): Input video of shape (N, H, W[, C]), where N is the number of frames.
+        func (Callable): A function that accepts a batch of frames 
+            (i.e., an array of shape (batch_size, H, W[, C])) and returns a batch of processed frames.
+        batch_size (int, optional): Number of frames per batch. If None, chosen automatically.
+        num_workers (int, optional): Number of parallel worker processes. If None, chosen automatically.
+        max_workers (int, optional): Maximum number of processes allowed (defaults to all available CPU cores).
+        verbose (bool, optional): If True, enables logging output.
+
+    Returns:
+        np.ndarray: Processed video of the same shape as the input.
+
+    Example:
+        >>> import cv2
+        >>> from functools import partial
+        >>> def batch_blur(batch: np.ndarray, ksize=(5, 5)) -> np.ndarray:
+        ...     return np.array([cv2.GaussianBlur(f, ksize, sigmaX=0) for f in batch])
+        >>> blur_fn = partial(batch_blur, ksize=(7, 7))
+        >>> output = parallel_process_video(video, blur_fn, verbose=True)
+    """
+    n_frames = len(video)
+
+    # Configure logging
+    logger = logging.getLogger("parallel_process_video")
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("[%(levelname)s] %(message)s")
+    handler.setFormatter(formatter)
+    if not logger.handlers:
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO if verbose else logging.WARNING)
+
+    cpu_limit = mp.cpu_count()
+    max_workers = max_workers or cpu_limit
+
+    # Resolve parameter interaction
+    if batch_size is None and num_workers is None:
+        batch_size = choose_batch_size_video(n_frames)
+        num_workers = min(max_workers, math.ceil(n_frames / batch_size))
+        logger.info(f"[Auto] batch_size={batch_size}, num_workers={num_workers}")
+
+    elif batch_size is not None and num_workers is None:
+        num_workers = min(max_workers, math.ceil(n_frames / batch_size))
+        logger.info(f"[Auto] num_workers={num_workers} for batch_size={batch_size}")
+
+    elif batch_size is None and num_workers is not None:
+        num_workers = min(num_workers, max_workers)
+        batch_size = math.ceil(n_frames / num_workers)
+        logger.info(f"[Auto] batch_size={batch_size} for num_workers={num_workers}")
+
+    else:
+        num_workers = min(num_workers, max_workers)
+        logger.info(f"[Manual] Using batch_size={batch_size}, num_workers={num_workers}")
+
+    # Validate parameters
+    assert batch_size > 0 and num_workers > 0, "batch_size and num_workers must be positive integers"
+
+    # Create batches
+    batches = [video[i:i + batch_size] for i in range(0, n_frames, batch_size)]
+    logger.info(f"Created {len(batches)} batches, each with up to {batch_size} frames")
+
+    # Parallel execution
+    with mp.Pool(processes=num_workers) as pool:
+        results = pool.map(func, batches)
+
+    # Combine results
+    return np.concatenate(results, axis=0)
+
