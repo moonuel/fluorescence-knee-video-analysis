@@ -375,6 +375,11 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
 
     if title is None: title = "show_frames()"
 
+    # Skip through frames with number row
+    itvs = np.linspace(0, nfs, 11, dtype=np.uint32)[:-1]
+    idxs = [ord(str(n)) for n in [1,2,3,4,5,6,7,8,9,0]]
+    fn_slcs = dict(zip(idxs, itvs))
+
     while True:
         frame = video[cf]
 
@@ -389,6 +394,7 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
         if k == ord('q'): break
         if k == ord("a"): cf-=1
         if k == ord("s"): cf+=1
+        if k in fn_slcs: cf = fn_slcs[k]
 
         # Edge handling
         cf = cf%nfs # mod num_frames
