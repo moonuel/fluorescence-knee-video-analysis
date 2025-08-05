@@ -451,6 +451,8 @@ def match_histograms_video(video, reference_frame=None):
     Returns:
         matched_video: np.ndarray of same shape as input
     """
+    if VERBOSE: print("match_histograms_video() called!")
+
     if reference_frame is None:
         reference_frame = video[0]
         
