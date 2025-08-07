@@ -366,7 +366,6 @@ def get_centroid_pts(femur_pts: np.ndarray) -> np.ndarray:
         # Compute centroid of points
         cntrd = np.mean(pts, axis=0, dtype=int)
 
-        # Filter out points outside 
         centroids.append([cntrd])
 
     return np.array(centroids, dtype=object)
@@ -430,8 +429,8 @@ def estimate_femur_midpoint_boundary(sample_pts:np.ndarray, start:float = 0.0, e
         npts = pts.shape[0] # shape (npts, 2)
 
         # Top and bottom boundary points are stored in pairs
-        strt_idx = int(npts/2*start)*2
-        end_idx = int(npts/2*end)*2
+        strt_idx = int(round(npts / 2 * start)) * 2
+        end_idx = int(round(npts / 2 * end)) * 2
 
         # Get the boundary points between the start and end indices
         midpt_bndry = pts[strt_idx:end_idx]
