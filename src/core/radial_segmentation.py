@@ -517,51 +517,70 @@ def centre_video_mp(video: np.ndarray, n_workers: int = None) -> Tuple[np.ndarra
     return video_ctrd, translation_mxs
 
 
-def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
-    """Gets the radial segments for the video. Returns (radial_regions, radial_masks) """
-    if VERBOSE: print("get_radial_segments() called!")
+def get_radial_segments(video: np.ndarray,
+                        circle_ctrs: np.ndarray,
+                        circle_pts: np.ndarray,
+                        thresh_scale: int = 0.8) -> Tuple[np.ndarray, np.ndarray]:
+    """Gets the radial segments for the video. Returns (radial_regions, radial_masks)."""
+    
+    if VERBOSE:
+        print("get_radial_segments() called!")
 
     video = np.asarray(video)
-    circle_ctrs = np.array(circle_ctrs) # Expected shape: (nfs, npts, 2)
-    circle_pts = np.array(circle_pts) # Expected shape: (nfs, 1, 2)
+    circle_ctrs = np.array(circle_ctrs)  # shape: (nfs, npts, 2)
+    circle_pts = np.array(circle_pts)    # shape: (nfs, 1, 2)
 
-    circle_ctrs = np.reshape(circle_ctrs, (-1, 2))
+    circle_ctrs = np.reshape(circle_ctrs, (-1, 2))  # (nfs, 2)
 
-    
-    # TODO: input validation
+    # Histogram matching for better Otsu performance
+    video_hist = match_histograms_video(video)
 
-    # Get Otsu masks
-    video_hist = match_histograms_video(video) # For more consistent segmentation
+    # Otsu masks for each frame
     otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale)
-    # views.show_frames(otsu_masks) # Validate otsu masks
 
-    # Get bisection mask for every point on the circle
+    # Precompute useful shapes
     nfs, h, w = video.shape
     _, N, _ = circle_pts.shape
-    bsct_masks = np.empty((N, nfs, h,w), dtype=bool) # dimensions (N_masks, nframes, h, w)
-    for n in range(N):
-        bsct_masks[n] = ks.get_bisecting_masks(video, 
-                                               circle_pts[:,n], # Pass (nfs, 2)
-                                               circle_ctrs) # Pass (nfs, 2)
-        # views.show_frames(bsct_masks[n]) # Validate bisecting masks
 
-    # Get radial slices
-    radial_slices = np.empty((N, nfs, h,w), dtype=bool) # dimensions (N_masks, nframes, h, w)
-    for n in range(N):
-        radial_slices[n] = intersect_masks(bsct_masks[n], ~bsct_masks[n-1])
-        # views.show_frames(radial_slices[n]) # Validate radial slices
-
-    # Get radial masks
-    radial_masks = np.empty((N, nfs, h,w), dtype=bool) # dimensions (N_masks, nframes, h, w)
-    for n in range(N):
-        radial_masks[n] = intersect_masks(radial_slices[n], otsu_masks)
-        # views.show_frames(radial_masks[n]) # Validate radial masks
-
-    # Get radial regions
+    # Compute static region once
     otsu_region = intersect_masks(otsu_masks, video)
-    radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
-    for n in range(N):
-        radial_regions[n] = intersect_masks(radial_slices[n], otsu_region)
-        # views.show_frames(radial_masks[n]) # Validate radial regions
+
+    # Store output in lists
+    radial_masks_list = []
+    radial_regions_list = []
+
+    # Compute first bisecting mask
+    prev_bsct_mask = ks.get_bisecting_masks(video, circle_pts[:, 0], circle_ctrs)
+
+    for n in range(1, N):
+        # Compute current bisecting mask
+        curr_bsct_mask = ks.get_bisecting_masks(video, circle_pts[:, n], circle_ctrs)
+
+        # Create radial slice by subtracting previous
+        radial_slice = intersect_masks(curr_bsct_mask, ~prev_bsct_mask)
+
+        # Apply masks to compute radial mask and region
+        radial_mask = intersect_masks(radial_slice, otsu_masks)
+        radial_region = intersect_masks(radial_slice, otsu_region)
+
+        # Save results
+        radial_masks_list.append(radial_mask)
+        radial_regions_list.append(radial_region)
+
+        # Advance to next
+        prev_bsct_mask = curr_bsct_mask
+
+    # Final slice to wrap around: from first to last
+    # (to match the original loop over all N)
+    final_bsct_mask = ks.get_bisecting_masks(video, circle_pts[:, 0], circle_ctrs)
+    radial_slice = intersect_masks(final_bsct_mask, ~prev_bsct_mask)
+    radial_mask = intersect_masks(radial_slice, otsu_masks)
+    radial_region = intersect_masks(radial_slice, otsu_region)
+    radial_masks_list.append(radial_mask)
+    radial_regions_list.append(radial_region)
+
+    # Convert lists to arrays
+    radial_masks = np.array(radial_masks_list, dtype=np.uint8)      # shape: (N, nfs, h, w)
+    radial_regions = np.array(radial_regions_list, dtype=np.uint8)  # shape: (N, nfs, h, w)
 
     return radial_regions, radial_masks
