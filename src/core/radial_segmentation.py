@@ -12,6 +12,8 @@ from config import VERBOSE
 from core import data_processing as dp
 from skimage.exposure import match_histograms
 from multiprocessing import Pool, cpu_count
+from tempfile import mkdtemp
+
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
     """
@@ -107,6 +109,9 @@ def estimate_femur_position(mask:np.ndarray) -> Tuple[ np.ndarray, np.ndarray]:
 
     return None, None
 
+def _intersect_mask(mask1, mask2) -> np.ndarray:
+    return mask1 & mask2
+
 def intersect_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
     """
     Performs frame-wise binary AND over all frames in two 3D binary masks.
@@ -119,7 +124,7 @@ def intersect_masks(mask1: np.ndarray, mask2: np.ndarray) -> np.ndarray:
 
     AND_frs = []
     for cf in range(nfs):
-        AND_frs.append(mask1[cf] & mask2[cf])
+        AND_frs.append(_intersect_mask(mask1[cf], mask2[cf]))
     AND_frs = np.array(AND_frs, dtype=np.uint8)
     
     return AND_frs
@@ -461,104 +466,6 @@ def match_histograms_video(video, reference_frame=None):
         
     return matched_video
 
-# def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
-#     """Gets the radial segments for the video. Returns (radial_regions, radial_masks) """
-#     if VERBOSE: print("get_radial_segments() called!")
-
-#     video = np.asarray(video)
-#     circle_ctrs = np.array(circle_ctrs) # Expected shape: (nfs, npts, 2)
-#     circle_pts = np.array(circle_pts) # Expected shape: (nfs, 1, 2)
-
-#     circle_ctrs = np.reshape(circle_ctrs, (-1, 2))
-
-    
-#     # TODO: input validation
-
-#     # Get Otsu masks
-#     video_hist = match_histograms_video(video) # For more consistent segmentation
-#     otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale)
-#     # views.show_frames(otsu_masks) # Validate otsu masks
-
-#     # Get bisection mask for every point on the circle
-#     nfs, h, w = video.shape
-#     _, N, _ = circle_pts.shape
-#     bsct_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
-#     for n in range(N):
-#         bsct_masks[n] = ks.get_bisecting_masks(video, 
-#                                                circle_pts[:,n], # Pass (nfs, 2)
-#                                                circle_ctrs) # Pass (nfs, 2)
-#         # views.show_frames(bsct_masks[n]) # Validate bisecting masks
-
-#     # Get radial slices
-#     radial_slices = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
-#     for n in range(N):
-#         radial_slices[n] = intersect_masks(bsct_masks[n], ~bsct_masks[n-1])
-#         # views.show_frames(radial_slices[n]) # Validate radial slices
-
-#     # Get radial masks
-#     radial_masks = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
-#     for n in range(N):
-#         radial_masks[n] = intersect_masks(radial_slices[n], otsu_masks)
-#         # views.show_frames(radial_masks[n]) # Validate radial masks
-
-#     # Get radial regions
-#     otsu_region = intersect_masks(otsu_masks, video)
-#     radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
-#     for n in range(N):
-#         radial_regions[n] = intersect_masks(radial_slices[n], otsu_region)
-#         # views.show_frames(radial_masks[n]) # Validate radial regions
-
-#     return radial_regions, radial_masks
-
-def get_radial_segments(video: np.ndarray, circle_ctrs: np.ndarray, circle_pts: np.ndarray, thresh_scale: int = 0.8) -> Tuple[np.ndarray, np.ndarray]:
-    """Gets the radial segments for the video. Returns (radial_regions, radial_masks)"""
-    if VERBOSE: print("get_radial_segments() called!")
-
-    video = np.asarray(video)
-    circle_ctrs = np.array(circle_ctrs)  # shape: (nfs, npts, 2)
-    circle_pts = np.array(circle_pts)    # shape: (nfs, 1, 2)
-    circle_ctrs = np.reshape(circle_ctrs, (-1, 2))  # shape: (nfs, 2)
-
-    # Step 1: Otsu masking (applies to entire video)
-    video_hist = match_histograms_video(video)
-    otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale)
-
-    nfs, h, w = video.shape
-    _, N, _ = circle_pts.shape
-    max_proc = min(N, cpu_count())
-
-    # Step 2: Compute bisecting masks (parallel over N)
-    bsct_args = [(video, circle_pts[:, n], circle_ctrs) for n in range(N)]
-    with Pool(processes=max_proc) as pool:
-        bsct_results = pool.starmap(ks.get_bisecting_masks, bsct_args)
-    bsct_masks = np.stack(bsct_results, axis=0)  # shape: (N, nfs, h, w)
-
-    # Step 3: Compute radial slices (parallel over N)
-    def make_radial_slice_args():
-        for n in range(N):
-            prev_idx = (n - 1) % N  # wraparound for n-1
-            yield (bsct_masks[n], ~bsct_masks[prev_idx])
-
-    with Pool(processes=max_proc) as pool:
-        radial_slices_list = pool.starmap(intersect_masks, list(make_radial_slice_args()))
-    radial_slices = np.stack(radial_slices_list, axis=0)  # shape: (N, nfs, h, w)
-
-    # Step 4: Compute radial masks (parallel over N)
-    radial_mask_args = [(radial_slices[n], otsu_masks) for n in range(N)]
-    with Pool(processes=max_proc) as pool:
-        radial_masks_list = pool.starmap(intersect_masks, radial_mask_args)
-    radial_masks = np.stack(radial_masks_list, axis=0)
-
-    # Step 5: Compute radial regions (parallel over N)
-    otsu_region = intersect_masks(otsu_masks, video)
-    radial_region_args = [(radial_slices[n], otsu_region) for n in range(N)]
-    with Pool(processes=max_proc) as pool:
-        radial_regions_list = pool.starmap(intersect_masks, radial_region_args)
-    radial_regions = np.stack(radial_regions_list, axis=0)
-
-    return radial_regions, radial_masks
-
-
 
 def _process_batch(batch: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     start_time = time.time()
@@ -608,3 +515,53 @@ def centre_video_mp(video: np.ndarray, n_workers: int = None) -> Tuple[np.ndarra
     print("Done centering video!")
 
     return video_ctrd, translation_mxs
+
+
+def get_radial_segments(video:np.ndarray, circle_ctrs:np.ndarray, circle_pts:np.ndarray, thresh_scale:int=0.8) -> Tuple[np.ndarray, np.ndarray]:
+    """Gets the radial segments for the video. Returns (radial_regions, radial_masks) """
+    if VERBOSE: print("get_radial_segments() called!")
+
+    video = np.asarray(video)
+    circle_ctrs = np.array(circle_ctrs) # Expected shape: (nfs, npts, 2)
+    circle_pts = np.array(circle_pts) # Expected shape: (nfs, 1, 2)
+
+    circle_ctrs = np.reshape(circle_ctrs, (-1, 2))
+
+    
+    # TODO: input validation
+
+    # Get Otsu masks
+    video_hist = match_histograms_video(video) # For more consistent segmentation
+    otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale)
+    # views.show_frames(otsu_masks) # Validate otsu masks
+
+    # Get bisection mask for every point on the circle
+    nfs, h, w = video.shape
+    _, N, _ = circle_pts.shape
+    bsct_masks = np.empty((N, nfs, h,w), dtype=bool) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        bsct_masks[n] = ks.get_bisecting_masks(video, 
+                                               circle_pts[:,n], # Pass (nfs, 2)
+                                               circle_ctrs) # Pass (nfs, 2)
+        # views.show_frames(bsct_masks[n]) # Validate bisecting masks
+
+    # Get radial slices
+    radial_slices = np.empty((N, nfs, h,w), dtype=bool) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        radial_slices[n] = intersect_masks(bsct_masks[n], ~bsct_masks[n-1])
+        # views.show_frames(radial_slices[n]) # Validate radial slices
+
+    # Get radial masks
+    radial_masks = np.empty((N, nfs, h,w), dtype=bool) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        radial_masks[n] = intersect_masks(radial_slices[n], otsu_masks)
+        # views.show_frames(radial_masks[n]) # Validate radial masks
+
+    # Get radial regions
+    otsu_region = intersect_masks(otsu_masks, video)
+    radial_regions = np.empty((N, nfs, h,w), dtype=np.uint8) # dimensions (N_masks, nframes, h, w)
+    for n in range(N):
+        radial_regions[n] = intersect_masks(radial_slices[n], otsu_region)
+        # views.show_frames(radial_masks[n]) # Validate radial regions
+
+    return radial_regions, radial_masks
