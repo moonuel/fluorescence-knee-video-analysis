@@ -56,6 +56,65 @@ def analyze_video(video, radial_masks, radial_regions,
 
     return total_sums
 
+
+def plot_specific_frames(total_sums, 
+                         flex_frames=None, 
+                         ext_frames=None, 
+                         title="", 
+                         start_frame=1):
+    """
+    Plot total_sums curves with shaded frame regions.
+
+    Parameters:
+    - total_sums: np.ndarray, shape (3, nframes)
+    - flex_frames: tuple (start_frame, end_frame), frames to shade gray
+    - ext_frames: tuple (start_frame, end_frame), frames to shade gray
+    - title: str, plot title
+    - start_frame: int, actual frame number of total_sums[*,0]
+    """
+
+    nframes = total_sums.shape[1]
+    cols = ['r', 'g', 'b']
+    lbls = ["Left", "Middle", "Right"]
+
+    plt.figure(figsize=(9, 17))
+
+    # Generate x-axis values based on start_frame
+    x = np.arange(start_frame, start_frame + nframes)
+    plt.xlim(start_frame, start_frame + nframes - 1)
+
+    # Plot each curve
+    for slc in range(3):
+        plt.plot(x, total_sums[slc], color=cols[slc], label=lbls[slc])
+
+    # Shade flex_frames if provided
+    if flex_frames is not None:
+        plt.axvspan(flex_frames[0], flex_frames[1], color='gray', alpha=0.3)
+        plt.axvline(flex_frames[1], color='k', linestyle='--')
+        mid_flex = (flex_frames[0] + flex_frames[1]) / 2
+        plt.text(mid_flex, plt.ylim()[1] * 0.98, "Flexion",
+                 ha='center', va='top', fontsize=12, color='black')
+        plt.xlim(left=flex_frames[0])
+
+    # Shade ext_frames if provided
+    if ext_frames is not None:
+        plt.axvspan(ext_frames[0], ext_frames[1], color='gray', alpha=0.3)
+        plt.axvline(ext_frames[0], color='k', linestyle='--')
+        mid_ext = (ext_frames[0] + ext_frames[1]) / 2
+        plt.text(mid_ext, plt.ylim()[1] * 0.98, "Extension",
+                 ha='center', va='top', fontsize=12, color='black')
+        plt.xlim(right=ext_frames[1])
+
+    plt.title(title)
+    plt.legend()
+    plt.xlabel("Frame number")
+    plt.ylabel("Total pixel intensity")
+
+    plt.show()
+    return
+
+
+
 def main():
 
     video = io.load_nparray("../data/processed/1339_knee_radial_video_N16.npy")
@@ -68,6 +127,21 @@ def main():
     mdl = (7,11)
     rgt = (1,7)
     total_sums = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt)
+
+
+
+    # Plot specific cycles
+    plot_specific_frames(total_sums, (290, 309), (312, 329), title="1339 - Total intensities - Cycle 1", start_frame=frm_offset)
+    plot_specific_frames(total_sums, (331, 352), (355, 374), title="1339 - Total intensities - Cycle 2", start_frame=frm_offset)
+    plot_specific_frames(total_sums, (375, 394), (398, 421), title="1339 - Total intensities - Cycle 3", start_frame=frm_offset)
+    plot_specific_frames(total_sums, (422, 439), (441, 463), title="1339 - Total intensities - Cycle 4", start_frame=frm_offset)
+    plot_specific_frames(total_sums, (464, 488), (490, 512), title="1339 - Total intensities - Cycle 5", start_frame=frm_offset)
+    plot_specific_frames(total_sums, (513, 530), (532, 553), title="1339 - Total intensities - Cycle 6", start_frame=frm_offset)
+    plot_specific_frames(total_sums, (554, 576), (579, 609), title="1339 - Total intensities - Cycle 7", start_frame=frm_offset)
+
+
+    return
+
 
     # Plot figures
     cols = ['r', 'g', 'b'] # Hard code RGB colors for LMR
@@ -107,15 +181,15 @@ def main():
     m_knee = rdl.combine_masks(rdl.circular_slice(radial_masks, mdl))
     r_knee = rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
     v_out = views.draw_radial_masks(video, [l_knee, m_knee, r_knee], frame_offset=290)
-    io.save_avi("../figures/1339_radial_segmentation.avi", v_out)
-    io.save_mp4("../figures/1339_radial_segmentation.mp4", v_out)
+    # io.save_avi("../figures/1339_radial_segmentation.avi", v_out)
+    # io.save_mp4("../figures/1339_radial_segmentation.mp4", v_out)
 
     # Write data to spreadsheet
     nfs = total_sums.shape[1]
     fns = np.arange(1 + frm_offset, nfs + 1 + frm_offset)
     df = pd.DataFrame(np.column_stack([fns, total_sums.T]), columns=["Frame Number", "Left", "Middle", "Right"])
 
-    df.to_excel("../figures/1339_radial_intensities.xlsx", index=False)
+    # df.to_excel("../figures/1339_radial_intensities.xlsx", index=False)
 
 if __name__ == "__main__":
     main()
