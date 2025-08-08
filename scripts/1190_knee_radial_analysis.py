@@ -170,13 +170,181 @@ def plot_with_xaxis_break(total_sums, skip_start, skip_end):
     plt.show()
 
 
+def plot_with_multiple_xaxis_breaks(total_sums, skip_ranges, full_start=65, full_end=861):
+    """
+    Plot total_sums while skipping multiple frame ranges on the x-axis with breaks.
+    
+    Parameters:
+        total_sums : np.array, shape (nslices, n_frames)
+            The y-data for plotting.
+        skip_ranges : list of tuples [(start1, end1), (start2, end2), ...]
+            List of frame ranges to skip (inclusive).
+        full_start : int
+            Starting frame index of the full data range.
+        full_end : int
+            Ending frame index of the full data range.
+    """
+    cols = ['r', 'g', 'b']
+    lbls = ["Left", "Middle", "Right"]
+    
+    # Sort and merge overlapping/adjacent skip ranges
+    skip_ranges = sorted(skip_ranges, key=lambda x: x[0])
+    merged_skips = []
+    for rng in skip_ranges:
+        if not merged_skips:
+            merged_skips.append(rng)
+        else:
+            last_start, last_end = merged_skips[-1]
+            curr_start, curr_end = rng
+            if curr_start <= last_end + 1:  # overlapping or adjacent
+                merged_skips[-1] = (last_start, max(last_end, curr_end))
+            else:
+                merged_skips.append(rng)
+    skip_ranges = merged_skips
+    
+    # Precompute cumulative skip lengths and boundaries
+    skip_lengths = [end - start + 1 for start, end in skip_ranges]
+    cum_skip_lengths = np.cumsum(skip_lengths)
+    
+    # Function to compute how many frames are skipped before a given frame f
+    def total_skip_before(f):
+        total = 0
+        for i, (start, end) in enumerate(skip_ranges):
+            if f > end:
+                total += skip_lengths[i]
+            elif f >= start:
+                # Inside a skip range → treated as skipped frame
+                return None
+            else:
+                break
+        return total
+    
+    # Map original frame f to compressed x-axis coordinate
+    def frame_to_new_x(f):
+        skip_before = total_skip_before(f)
+        if skip_before is None:
+            return None  # skip this frame
+        return f - full_start - skip_before
+    
+    # Prepare masked x and y for each slice
+    nslices = total_sums.shape[0]
+    x_vals = []
+    y_vals = []
+    
+    for slc in range(nslices):
+        x = []
+        y = []
+        for i in range(full_start, full_end + 1):
+            new_x = frame_to_new_x(i)
+            if new_x is not None:
+                x.append(new_x)
+                y.append(total_sums[slc, i])
+        x_vals.append(np.array(x))
+        y_vals.append(np.array(y))
+    
+    plt.figure(figsize=(17, 9))
+    
+    # Plot data lines
+    for slc in range(nslices):
+        plt.plot(x_vals[slc], y_vals[slc], color=cols[slc], label=lbls[slc])
+    
+    # Shade regions - remap lns indices
+    lns = np.array([
+        66, 89, 92, 109,
+        421, 452, 470, 492,
+        503, 532, 533, 569,
+        737, 767, 770, 793,
+        794, 822, 823, 860
+    ]) - 1  # zero-based
+    
+    def remap_frame(f):
+        return frame_to_new_x(f)
+    
+    for i in range(0, len(lns), 2):
+        start = remap_frame(lns[i])
+        end = remap_frame(lns[i + 1])
+        if start is not None and end is not None:
+            plt.axvspan(start, end, color='gray', alpha=0.2)
+    
+    for i in range(0, len(lns), 4):
+        left = remap_frame(lns[i])
+        right = remap_frame(lns[i + 3])
+        if left is not None and right is not None:
+            mid = (left + right) / 2
+            plt.text(mid, plt.ylim()[1] * 0.98, f"Cycle {i//4 + 1}",
+                     ha='center', va='top', fontsize=12, color='black')
+    
+    plt.title(f"1190 knee total pixel intensities (frames {full_start}-{full_end} with skips)")
+    plt.legend()
+    
+    # Set xticks and labels with correct mapping back to original frame numbers
+    new_xticks = plt.xticks()[0]
+    labels = []
+    for t in new_xticks:
+        # Invert frame_to_new_x mapping
+        # This is more involved with multiple skip ranges:
+        # Find original frame f so that frame_to_new_x(f) == t
+        # We do a search since the mapping is piecewise linear
+        # A binary search over frames is efficient
+        low = full_start
+        high = full_end
+        orig_f = None
+        while low <= high:
+            mid = (low + high) // 2
+            mapped = frame_to_new_x(mid)
+            if mapped is None or mapped < t:
+                low = mid + 1
+            elif mapped > t:
+                high = mid - 1
+            else:
+                orig_f = mid
+                break
+        if orig_f is None:
+            # If exact match not found, approximate by closest smaller frame
+            # Try low-1 first
+            for candidate in range(low - 1, full_start - 1, -1):
+                if frame_to_new_x(candidate) == t:
+                    orig_f = candidate
+                    break
+            else:
+                # fallback
+                orig_f = int(t + full_start)
+        labels.append(str(orig_f + 1))  # back to 1-based indexing
+    
+    plt.xticks(new_xticks, labels)
+    plt.xlabel("Frame number")
+    plt.ylabel("Total pixel intensity")
+    
+    # Draw zigzag breaks for each skip range
+    ax = plt.gca()
+    trans = ax.get_xaxis_transform()
+    kwargs = dict(transform=trans, color='k', clip_on=False, linewidth=1.5)
+    for start, end in skip_ranges:
+        # Draw break *just before* where the gap starts
+        break_pos = frame_to_new_x(start)
+        if break_pos is None:
+            # The break is at the end of previous frames: find next valid position left of start
+            # Scan backwards until we find a valid frame
+            for f in range(start - 1, full_start - 1, -1):
+                pos = frame_to_new_x(f)
+                if pos is not None:
+                    break_pos = pos + 0.5  # put break slightly right of last valid frame
+                    break
+            else:
+                continue  # no valid frame found, skip break
+        plt.plot([break_pos - 0.1, break_pos + 0.1], [-0.02, 0.02], **kwargs)
+        plt.plot([break_pos - 0.1, break_pos + 0.1], [0.02, -0.02], **kwargs)
+    
+    plt.show()
+
+
 def main():
 
     video = io.load_nparray("../data/processed/1190_knee_radial_video_N16.npy")
     radial_masks = io.load_nparray("../data/processed/1190_knee_radial_masks_N16.npy")
-    radial_regions = io.load_nparray("../data/processed/1190_knee_radial_regions_N16.npy")
+    # radial_regions = io.load_nparray("../data/processed/1190_knee_radial_regions_N16.npy")
 
-    print(video.shape, radial_masks.shape, radial_regions.shape)
+    print(video.shape, radial_masks.shape)
 
     radial_masks = (radial_masks > 0).astype(np.uint8)*255
 
@@ -186,16 +354,16 @@ def main():
     rgt = (1,8)
 
     l_knee = rdl.circular_slice(radial_masks, lft)
-    l_knee = np.max(l_knee, axis=0)
-    l_knee = np.minimum(l_knee, video)
+    l_knee = np.max(l_knee, axis=0) # combine the masks
+    l_knee = np.minimum(l_knee, video) # restrict video to mask
 
     m_knee = rdl.circular_slice(radial_masks, mdl)
-    m_knee = np.max(m_knee, axis=0)
-    m_knee = np.minimum(m_knee, video)
+    m_knee = np.max(m_knee, axis=0) # combine the masks
+    m_knee = np.minimum(m_knee, video) # restrict video to mask
 
     r_knee = rdl.circular_slice(radial_masks, rgt)
-    r_knee = np.max(r_knee, axis=0)
-    r_knee = np.minimum(r_knee, video)
+    r_knee = np.max(r_knee, axis=0) # combine the masks
+    r_knee = np.minimum(r_knee, video) # restrict video to mask
 
     views.draw_radial_masks(video, [l_knee, m_knee, r_knee])
 
@@ -204,50 +372,10 @@ def main():
 
 
     # Plot figures
-    plot_with_xaxis_break(total_sums, 120, 400)
+    # plot_with_xaxis_break(total_sums, 120, 400)
+    plot_with_multiple_xaxis_breaks(total_sums, [(120, 400), (590, 720)])
 
     return
-
-    # Get pixel intensity sums
-    lft = (11,1)
-    mdl = (7,11)
-    rgt = (1,7)
-    total_sums = analyze_video(video, radial_regions, lft, mdl, rgt)
-
-    return
-
-    # Plot figures
-    cols = ['r', 'g', 'b'] # Hard code RGB colors for LMR
-    lbls = ["Left", "Middle", "Right"]
-
-    plt.figure(figsize=(17,9))
-    
-    nslices = total_sums.shape[0]
-    for slc in range(nslices):
-        plt.plot(total_sums[slc], color=cols[slc], label=lbls[slc])
-
-    # Shade regions between line pairs
-    lns = np.array([290, 309, 312, 329, 
-                    331, 352, 355, 374, 
-                    375, 394, 398, 421, 
-                    422, 439, 441, 463, 
-                    464, 488, 490, 512, 
-                    513, 530, 532, 553, 
-                    554, 576, 579, 609]) - 1 # -1 for 0-based indexing
-    for i in range(0, len(lns), 2):
-        plt.axvspan(lns[i], lns[i+1], color='gray', alpha=0.2)
-
-    for i in range(0, len(lns), 4):
-        mid = (lns[i] + lns[i+3]) / 2
-        plt.text(mid, plt.ylim()[1] * 0.98, f"Cycle {i//4 + 1}",
-             ha='center', va='top', fontsize=12, color='black')
-
-    plt.title("1339 knee total pixel intensities (frames 290-609)")
-    plt.legend()
-
-    xticks = plt.xticks()[0]
-    plt.xticks(xticks, [str(int(x+1)) for x in xticks]) # Display as 1-based indexing
-    plt.show()
 
     # Show video for validation
     r_knee = rdl.combine_masks(rdl.circular_slice(radial_masks, lft))
