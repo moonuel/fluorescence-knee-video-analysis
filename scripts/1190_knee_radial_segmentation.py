@@ -21,12 +21,12 @@ def get_femur_mask(video:np.ndarray) -> np.ndarray:
     # Rescale intensities for more consistent otsu segmentation
     ref_fm = video[492]
     match_histograms_func = partial(rdl.match_histograms_video, reference_frame=ref_fm) # Establish pure function
-    video_blr_hist = utils.parallel_process_video(video_blr, match_histograms_func, verbose=True, num_workers=4, batch_size=100) # Parallelize 
+    video_blr_hist = utils.parallel_process_video(video_blr, match_histograms_func, verbose=True, num_workers=4, batch_size=150) # Parallelize 
     # views.show_frames(video_blr_hist)
 
     # Get outer mask 
     otsu_func = partial(ks.get_otsu_masks, thresh_scale=0.6)
-    outer_mask = utils.parallel_process_video(video_blr_hist, otsu_func, verbose=True, num_workers=4, batch_size=100)
+    outer_mask = utils.parallel_process_video(video_blr_hist, otsu_func, verbose=True, num_workers=4, batch_size=150)
     
     morph_erode_func = partial(utils.morph_erode, kernel_size=(41,41))
     outer_mask = utils.parallel_process_video(outer_mask, morph_erode_func) #, batch_size=100, num_workers=4) # Parallel version
@@ -77,8 +77,35 @@ def main():
     # Get interior boundary points
     femur_boundary = rdl.sample_femur_interior_pts(mask, 128)
 
-    views.draw_points(video, femur_boundary)
+    # Estimate femur tip 
+    femur_tip_ = rdl.estimate_femur_tip_boundary(femur_boundary, 0.6)
+    # femur_tip_ = rdl.filter_outlier_points_centroid(femur_tip_, 100) # Not necessary?   
+    
+    femur_tip = rdl.get_centroid_pts(femur_tip_)
+    femur_tip = rdl.smooth_points(femur_tip, window_size=15)
 
+    # Estimate femur midpoint
+    femur_midpt_ = rdl.estimate_femur_midpoint_boundary(femur_boundary, 0.1, 0.4)
+    # femur_midpt_ = rdl.filter_outlier_points_centroid(femur_midpt_, 100)
+    # views.draw_points(video, femur_midpt_)
+
+    femur_midpt = rdl.get_centroid_pts(femur_midpt_)
+    femur_midpt = rdl.smooth_points(femur_midpt, window_size=15)
+
+    # views.draw_points(video, femur_tip)
+    # views.draw_points(video, femur_midpt)
+
+    # Radially segment 
+    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_midpt, N=16)
+    radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.8)
+
+    v1 = views.draw_radial_masks(video, radial_masks, False)
+    views.draw_radial_slice_numbers(v1, circle_pts)
+
+    # Save segmentation data
+    # io.save_nparray(video, "../data/processed/1190_knee_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/processed/1190_knee_radial_masks_N16.npy")
+    # io.save_nparray(radial_regions, "../data/processed/1190_knee_radial_regions_N16.npy")
 
 
 
