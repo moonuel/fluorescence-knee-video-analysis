@@ -483,7 +483,7 @@ def draw_current_frame_num(frame:np.ndarray, frame_num:int) -> None:
 def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray, show_video:bool=True, frame_offset:int=0) -> None:
     if VERBOSE: print("draw_radial_masks() called!")
 
-    radial_masks = np.array(radial_masks)
+    radial_masks = np.asarray(radial_masks)
     video = video.copy()
 
     nsegs, nfrs, h, w = radial_masks.shape
@@ -493,7 +493,8 @@ def draw_radial_masks(video:np.ndarray, radial_masks:np.ndarray, show_video:bool
         frame = video[cf]
 
         for seg in range(nsegs):
-            video[cf] = _draw_mask_outline(frame, radial_masks[seg, cf])
+            msk = (radial_masks[seg, cf] > 0).astype(np.uint8) * 255 # Cast to 255 intensity uint8
+            video[cf] = _draw_mask_outline(frame, msk)
 
         draw_current_frame_num(frame, cf+frame_offset)
 

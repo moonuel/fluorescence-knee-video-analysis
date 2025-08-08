@@ -12,7 +12,8 @@ from config import VERBOSE
 from core import data_processing as dp
 from skimage.exposure import match_histograms
 from multiprocessing import Pool, cpu_count
-from tempfile import mkdtemp
+import tempfile
+import gc
 
 
 def get_closest_pt_to_edge(mask:np.ndarray, edge:str) -> Tuple[int,int]:
@@ -529,47 +530,61 @@ def get_radial_segments(video: np.ndarray,
     video = np.asarray(video)
     circle_ctrs = np.asarray(circle_ctrs)  # Expected shape: (nfs, 1, 2)
     circle_pts = np.asarray(circle_pts)    # Expected shape: (nfs, npts, 2)
-
-    # Reshape ctrs to (nfs, 2)
     circle_ctrs = circle_ctrs.reshape(-1, 2)
 
     # --- Get Otsu masks ---
-    video_hist = match_histograms_video(video)  # normalize histograms for consistency
+    video_hist = match_histograms_video(video)  # normalize histograms
     otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale).astype(bool)
 
     # --- Dimensions ---
     nfs, h, w = video.shape
     _, N, _ = circle_pts.shape
 
-    # --- Preallocate final outputs --- 
-    # TODO: implement as memmaps to reduce memory load
-    bsct_masks = np.empty((N, nfs, h, w), dtype=bool)
-    radial_slices = np.empty_like(bsct_masks)
-    radial_masks = np.empty_like(bsct_masks)
-    radial_regions = np.empty((N, nfs, h, w), dtype=np.uint8)
+    # --- Create temp directory for memmaps ---
+    temp_dir = tempfile.mkdtemp(prefix="radial_segments_")
 
-    # --- Precompute bsct_masks ---
-    for n in range(N):
-        bsct_masks[n] = ks.get_bisecting_masks(video,
-                                               circle_pts[:, n],  # (nfs, 2)
-                                               circle_ctrs)       # (nfs, 2)
+    # --- Helper to create memmap ---
+    def create_memmap(name, shape, dtype):
+        return np.memmap(os.path.join(temp_dir, f"{name}.dat"), 
+                         dtype=dtype, mode="w+", shape=shape)
 
-    # --- Compute otsu_region once ---
-    otsu_region = np.logical_and(otsu_masks, video > 0)
+    # --- Allocate large arrays as memmaps ---
+    bsct_masks = create_memmap("bsct_masks", (N, nfs, h, w), dtype=bool)
+    radial_slices = create_memmap("radial_slices", (N, nfs, h, w), dtype=bool)
+    radial_masks = create_memmap("radial_masks", (N, nfs, h, w), dtype=bool)
+    radial_regions = create_memmap("radial_regions", (N, nfs, h, w), dtype=np.uint8)
 
-    # --- Process slices ---
-    for n in range(N):
-        prev_idx = (n - 1) % N  # wrap-around explicitly
+    try:
+        # --- Precompute bsct_masks ---
+        for n in range(N):
+            bsct_masks[n] = ks.get_bisecting_masks(video,
+                                                   circle_pts[:, n],  # (nfs, 2)
+                                                   circle_ctrs)       # (nfs, 2)
 
-        # radial_slices[n] = bsct_masks[n] & ~bsct_masks[prev_idx]
-        np.logical_and(bsct_masks[n],
-                       np.logical_not(bsct_masks[prev_idx]),
-                       out=radial_slices[n])
+        # --- Compute otsu_region once ---
+        otsu_region = np.logical_and(otsu_masks, video > 0)
 
-        # radial_masks[n] = radial_slices[n] & otsu_masks
-        np.logical_and(radial_slices[n], otsu_masks, out=radial_masks[n])
+        # --- Process slices ---
+        for n in range(N):
+            prev_idx = (n - 1) % N  # wrap-around explicitly
 
-        # radial_regions[n] = radial_slices[n] & otsu_region
-        np.logical_and(radial_slices[n], otsu_region, out=radial_regions[n])
+            np.logical_and(bsct_masks[n],
+                           np.logical_not(bsct_masks[prev_idx]),
+                           out=radial_slices[n])
+            np.logical_and(radial_slices[n], otsu_masks, out=radial_masks[n])
+            np.logical_and(radial_slices[n], otsu_region, out=radial_regions[n])
 
-    return radial_regions, radial_masks
+        radial_regions_result = np.array(radial_regions)
+        radial_masks_result = np.array(radial_masks)
+
+    finally:
+
+        del bsct_masks, radial_slices, radial_masks, radial_regions
+        gc.collect()
+
+        # --- Cleanup temp files ---
+        for fname in os.listdir(temp_dir):
+            os.remove(os.path.join(temp_dir, fname))
+        os.rmdir(temp_dir)
+
+    return radial_regions_result, radial_masks_result
