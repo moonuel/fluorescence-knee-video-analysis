@@ -520,67 +520,56 @@ def centre_video_mp(video: np.ndarray, n_workers: int = None) -> Tuple[np.ndarra
 def get_radial_segments(video: np.ndarray,
                         circle_ctrs: np.ndarray,
                         circle_pts: np.ndarray,
-                        thresh_scale: int = 0.8) -> Tuple[np.ndarray, np.ndarray]:
-    """Gets the radial segments for the video. Returns (radial_regions, radial_masks)."""
-    
+                        thresh_scale: float = 0.8) -> Tuple[np.ndarray, np.ndarray]:
+    """Gets the radial segments for the video. Returns (radial_regions, radial_masks)"""
     if VERBOSE:
         print("get_radial_segments() called!")
 
+    # Ensure arrays
     video = np.asarray(video)
-    circle_ctrs = np.array(circle_ctrs)  # shape: (nfs, npts, 2)
-    circle_pts = np.array(circle_pts)    # shape: (nfs, 1, 2)
+    circle_ctrs = np.asarray(circle_ctrs)  # Expected shape: (nfs, 1, 2)
+    circle_pts = np.asarray(circle_pts)    # Expected shape: (nfs, npts, 2)
 
-    circle_ctrs = np.reshape(circle_ctrs, (-1, 2))  # (nfs, 2)
+    # Reshape ctrs to (nfs, 2)
+    circle_ctrs = circle_ctrs.reshape(-1, 2)
 
-    # Histogram matching for better Otsu performance
-    video_hist = match_histograms_video(video)
+    # --- Get Otsu masks ---
+    video_hist = match_histograms_video(video)  # normalize histograms for consistency
+    otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale).astype(bool)
 
-    # Otsu masks for each frame
-    otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=thresh_scale)
-
-    # Precompute useful shapes
+    # --- Dimensions ---
     nfs, h, w = video.shape
     _, N, _ = circle_pts.shape
 
-    # Compute static region once
-    otsu_region = intersect_masks(otsu_masks, video)
+    # --- Preallocate final outputs --- 
+    # TODO: implement as memmaps to reduce memory load
+    bsct_masks = np.empty((N, nfs, h, w), dtype=bool)
+    radial_slices = np.empty_like(bsct_masks)
+    radial_masks = np.empty_like(bsct_masks)
+    radial_regions = np.empty((N, nfs, h, w), dtype=np.uint8)
 
-    # Store output in lists
-    radial_masks_list = []
-    radial_regions_list = []
+    # --- Precompute bsct_masks ---
+    for n in range(N):
+        bsct_masks[n] = ks.get_bisecting_masks(video,
+                                               circle_pts[:, n],  # (nfs, 2)
+                                               circle_ctrs)       # (nfs, 2)
 
-    # Compute first bisecting mask
-    prev_bsct_mask = ks.get_bisecting_masks(video, circle_pts[:, 0], circle_ctrs)
+    # --- Compute otsu_region once ---
+    otsu_region = np.logical_and(otsu_masks, video > 0)
 
-    for n in range(1, N):
-        # Compute current bisecting mask
-        curr_bsct_mask = ks.get_bisecting_masks(video, circle_pts[:, n], circle_ctrs)
+    # --- Process slices ---
+    for n in range(N):
+        prev_idx = (n - 1) % N  # wrap-around explicitly
 
-        # Create radial slice by subtracting previous
-        radial_slice = intersect_masks(curr_bsct_mask, ~prev_bsct_mask)
+        # radial_slices[n] = bsct_masks[n] & ~bsct_masks[prev_idx]
+        np.logical_and(bsct_masks[n],
+                       np.logical_not(bsct_masks[prev_idx]),
+                       out=radial_slices[n])
 
-        # Apply masks to compute radial mask and region
-        radial_mask = intersect_masks(radial_slice, otsu_masks)
-        radial_region = intersect_masks(radial_slice, otsu_region)
+        # radial_masks[n] = radial_slices[n] & otsu_masks
+        np.logical_and(radial_slices[n], otsu_masks, out=radial_masks[n])
 
-        # Save results
-        radial_masks_list.append(radial_mask)
-        radial_regions_list.append(radial_region)
-
-        # Advance to next
-        prev_bsct_mask = curr_bsct_mask
-
-    # Final slice to wrap around: from first to last
-    # (to match the original loop over all N)
-    final_bsct_mask = ks.get_bisecting_masks(video, circle_pts[:, 0], circle_ctrs)
-    radial_slice = intersect_masks(final_bsct_mask, ~prev_bsct_mask)
-    radial_mask = intersect_masks(radial_slice, otsu_masks)
-    radial_region = intersect_masks(radial_slice, otsu_region)
-    radial_masks_list.append(radial_mask)
-    radial_regions_list.append(radial_region)
-
-    # Convert lists to arrays
-    radial_masks = np.array(radial_masks_list, dtype=np.uint8)      # shape: (N, nfs, h, w)
-    radial_regions = np.array(radial_regions_list, dtype=np.uint8)  # shape: (N, nfs, h, w)
+        # radial_regions[n] = radial_slices[n] & otsu_region
+        np.logical_and(radial_slices[n], otsu_region, out=radial_regions[n])
 
     return radial_regions, radial_masks
