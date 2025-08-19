@@ -97,6 +97,64 @@ def sum_region_intensities(radial_regions,
 
     return total_sums
 
+
+def plot_specific_frames(total_sums, 
+                         flex_frames=None, 
+                         ext_frames=None, 
+                         title="", 
+                         start_frame=1):
+    """
+    Plot total_sums curves with shaded frame regions.
+
+    Parameters:
+    - total_sums: np.ndarray, shape (3, nframes)
+    - flex_frames: tuple (start_frame, end_frame), frames to shade gray
+    - ext_frames: tuple (start_frame, end_frame), frames to shade gray
+    - title: str, plot title
+    - start_frame: int, actual frame number of total_sums[*,0]
+    """
+
+    nframes = total_sums.shape[1]
+    cols = ['r', 'g', 'b']
+    lbls = ["Left", "Middle", "Right"]
+
+    plt.figure(figsize=(9, 17))
+
+    # Generate x-axis values based on start_frame
+    x = np.arange(start_frame, start_frame + nframes)
+    plt.xlim(start_frame, start_frame + nframes - 1)
+
+    # Plot each curve
+    for slc in range(3):
+        plt.plot(x, total_sums[slc], color=cols[slc], label=lbls[slc])
+
+    # Shade flex_frames if provided
+    if flex_frames is not None:
+        plt.axvspan(flex_frames[0], flex_frames[1], color='gray', alpha=0.3)
+        plt.axvline(flex_frames[1], color='k', linestyle='--')
+        mid_flex = (flex_frames[0] + flex_frames[1]) / 2
+        plt.text(mid_flex, plt.ylim()[1] * 0.98, "Flexion",
+                 ha='center', va='top', fontsize=12, color='black')
+        plt.xlim(left=flex_frames[0])
+
+    # Shade ext_frames if provided
+    if ext_frames is not None:
+        plt.axvspan(ext_frames[0], ext_frames[1], color='gray', alpha=0.3)
+        plt.axvline(ext_frames[0], color='k', linestyle='--')
+        mid_ext = (ext_frames[0] + ext_frames[1]) / 2
+        plt.text(mid_ext, plt.ylim()[1] * 0.98, "Extension",
+                 ha='center', va='top', fontsize=12, color='black')
+        plt.xlim(right=ext_frames[1])
+
+    plt.title(title)
+    plt.legend()
+    plt.xlabel("Frame number")
+    plt.ylabel("Total pixel intensity")
+
+    plt.show()
+    return
+
+
 def main():
     if VERBOSE: print("main() called!")
 
@@ -111,6 +169,13 @@ def main():
     save_dir = None # Disable save
     total_sums = sum_region_intensities(radial_regions, lft, mdl, rgt)
     
+    plot_specific_frames(total_sums, (71, 116), (117, 155), "308 - Total intensities - Cycle 1")
+    plot_specific_frames(total_sums, (253, 298), (299, 335), "308 - Total intensities - Cycle 2")
+    plot_specific_frames(total_sums, (585, 618), (630, 669), "308 - Total intensities - Cycle 3")
+    plot_specific_frames(total_sums, (156, 199), (210, 250), "308 - Total intensities - Cycle 4")
+
+    return # Temp 
+
     # Plot figures
     cols = ['r', 'g', 'b'] # Hard code RGB colors for LMR
     lbls = ["Left", "Middle", "Right"]
