@@ -1,3 +1,10 @@
+"""
+Reusable utility script for quickly converting large .avi files to .h5 files for chunked data retrieval. 
+
+Parameters are hard-coded and must be set manually.
+
+"""
+
 import cv2
 import numpy as np
 import h5py
@@ -104,8 +111,8 @@ def main(video_path, output_path, chunk_size=100):
 
 if __name__ == "__main__":
 
-    avi_path = "../data/raw/1 con-0 min-fluid movement over exposure_00001189.avi"
-    h5_out_path = "../data/raw/1 con-0 min-fluid movement over exposure_00001189.h5"
+    avi_path = "../data/raw/1 con-10 min slow and quick joint movement tiny movement with quick_00001193.avi"
+    h5_out_path = avi_path[:-4] + ".h5"
 
     main(avi_path, h5_out_path, chunk_size=200)
 
