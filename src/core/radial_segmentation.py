@@ -198,26 +198,22 @@ def circular_slice(arr: np.ndarray, bounds: Tuple[int, int]) -> np.ndarray:
     else:
         return np.concatenate((arr[start:], arr[:stop]), axis=0)
 
-def combine_masks(masks:np.ndarray) -> np.ndarray:
-    """Takes the frame-wise union of all input masks"""
-
-    # TODO: input validation
-
-    masks = masks.copy()
-    nmsks, nfrms, h, w = masks.shape
+def combine_masks(masks: np.ndarray) -> np.ndarray:
+    """
+    Takes the frame-wise pixel-wise maximum of all input masks (binary or grayscale).
     
-    combined_masks = []
-    for cf in range (nfrms):
+    Args:
+        masks: ndarray of shape (n_masks, n_frames, h, w), dtype uint8 or similar.
         
-        frame = np.zeros((h,w), dtype=np.uint8)
-
-        for mn in range(nmsks):
-            frame = frame | masks[mn, cf]
-
-        combined_masks.append(frame)
-
-    combined_masks = np.array(combined_masks)
+    Returns:
+        combined_masks: ndarray of shape (n_frames, h, w), dtype same as input,
+                        pixel-wise maximum over masks.
+    """
+    masks = np.asarray(masks)
+    combined_masks = np.max(masks, axis=0)
     return combined_masks
+
+
 
 def _get_N_points_on_circle(circle_ctr:Tuple[int,int], ref_pt:Tuple[int,int], N:int, radius_scale:int=1) -> np.ndarray:
     """Returns N equally spaced points on a circle as a NumPy array.
