@@ -371,7 +371,6 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     video = video.copy() # don't modify original
     nfs, h,w = video.shape
     btm_l_pos = (10, h - 10)
-    cf=0
 
     if title is None: title = "show_frames()"
 
@@ -380,7 +379,9 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     idxs = [ord(str(n)) for n in [1,2,3,4,5,6,7,8,9,0]]
     fn_slcs = dict(zip(idxs, itvs))
 
+    cf=0
     while True:
+        cf = int(cf)
         frame = video[cf]
 
         if show_num:
