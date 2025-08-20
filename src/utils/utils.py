@@ -275,24 +275,31 @@ def crop_frame_square(frame: np.ndarray, h: int, w: int = None) -> np.ndarray:
     return frame[y1:y2, x1:x2]
 
 
-def crop_video_square(video:np.ndarray, h:int, w:int=None) -> np.ndarray:
-    """Crops the input video into a centered square of dimensions h-by-h pixels (optionally, to h-by-w pixels)
-    Inputs: 
-        video (np.ndarray): video array with dimensions (nframes,h,w)
-    Outputs:
-        video (np.ndarray): same video crame but cropped around the centre
+def crop_video_square(video: np.ndarray, h: int, w: int = None) -> np.ndarray:
     """
-    if VERBOSE: print("crop_video_square() called!")
+    Crops the input video into a centered rectangle of dimensions h-by-w pixels
+    (default is h-by-h square).
     
+    Inputs:
+        video (np.ndarray): video array with dimensions (nframes, H, W)
+        h (int): target height
+        w (int): target width (defaults to h)
+    Outputs:
+        np.ndarray: cropped video with shape (nframes, h, w)
+    """
     if w is None:
-        w = h # default to square frame
+        w = h
 
-    vid_c = []
-    for _, frame in enumerate(video):
-        f_c = crop_frame_square(frame, h, w)
-        vid_c.append(f_c)
-    vid_c = np.array(vid_c)
-    return vid_c
+    # original spatial dimensions
+    H, W = video.shape[1], video.shape[2]
+
+    # calculate crop indices (centered)
+    top = (H - h) // 2
+    left = (W - w) // 2
+
+    # crop in one go (broadcasts across frames)
+    return video[:, top:top+h, left:left+w]
+
 
 def pixels_left_of_line(frame, p1, p2):
     """Classify pixels as left or right of the line (p1, p2) using the cross product."""
