@@ -368,6 +368,10 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     if isinstance(video, List): # TODO: Dynamically accept a list of videos and automatically display them side by side 
         video = np.concatenate(video, axis=2)
 
+    if video.dtype != np.uint8:
+        print("show_frames() runtime warning: input video is not np.uint8! Converting...")
+        video = np.asarray(video, dtype=np.uint8)
+
     video = video.copy() # don't modify original
     nfs, h,w = video.shape
     btm_l_pos = (10, h - 10)
@@ -375,13 +379,12 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     if title is None: title = "show_frames()"
 
     # Skip through frames with number row
-    itvs = np.linspace(0, nfs, 11, dtype=np.uint32)[:-1]
+    itvs = np.linspace(0, nfs, 11, dtype=int)[:-1]
     idxs = [ord(str(n)) for n in [1,2,3,4,5,6,7,8,9,0]]
     fn_slcs = dict(zip(idxs, itvs))
 
     cf=0
     while True:
-        cf = int(cf)
         frame = video[cf]
 
         if show_num:
