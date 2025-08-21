@@ -184,7 +184,7 @@ def get_three_segments(video: np.ndarray, coords: np.ndarray, thresh_scale:int=0
     
     return regions, masks
 
-def get_otsu_masks(video:np.ndarray, thresh_scale:int=0.8) -> np.ndarray:
+def get_otsu_masks(video:np.ndarray, thresh_scale:int=0.8, dtype=np.uint8) -> np.ndarray:
     """Gets the Otsu masks for the video. Optionally rescale the threshold value"""
     if VERBOSE: print("get_otsu_masks() called!")
 
@@ -200,7 +200,7 @@ def get_otsu_masks(video:np.ndarray, thresh_scale:int=0.8) -> np.ndarray:
         # Store otsu mask
         otsu_masks.append(otsu_mask)
         
-    otsu_masks = np.array(otsu_masks)
+    otsu_masks = np.array(otsu_masks, dtype=dtype)
 
     return otsu_masks
 
