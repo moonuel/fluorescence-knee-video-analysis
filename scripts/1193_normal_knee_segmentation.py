@@ -141,14 +141,75 @@ def main():
     views.draw_points(video, femur_midpt) # Validate results
 
 
-    # Radially segment 
-    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_midpt, N=16)
-    radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.8)
+    # Radially segment
+    video_hist = rdl.match_histograms_video(video)  # normalize histograms for more consistent segmentation
+    otsu_masks = ks.get_otsu_masks(video_hist, 0.8, bool)
 
-    v1 = views.draw_radial_masks(video, radial_masks, False)
-    views.draw_radial_slice_numbers(v1, circle_pts)
+    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_midpt, N=16, radius_scale=2)
+    radial_masks = rdl.label_radial_masks(otsu_masks, femur_tip, circle_pts)
+
+    # Save segmentation data
+    io.save_nparray(video, "../data/processed/1193_normal_radial_video_N16.npy")
+    io.save_nparray(radial_masks, "../data/processed/1193_normal_radial_masks_N16.npy")
+
+def debug_draw_radial_masks():
+
+    video = io.load_nparray("../data/processed/1193_knee_frames_ctrd.npy")[:200]
+    video = utils.crop_video_square(video, 500)
+    video = np.rot90(video, k=1, axes=(1,2))
+    video = np.flip(video, axis=2)
+    video[video == 0] = 19 # Fill empty borders for histogram matching stability
+
+    mask = io.load_nparray("../data/processed/1193_normal_mask.npy")[:200]
+
+    print(video.shape, mask.shape)
+
+    # views.show_frames(video)
+    # views.draw_mask_boundary(video, mask) # Validate results
+
+    # Get interior boundary points
+    femur_boundary = rdl.sample_femur_interior_pts(mask, 128)
+    femur_boundary = forward_fill_jagged(femur_boundary) # Forward fill frames with empty point sets for safety
+
+    # views.draw_points(video, femur_boundary) # Validate results
+
+    # Estimate femur tip 
+    femur_tip_ = rdl.estimate_femur_tip_boundary(femur_boundary, 0.6)
+    # femur_tip_ = rdl.filter_outlier_points_centroid(femur_tip_, 100) # Not necessary?   
+    # views.draw_points(video, femur_tip_) # Validate results
+
+    femur_tip = rdl.get_centroid_pts(femur_tip_)
+    femur_tip = rdl.smooth_points(femur_tip, window_size=7)
+    # views.draw_points(video, femur_tip) # Validate results
+
+    # Estimate femur midpoint
+    femur_midpt_ = rdl.estimate_femur_midpoint_boundary(femur_boundary, 0.1, 0.4)
+    # femur_midpt_ = rdl.filter_outlier_points_centroid(femur_midpt_, 100)
+    # views.draw_points(video, femur_midpt_) # Validate results
+
+    femur_midpt = rdl.get_centroid_pts(femur_midpt_)
+    femur_midpt = rdl.smooth_points(femur_midpt, window_size=7)
+    # views.draw_points(video, femur_midpt) # Validate results
+
+    # Radially segment
+    # --- Get Otsu masks ---
+    video_hist = rdl.match_histograms_video(video)  # normalize histograms for more consistent segmentation
+    otsu_masks = ks.get_otsu_masks(video_hist, 0.8).astype(bool)
+
+    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_midpt, N=16, radius_scale=2)
+    radial_masks = rdl.label_radial_masks(otsu_masks, femur_tip, circle_pts)
+
+    views.show_frames(radial_masks)
+
+
+    return
+
 
 if __name__ == "__main__":
     # save_1193_mask() # Doesn't need to be run again unless the mask needs adjustments 
 
-    main()
+    # main()
+
+    debug_draw_radial_masks()
+
+    
