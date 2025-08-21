@@ -76,6 +76,31 @@ def save_1193_mask():
 
     return
 
+
+def forward_fill_jagged(arr):
+    """
+    Forward fills empty frames in a jagged NumPy array (dtype=object).
+    
+    Parameters:
+        arr (np.ndarray): jagged array of shape (nframes, npts*, 2)
+        
+    Returns:
+        np.ndarray: forward-filled jagged array (same shape/dtype)
+    """
+    filled = arr.copy()
+    last_valid = None
+    
+    for i, frame in enumerate(filled):
+        frame = np.asarray(frame)
+        if frame.size == 0:
+            if last_valid is not None:
+                filled[i] = last_valid
+        else:
+            last_valid = frame
+    
+    return filled
+
+
 def main():
 
     video = io.load_nparray("../data/processed/1193_knee_frames_ctrd.npy")#[600:1000]
@@ -89,10 +114,12 @@ def main():
     print(video.shape, mask.shape)
 
     # views.show_frames(video)
-    views.draw_mask_boundary(video, mask)
+    views.draw_mask_boundary(video, mask) # Validate results
 
     # Get interior boundary points
     femur_boundary = rdl.sample_femur_interior_pts(mask, 128)
+    femur_boundary = forward_fill_jagged(femur_boundary) # Forward fill frames with empty point sets for safety
+
     views.draw_points(video, femur_boundary) # Validate results
 
     # Estimate femur tip 
@@ -101,17 +128,17 @@ def main():
     views.draw_points(video, femur_tip_) # Validate results
 
     femur_tip = rdl.get_centroid_pts(femur_tip_)
-    femur_tip = rdl.smooth_points(femur_tip, window_size=15)
+    femur_tip = rdl.smooth_points(femur_tip, window_size=7)
     views.draw_points(video, femur_tip) # Validate results
 
     # Estimate femur midpoint
     femur_midpt_ = rdl.estimate_femur_midpoint_boundary(femur_boundary, 0.1, 0.4)
     # femur_midpt_ = rdl.filter_outlier_points_centroid(femur_midpt_, 100)
-    views.draw_points(video, femur_midpt_)
+    views.draw_points(video, femur_midpt_) # Validate results
 
     femur_midpt = rdl.get_centroid_pts(femur_midpt_)
-    femur_midpt = rdl.smooth_points(femur_midpt, window_size=15)
-    views.draw_points(video, femur_midpt)
+    femur_midpt = rdl.smooth_points(femur_midpt, window_size=7)
+    views.draw_points(video, femur_midpt) # Validate results
 
 
     # Radially segment 
