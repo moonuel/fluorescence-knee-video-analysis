@@ -584,3 +584,55 @@ def get_radial_segments(video: np.ndarray,
         os.rmdir(temp_dir)
 
     return radial_regions_result, radial_masks_result
+
+
+def label_radial_masks(masks:np.ndarray, centers:np.ndarray, circumference_points_per_frame:np.ndarray) -> np.ndarray:
+    """
+    Labels pixels from 1-N inside a mask based on N circular sectors.
+
+    Args:
+        masks: boolean array of shape (nfs, h, w)
+        centers: array of circle centers with shape (nfs, 1, 2)
+        circumference_points_per_frame: array of N points on circumference of circle, with shape (nfs, N, 2)
+
+    Returns:
+        labels_video: np.ndarray of shape (nfs, H, W), with sector labels 1..N for masked pixels,
+                      0 for pixels outside mask
+    """
+    if VERBOSE: print("label_radial_masks() called!")
+    
+    # video = np.asarray(video)
+    centers = np.asarray(centers) # Expected shape: (nfs, 1, 2)
+    centers = np.reshape(centers, (-1, 2))
+    circumference_points_per_frame = np.asarray(circumference_points_per_frame) # Expected shape: (nfs, N, 2)
+
+    nfs, h, w = masks.shape
+    _, N, _ = circumference_points_per_frame.shape
+    labels_video = np.zeros((nfs, h, w), dtype=np.uint16)
+
+    for t in range(nfs):
+        cy, cx = centers[t] # Shape: (2)
+        circumference_points = circumference_points_per_frame[t] # Shape: (N, 2)
+        mask = masks[t]
+
+        # Compute sector boundary angles
+        boundary_angles = np.array([
+            np.arctan2(y - cy, x - cx) for (y, x) in circumference_points
+        ])
+        sort_idx = np.argsort(boundary_angles)
+        boundary_angles = boundary_angles[sort_idx]
+
+        # Get coordinates of masked pixels
+        yy_masked, xx_masked = np.where(mask)
+
+        # Compute angles only for masked pixels
+        pixel_angles = np.arctan2(yy_masked - cy, xx_masked - cx)
+
+        # Assign sectors (labels 1..N)
+        sector_labels = np.searchsorted(boundary_angles, pixel_angles, side='right')
+        sector_labels = (sector_labels % len(boundary_angles)) + 1
+
+        # Put the labels back into the full frame
+        labels_video[t, yy_masked, xx_masked] = sector_labels
+
+    return labels_video
