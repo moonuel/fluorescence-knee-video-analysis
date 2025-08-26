@@ -586,53 +586,51 @@ def get_radial_segments(video: np.ndarray,
     return radial_regions_result, radial_masks_result
 
 
-def label_radial_masks(masks:np.ndarray, centers:np.ndarray, circumference_points_per_frame:np.ndarray) -> np.ndarray:
+def label_radial_masks(
+    masks: np.ndarray, 
+    centers: np.ndarray, 
+    references: np.ndarray, 
+    N: int
+) -> np.ndarray:
     """
-    Labels pixels from 1-N inside a mask based on N circular sectors.
+    Labels pixels from 1-N inside a mask based on N circular sectors,
+    starting from the direction defined by a reference point. Uses (x, y) coordinate convention.
 
     Args:
-        masks: boolean array of shape (nfs, h, w)
-        centers: array of circle centers with shape (nfs, 1, 2)
-        circumference_points_per_frame: array of N points on circumference of circle, with shape (nfs, N, 2)
+        masks: binary mask array of shape (nfs, h, w)
+        centers: array of circle centers with shape (nfs, 1, 2) (x, y)
+        references: array of reference points with shape (nfs, 1, 2) (x, y)
+        N: number of sectors
 
     Returns:
-        labels_video: np.ndarray of shape (nfs, H, W), with sector labels 1..N for masked pixels,
+        labels_video: np.ndarray of shape (nfs, h, w), with sector labels 1..N for masked pixels,
                       0 for pixels outside mask
     """
-    if VERBOSE: print("label_radial_masks() called!")
-    
-    # video = np.asarray(video)
-    centers = np.asarray(centers) # Expected shape: (nfs, 1, 2)
-    centers = np.reshape(centers, (-1, 2))
-    circumference_points_per_frame = np.asarray(circumference_points_per_frame) # Expected shape: (nfs, N, 2)
-
     nfs, h, w = masks.shape
-    _, N, _ = circumference_points_per_frame.shape
-    labels_video = np.zeros((nfs, h, w), dtype=np.uint16)
+    labels_video = np.zeros_like(masks, dtype=int)
+    sector_size = 2 * np.pi / N
 
-    for t in range(nfs):
-        cy, cx = centers[t] # Shape: (2)
-        circumference_points = circumference_points_per_frame[t] # Shape: (N, 2)
-        mask = masks[t]
+    for f in range(nfs):
+        mask = masks[f]
+        cx, cy = centers[f, 0]
+        rx, ry = references[f, 0]
 
-        # Compute sector boundary angles
-        boundary_angles = np.array([
-            np.arctan2(y - cy, x - cx) for (y, x) in circumference_points
-        ])
-        sort_idx = np.argsort(boundary_angles)
-        boundary_angles = boundary_angles[sort_idx]
+        # Compute reference angle
+        ref_angle = np.arctan2(ry - cy, rx - cx)
 
-        # Get coordinates of masked pixels
-        yy_masked, xx_masked = np.where(mask)
+        # Get masked pixel coordinates
+        ys, xs = np.nonzero(mask)
 
-        # Compute angles only for masked pixels
-        pixel_angles = np.arctan2(yy_masked - cy, xx_masked - cx)
+        # Compute angles relative to center
+        pixel_angles = np.arctan2(ys - cy, xs - cx)
 
-        # Assign sectors (labels 1..N)
-        sector_labels = np.searchsorted(boundary_angles, pixel_angles, side='right')
-        sector_labels = (sector_labels % len(boundary_angles)) + 1
+        # Compute delta angles relative to reference and wrap to [0, 2pi)
+        delta_angles = (pixel_angles - ref_angle + 2 * np.pi) % (2 * np.pi)
 
-        # Put the labels back into the full frame
-        labels_video[t, yy_masked, xx_masked] = sector_labels
+        # Assign sector labels
+        labels = (delta_angles // sector_size).astype(int) + 1  # 1..N
+
+        # Place labels into output array
+        labels_video[f, ys, xs] = labels
 
     return labels_video
