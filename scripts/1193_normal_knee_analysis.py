@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import utils.io as io
 import numpy as np
 import pandas as pd
+import cv2
 
 
 from config import VERBOSE
@@ -402,9 +403,12 @@ def sum_intensity_per_partition(video: np.ndarray, radial_masks: np.ndarray, N: 
     Returns:
         sums_per_frame: np.ndarray of shape (N, nfs)
                         sums_per_frame[i, cf] is the sum of pixels in partition i+1 of frame cf
+        counts_per_frame: np.ndarray of shape (N, nfs)
+                          counts_per_frame[i, cf] is the count of pixels in partition i+1 of frame cf of the video
     """
     nfs, h, w = video.shape
     sums_per_frame = np.zeros((N, nfs), dtype=np.uint32)
+    counts_per_frame = np.zeros((N, nfs), dtype=np.uint32)
 
     for n in range(1, N+1):
         # Create a boolean mask for the current partition (1..N)
@@ -412,23 +416,66 @@ def sum_intensity_per_partition(video: np.ndarray, radial_masks: np.ndarray, N: 
 
         # Multiply by video and sum over h and w axes
         sums_per_frame[n-1, :] = np.sum(video * mask_one_hot, axis=(1, 2))
+        counts_per_frame[n-1, :] = np.sum(mask_one_hot, axis=(1, 2))
 
-    return sums_per_frame
+    return sums_per_frame, counts_per_frame
 
+
+def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: int = 255, thickness: int = 1) -> np.ndarray:
+    """
+    Draws mask boundaries on grayscale video frames.
+
+    Args:
+        video (np.ndarray): Grayscale video of shape (nframes, h, w), dtype uint8.
+        mask_labels (np.ndarray): Labeled mask array of shape (nframes, h, w), 
+                                  where 0 = background, 1..N = partitions.
+        intensity (int): Pixel intensity for boundary (0–255).
+        thickness (int): Thickness of boundary lines.
+
+    Returns:
+        np.ndarray: Video with mask boundaries drawn, shape (nframes, h, w), dtype uint8.
+    """
+    nframes, h, w = video.shape
+    output = video.copy()
+
+    for i in range(nframes):
+        frame = video[i]
+        labels = mask_labels[i]
+
+        # For each label > 0, find contours
+        for lbl in np.unique(labels):
+            if lbl == 0:
+                continue
+            mask = (labels == lbl).astype(np.uint8)
+
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(output[i], contours, -1, color=intensity, thickness=thickness)
+
+    return output
 
 
 def main():
 
-    video = io.load_nparray("../data/processed/1193_normal_radial_video_N16.npy")
-    radial_masks = io.load_nparray("../data/processed/1193_normal_radial_masks_N16.npy")
+    video = io.load_nparray("../data/processed/1193_normal_radial_video_N16.npy")#[1700:1750]
+    radial_masks = io.load_nparray("../data/processed/1193_normal_radial_masks_N16.npy")#[1700:1750]
+
+    video_w_bnds = draw_mask_boundaries(video, radial_masks)
+    views.show_frames(video_w_bnds)
+
+    print(video.shape, radial_masks.shape)
+    print(video.dtype, radial_masks.dtype)
 
     nfs, h, w = video.shape
 
     N = 16
     
-    total_sums = sum_intensity_per_partition(video, radial_masks, N=16)
+    # total_sums, total_counts = sum_intensity_per_partition(video, radial_masks, N=16)
 
-
+    # views.show_frames(np.isin(radial_masks, [2,3,4,5,6,7,8,9]) * video)
+    views.show_frames(
+        [np.isin(radial_masks, [8,9,10]) * video, 
+         video])
+    # views.show_frames(np.isin(radial_masks, [2,3,4,5,6,7,8,9]) * video)
     # views.show_frames(video)
     # views.show_frames(radial_masks)
 
