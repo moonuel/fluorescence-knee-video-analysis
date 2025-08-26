@@ -333,12 +333,17 @@ def morph_open(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
     "Implements a morphological opening operation over a grayscale video with dimensions (nframes,hgt,wth)"
     if VERBOSE: print("morph_open() called!")
 
+    video = np.asarray(video)
+    dtype = video.dtype
+
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size)
+
     video_o = []
     for _, frame in enumerate(video):
+        if dtype != np.uint8: frame = frame.astype(np.uint8)
         frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, kernel)
-        video_o.append(frame)
-    video_o = np.array(video_o)
+        video_o.append(frame.astype(dtype))
+    video_o = np.array(video_o, dtype=dtype)
 
     return video_o
 
