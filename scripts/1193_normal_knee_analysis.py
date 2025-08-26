@@ -487,92 +487,34 @@ def main():
     video_w_bnds = draw_mask_boundaries(video, radial_masks)
     views.show_frames(video_w_bnds)
 
-    
+    total_sums, total_counts = sum_intensity_per_partition(video, radial_masks, 3)
+    print(total_sums)
+    print(total_sums.shape)
 
-    return
+    plt.figure(figsize=(17,9))
+    plt.plot(total_sums[0], color="r")
+    plt.plot(total_sums[1], color="g")
+    plt.plot(total_sums[2], color="b")
+    plt.show()
 
-    print(video.shape, radial_masks.shape)
+    plot_specific_frames(total_sums, (1792, 1801), (1802, 1812), "1193 - Total pixel intensities - Slow Cycle 1")
+    plot_specific_frames(total_sums, (1813, 1822), (1823, 1833), "1193 - Total pixel intensities - Slow Cycle 2")
+    plot_specific_frames(total_sums, (1834, 1843), (1844, 1852), "1193 - Total pixel intensities - Slow Cycle 3")
+    plot_specific_frames(total_sums, (1853, 1863), (1864, 1872), "1193 - Total pixel intensities - Slow Cycle 4")
+    plot_specific_frames(total_sums, (1873, 1881), (1881, 1889), "1193 - Total pixel intensities - Slow Cycle 5")
 
-    radial_masks = (radial_masks > 0).astype(np.uint8)*255
-
-
-    lft = (11,1)
-    mdl = (8,11)
-    rgt = (1,8)
-
-    l_knee = rdl.circular_slice(radial_masks, lft)
-    l_knee = np.max(l_knee, axis=0) # combine the masks
-    l_knee = np.minimum(l_knee, video) # restrict video to mask
-
-    m_knee = rdl.circular_slice(radial_masks, mdl)
-    m_knee = np.max(m_knee, axis=0) # combine the masks
-    m_knee = np.minimum(m_knee, video) # restrict video to mask
-
-    r_knee = rdl.circular_slice(radial_masks, rgt)
-    r_knee = np.max(r_knee, axis=0) # combine the masks
-    r_knee = np.minimum(r_knee, video) # restrict video to mask
-
-    v_out = views.draw_radial_masks(video, [l_knee, m_knee, r_knee])
-
-    total_sums = dp.measure_radial_intensities([l_knee, m_knee, r_knee])
-    print(total_sums.shape) # Shape (3, 988)
-
-
-    # Plot figures
-    # plot_with_xaxis_break(total_sums, 120, 400)
-    plot_with_multiple_xaxis_breaks(total_sums, [(120, 400), (590, 720)])
-
-    plot_specific_frames(total_sums, 
-                         flex_frames=(66, 89),
-                         ext_frames=(92, 109),
-                         title = "1190 - Total pixel intensities - Cycle 1")
-    
-    plot_specific_frames(total_sums, 
-                         flex_frames=(421, 452),
-                         ext_frames=(470, 492),
-                         title = "1190 - Total pixel intensities - Cycle 2")
-    
-    plot_specific_frames(total_sums, 
-                         flex_frames=(503, 532),
-                         ext_frames=(533, 569),
-                         title = "1190 - Total pixel intensities - Cycle 3")
-    
-    plot_specific_frames(total_sums, 
-                         flex_frames=(737, 767),
-                         ext_frames=(770, 793),
-                         title = "1190 - Total pixel intensities - Cycle 4")
-
-    plot_specific_frames(total_sums, 
-                         flex_frames=(794, 822),
-                         ext_frames=(823, 860),
-                         title = "1190 - Total pixel intensities - Cycle 5")
-
-    # io.save_avi("../figures/1190 knee radial analysis/1190_radial_segmentation.avi", v_out, fps=60)
-    # io.save_mp4("../figures/1190 knee radial analysis/1190_radial_segmentation.mp4", v_out, fps=60)
+    io.save_avi("../figures/1193 knee radial analysis/1193_radial_segmentation.avi", video_w_bnds, fps=60)
+    io.save_mp4("../figures/1193 knee radial analysis/1193_radial_segmentation.mp4", video_w_bnds, fps=60)
 
     # Write data to spreadsheet
     nfs = total_sums.shape[1]
     fns = np.arange(1, nfs + 1)
     df = pd.DataFrame(np.column_stack([fns, total_sums.T]), columns=["Frame Number", "Left", "Middle", "Right"])
 
-    # df.to_excel("../figures/1190 knee radial analysis/1190_radial_intensities.xlsx", index=False)
+    df.to_excel("../figures/1193 knee radial analysis/1193_radial_intensities.xlsx", index=False)
 
     return
 
-    # Show video for validation
-    r_knee = rdl.combine_masks(rdl.circular_slice(radial_masks, lft))
-    r_knee = rdl.combine_masks(rdl.circular_slice(radial_masks, mdl))
-    r_knee = rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
-    v_out = views.draw_radial_masks(video, [r_knee, r_knee, r_knee], frame_offset=290)
-    io.save_avi("../figures/1339_radial_segmentation.avi", v_out)
-    io.save_mp4("../figures/1339_radial_segmentation.mp4", v_out)
-
-    # Write data to spreadsheet
-    nfs = total_sums.shape[1]
-    fns = np.arange(1, nfs + 1)
-    df = pd.DataFrame(np.column_stack([fns, total_sums.T]), columns=["Frame Number", "Left", "Middle", "Right"])
-
-    df.to_excel("../figures/1339_radial_intensities.xlsx", index=False)
 
 if __name__ == "__main__":
     main()
