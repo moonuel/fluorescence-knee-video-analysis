@@ -349,6 +349,7 @@ def plot_specific_frames(total_sums, flex_frames=None, ext_frames=None, title=""
     - ext_frames: tuple (start_frame, end_frame), frames to shade gray
     - title: str, plot title
     """
+    import matplotlib.ticker as ticker
 
     nframes = total_sums.shape[1]
     cols = ['r', 'g', 'b']
@@ -385,6 +386,8 @@ def plot_specific_frames(total_sums, flex_frames=None, ext_frames=None, title=""
     plt.legend()
     plt.xlabel("Frame number")
     plt.ylabel("Total pixel intensity")
+
+    plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
     plt.show()
     
