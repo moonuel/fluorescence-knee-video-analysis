@@ -461,8 +461,8 @@ def main():
     video = io.load_nparray("../data/processed/1193_normal_radial_video_N16.npy")#[1700:1750]
     radial_masks = io.load_nparray("../data/processed/1193_normal_radial_masks_N16.npy")#[1700:1750]
 
-    video_w_bnds = draw_mask_boundaries(video, radial_masks)
-    views.show_frames(video_w_bnds)
+    # video_w_bnds = draw_mask_boundaries(video, radial_masks)
+    # views.show_frames(video_w_bnds)
 
     print(video.shape, radial_masks.shape)
     print(video.dtype, radial_masks.dtype)
@@ -473,13 +473,18 @@ def main():
     
     # total_sums, total_counts = sum_intensity_per_partition(video, radial_masks, N=16)
 
-    # views.show_frames(np.isin(radial_masks, [2,3,4,5,6,7,8,9]) * video)
-    views.show_frames(
-        [np.isin(radial_masks, [8,9,10]) * video, 
-         video])
-    # views.show_frames(np.isin(radial_masks, [2,3,4,5,6,7,8,9]) * video)
-    # views.show_frames(video)
-    # views.show_frames(radial_masks)
+    # views.show_frames([np.isin(radial_masks, [1,2,3,4,5,6]) * video, video], "Left knee")
+    # views.show_frames([np.isin(radial_masks, [7,8,9]) * video, video], "Middle knee")
+    # views.show_frames([np.isin(radial_masks, [10,11,12,13,14,15,16]) * video, video], "Right knee")
+
+    l_knee = radial_masks[np.isin(radial_masks, [1,2,3,4,5,6])] = 1
+    m_knee = radial_masks[np.isin(radial_masks, [7,8,9])] = 2
+    r_knee = radial_masks[np.isin(radial_masks, [10,11,12,13,14,15,16])] = 3
+
+    video_w_bnds = draw_mask_boundaries(video, radial_masks)
+    views.show_frames(video_w_bnds)
+
+    
 
     return
 
