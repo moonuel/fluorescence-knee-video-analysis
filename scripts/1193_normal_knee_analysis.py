@@ -421,35 +421,37 @@ def sum_intensity_per_partition(video: np.ndarray, radial_masks: np.ndarray, N: 
     return sums_per_frame, counts_per_frame
 
 
-def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: int = 255, thickness: int = 1) -> np.ndarray:
+def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: int = 255) -> np.ndarray:
     """
-    Draws mask boundaries on grayscale video frames.
+    Draws boundaries between partitions in mask_labels on grayscale video frames.
+    Uses a fast vectorized method instead of per-label contours.
 
     Args:
         video (np.ndarray): Grayscale video of shape (nframes, h, w), dtype uint8.
-        mask_labels (np.ndarray): Labeled mask array of shape (nframes, h, w), 
+        mask_labels (np.ndarray): Labeled mask array of shape (nframes, h, w),
                                   where 0 = background, 1..N = partitions.
-        intensity (int): Pixel intensity for boundary (0–255).
-        thickness (int): Thickness of boundary lines.
+        intensity (int): Pixel intensity for boundaries (0-255).
 
     Returns:
-        np.ndarray: Video with mask boundaries drawn, shape (nframes, h, w), dtype uint8.
+        np.ndarray: Video with boundaries drawn, shape (nframes, h, w), dtype uint8.
     """
     nframes, h, w = video.shape
     output = video.copy()
 
     for i in range(nframes):
-        frame = video[i]
         labels = mask_labels[i]
 
-        # For each label > 0, find contours
-        for lbl in np.unique(labels):
-            if lbl == 0:
-                continue
-            mask = (labels == lbl).astype(np.uint8)
+        # Compute adjacency differences
+        horiz_diff = labels[:, 1:] != labels[:, :-1]
+        vert_diff = labels[1:, :] != labels[:-1, :]
 
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(output[i], contours, -1, color=intensity, thickness=thickness)
+        # Create an edge map
+        edges = np.zeros_like(labels, dtype=bool)
+        edges[:, 1:] |= horiz_diff
+        edges[1:, :] |= vert_diff
+
+        # Draw edges on the frame
+        output[i][edges] = intensity
 
     return output
 
