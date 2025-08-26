@@ -372,6 +372,9 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
         print("show_frames() runtime warning: input video is not np.uint8! Converting...")
         video = np.asarray(video, dtype=np.uint8)
 
+    if video.ndim == 2: # If input is a frame
+        video = np.reshape(video, (1, *video.shape))
+
     video = video.copy() # don't modify original
     nfs, h,w = video.shape
     btm_l_pos = (10, h - 10)
@@ -538,14 +541,15 @@ def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=True) -> np.
 
 def _draw_points(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
     """Helper func to draw_points(). Draws a set of points in pts directly on the frame."""
-    pts = np.array(pts)
+    frame = np.asarray(frame)
+    pts = np.asarray(pts)
     if pts.ndim != 2 or pts.shape[1] != 2: 
         raise ValueError(f"_draw_points(): 'pts' must be 2D array with shape (N, 2). Shape {pts.shape} was given")
     
     for pt in pts:
         cv2.circle(frame, tuple(pt), 1, (255,255,255))
     
-def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=True) -> np.ndarray:
+def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.ndarray:
     """For every frame, draws a set of points [[x1,y1], [x2,y2], ..., [xn,yn]] and displays it"""
     if VERBOSE: print("draw_points() called!")
 
@@ -570,6 +574,12 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=True) -> np.nd
 def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int]], show_video:bool=True) -> np.ndarray:
     """Draws a line on a video between two points"""
     if VERBOSE: print("draw_line() called!")
+
+    pt1 = np.asarray(pt1)
+    pt2 = np.asarray(pt2)
+
+    pt1 = np.reshape(pt1, (-1, 2))
+    pt2 = np.reshape(pt2, (-1, 2))
 
     video = video.copy()
     for cf, frame in enumerate(video):
