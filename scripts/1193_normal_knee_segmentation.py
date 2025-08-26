@@ -178,6 +178,7 @@ def main():
     # Radially segment
     video_hist = rdl.match_histograms_video(video)  # normalize histograms for more consistent segmentation
     otsu_masks = ks.get_otsu_masks(video_hist, 0.8, bool)
+    otsu_masks = utils.morph_open(otsu_masks, (31,31))
 
     radial_masks = rdl.label_radial_masks(otsu_masks, femur_tip, femur_midpt, N=16)
 
