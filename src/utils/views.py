@@ -452,7 +452,7 @@ def _draw_mask_outline(frame:np.ndarray, mask_segment:np.ndarray) -> np.ndarray:
 
     return frame
 
-def draw_mask_boundary(video:np.ndarray, mask:np.ndarray, show_video:bool=True) -> np.ndarray:
+def draw_mask_boundary(video:np.ndarray, mask:np.ndarray, show_video:bool=False) -> np.ndarray:
     """Draws the boundary of a binary mask on each frame of the video."""
     if VERBOSE: print("draw_mask_boundary() called!")
 
@@ -464,6 +464,8 @@ def draw_mask_boundary(video:np.ndarray, mask:np.ndarray, show_video:bool=True) 
     for cf in range(nfs):
         frame = video[cf]
         mask_f = mask[cf]
+
+        if mask_f.dtype != np.uint8: mask_f = (mask_f*255).astype(np.uint8)
 
         video[cf] = _draw_mask_outline(frame, mask_f)
 
