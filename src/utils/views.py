@@ -559,11 +559,12 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.n
         raise ValueError("draw_points(): video and pts arrays must have same number of rows")
 
     video = video.copy() # for safety
-    pts = pts.copy()
+    pts = np.asarray(pts)
 
     for cf in range(video.shape[0]):
         cpts = np.asarray(pts[cf])
         frame = np.asarray(video[cf])
+        if frame.dtype == bool: frame = (frame * 255).astype(np.uint8)
         # print(cpts) # debug
         # print(cpts.size) # debug
         if cpts.size == 0: continue
