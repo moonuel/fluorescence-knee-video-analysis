@@ -5,6 +5,11 @@ import numpy as np
 from typing import Tuple, List
 import math
 from config import VERBOSE
+import numpy as np
+import multiprocessing as mp
+import math
+import logging
+from typing import Callable, Optional
 
 def print_last_modified(filepath):
     """
@@ -395,13 +400,13 @@ def rotate_video(video:np.ndarray, angle:int, center:Tuple[int,int]=None) -> np.
         center = (w//2, h//2) # Default to frame center
 
     rot_mx = cv2.getRotationMatrix2D(center, -angle, 1)
-    video_r = []
-    for _, frame in enumerate(video):
-        frame = cv2.warpAffine(frame, rot_mx, (w,h))
-        video_r.append(frame)
-    video_r = np.array(video_r)
+    video_r = np.array([
+        cv2.warpAffine(frame, rot_mx, (w, h))
+        for frame in video
+    ])
 
     return video_r
+    
 
 def log_transform_video(video:np.ndarray, gain:float=1.0) -> np.ndarray:
     """Log transforms every frame in a video"""
@@ -584,12 +589,6 @@ def parallel_process_video(
 
     return concatenate_batches(results)
 
-
-import numpy as np
-import multiprocessing as mp
-import math
-import logging
-from typing import Callable, Optional
 
 def choose_batch_size_video(n_frames: int) -> int:
     """Heuristic for selecting a default batch size."""
