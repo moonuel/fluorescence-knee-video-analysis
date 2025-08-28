@@ -111,7 +111,7 @@ def main(video_path, output_path, chunk_size=100):
 
 if __name__ == "__main__":
 
-    avi_path = "../data/raw/1 con-10 min slow and quick joint movement tiny movement with quick_00001193.avi"
+    avi_path = "../data/raw/right 10 min-regional movement_00001342.avi"
     h5_out_path = avi_path[:-4] + ".h5"
 
     main(avi_path, h5_out_path, chunk_size=200)

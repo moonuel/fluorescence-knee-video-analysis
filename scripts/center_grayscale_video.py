@@ -33,8 +33,8 @@ def main(file_path:str, frames:Tuple[int, int], save_path:str):
         # "1190_knee_frames_ctrd.npy")
 
 if __name__ == "__main__":
-    h5_path = "../data/raw/1 con-10 min slow and quick joint movement tiny movement with quick_00001193.h5"
-    npy_path = "../data/processed/1193_knee_frames_ctrd.npy"
+    h5_path = "../data/raw/right 10 min-regional movement_00001342.h5"
+    npy_path = "../data/processed/1342_knee_frames_ctrd.npy"
 
     frames = None # None defaults to all
 
