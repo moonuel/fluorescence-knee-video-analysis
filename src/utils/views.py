@@ -58,6 +58,7 @@ def plot_coords(video:np.ndarray, coords:pd.DataFrame, title:str=None, show_vide
 
     return video
 
+
 def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=None, 
                                     show_figs:bool=True, save_figs:bool=False, vert_layout:bool=False, figsize:tuple=(20,7)) -> Tuple:
     """
@@ -136,6 +137,7 @@ def plot_radial_segment_intensities(intensities:np.ndarray, f0:int=None, fN:int=
         plt.close()
 
     return fig, axes
+
 
 def plot_radial_segment_intensities_2(intensities: np.ndarray, f0: int = None, fN: int = None, 
                                       show_figs: bool = True, save_dir: str = None, 
@@ -309,6 +311,7 @@ def plot_three_intensities(intensities: Dict, metadata: Dict, show_figs:bool=Tru
 
     return
 
+
 def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=True, save_figs=False, figsize:Tuple[int,int]=(17,10)) -> None:
     """Plots the three derivatives"""
     if VERBOSE: print("plot_three_derivs() called!")
@@ -343,24 +346,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
     plt.close("all")
     return
 
-# TODO: implement arrow keys traversal
-# def show_frames(video:np.ndarray) -> None:
-#     """Shows all frames. Press any button to advance, or 'q' to exit"""
-#     if VERBOSE: print("show_frames() called!")
 
-#     video = video.copy() # don't modify original
-#     h,w = video.shape[1:]
-#     btm_l_pos = (10, h - 10)
-
-#     for cf, frame in enumerate(video):
-#         cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
-#                     fontScale = 0.7, color = (255, 255, 255), thickness = 1, lineType=cv2.LINE_AA)
-#         cv2.imshow("show_frames()", frame)
-#         if cv2.waitKey(0) == ord('q'): break
-#     cv2.destroyAllWindows()
-
-#     return
-# 
 def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit. Accepts a list of videos as input for horizontal concatenation"""
     if VERBOSE: print("show_frames() called!")
@@ -409,6 +395,7 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
 
     return
 
+
 def show_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
     if VERBOSE: print("show_regions() called!")
 
@@ -439,6 +426,7 @@ def show_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
 
     cv2.destroyAllWindows()
 
+
 def _draw_mask_outline(frame:np.ndarray, mask_segment:np.ndarray) -> np.ndarray:
     """Helper function. Draws the outline of a binary mask on the frame and returns it"""
 
@@ -451,6 +439,7 @@ def _draw_mask_outline(frame:np.ndarray, mask_segment:np.ndarray) -> np.ndarray:
     cv2.drawContours(frame, contours, -1, (127,0,0), 1)
 
     return frame
+
 
 def draw_mask_boundary(video:np.ndarray, mask:np.ndarray, show_video:bool=False) -> np.ndarray:
     """Draws the boundary of a binary mask on each frame of the video."""
@@ -472,8 +461,6 @@ def draw_mask_boundary(video:np.ndarray, mask:np.ndarray, show_video:bool=False)
     if show_video: show_frames(video)
 
     return video
-
-
 
 
 def draw_current_frame_num(frame:np.ndarray, frame_num:int) -> None:
@@ -529,6 +516,7 @@ def draw_middle_lines(video:np.ndarray, show_video:bool=True, hplace:float=0.5, 
 
     return video
 
+
 def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=True) -> np.ndarray:
     """Draws a point (x,y) on the frame and displays it"""
     if VERBOSE: print("draw_point() called!")
@@ -541,6 +529,7 @@ def draw_point(video:np.ndarray, pt:Tuple[int,int], show_video:bool=True) -> np.
 
     return video
 
+
 def _draw_points(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
     """Helper func to draw_points(). Draws a set of points in pts directly on the frame."""
     frame = np.asarray(frame)
@@ -551,6 +540,7 @@ def _draw_points(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
     for pt in pts:
         cv2.circle(frame, tuple(pt), 1, (255,255,255))
     
+
 def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.ndarray:
     """For every frame, draws a set of points [[x1,y1], [x2,y2], ..., [xn,yn]] and displays it"""
     if VERBOSE: print("draw_points() called!")
@@ -574,6 +564,7 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.n
     
     return video
 
+
 def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int]], show_video:bool=True) -> np.ndarray:
     """Draws a line on a video between two points"""
     if VERBOSE: print("draw_line() called!")
@@ -591,6 +582,7 @@ def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int
     if show_video: show_frames(video)
     
     return video
+
 
 def _draw_numbers_on_circle_coords(frame:np.ndarray, coords:np.ndarray):
     """Helper function. Draws number in each slice."""
@@ -619,6 +611,7 @@ def _draw_numbers_on_circle_coords(frame:np.ndarray, coords:np.ndarray):
 
     return
 
+
 def draw_radial_slice_numbers(video:np.ndarray, coords_on_circle:np.ndarray, show_video:bool=True) -> np.ndarray:
     """Draws the slice number on every frame"""
 
@@ -632,6 +625,7 @@ def draw_radial_slice_numbers(video:np.ndarray, coords_on_circle:np.ndarray, sho
     if show_video: show_frames(video)
 
     return video
+
 
 def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True, show_num:bool=False) -> np.ndarray:
 
@@ -650,6 +644,7 @@ def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True, show
     if show_video: show_frames(video_rscld, show_num=show_num)
 
     return video_rscld
+
 
 def draw_text(frame:np.ndarray, text:str, pos:str='bl') -> np.ndarray:
     """Draws text on a frame. Some planned options in the future"""
