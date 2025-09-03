@@ -485,7 +485,7 @@ def main():
     r_knee = radial_masks[np.isin(radial_masks, [10,11,12,13,14,15,16])] = 3
 
     video_w_bnds = draw_mask_boundaries(video, radial_masks)
-    views.show_frames(video_w_bnds)
+    video_w_bnds = views.show_frames(video_w_bnds)
 
     total_sums, total_counts = sum_intensity_per_partition(video, radial_masks, 3)
     print(total_sums)

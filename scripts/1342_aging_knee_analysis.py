@@ -185,6 +185,62 @@ def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: 
     return output
 
 
+def plot_with_shading(total_sums, lns, f0=None, fN=None):
+    """
+    Plot total_sums between frames f0 and fN with shaded regions and cycle labels.
+
+    Parameters:
+    - total_sums: np.ndarray, shape (nslices, nframes)
+    - f0: int, starting frame index (absolute)
+    - fN: int, ending frame index (absolute)
+    - lns: list or array of absolute frame numbers (even length),
+           where each pair defines a shaded region, and
+           every two pairs define a cycle.
+    """
+
+    if f0 is None: f0 = 0
+    if fN is None: fN = total_sums.shape[1]
+
+    cols = ['r', 'g', 'b']
+    lbls = ["Left", "Middle", "Right"]
+    nslices = total_sums.shape[0]
+
+    # Prepare x and y values
+    x = np.arange(f0, fN)
+    y_vals = [total_sums[slc, f0:fN] for slc in range(nslices)]
+
+    # Plot curves
+    plt.figure(figsize=(17, 9))
+    for slc in range(nslices):
+        plt.plot(x, y_vals[slc], color=cols[slc], label=lbls[slc])
+
+    # Shade regions
+    for i in range(0, len(lns), 2):
+        start, end = lns[i], lns[i+1]
+        if end < f0 or start > fN:
+            continue  # skip if completely outside range
+        start = max(start, f0)
+        end   = min(end, fN)
+        plt.axvspan(start, end, color='gray', alpha=0.2)
+
+    # Label cycles
+    for i in range(0, len(lns), 4):
+        left, right = lns[i], lns[i+3]
+        if left >= f0 and right <= fN:
+            mid = (left + right) / 2
+            plt.text(mid, plt.ylim()[1] * 0.98,
+                     f"Cycle {i//4 + 1}",
+                     ha='center', va='top', fontsize=12, color='black')
+
+    # Final touches
+    plt.xlabel("Frame number")
+    plt.ylabel("Total pixel intensity")
+    plt.title(f"Total pixel intensities (frames {f0+1}-{fN+1})")
+    plt.xlim(f0, fN)
+    plt.legend()
+    plt.show()
+
+
 def main():
 
     video = io.load_nparray("../data/processed/1342_aging_radial_video_N16.npy")
@@ -217,7 +273,17 @@ def main():
     print(total_sums)
     print(total_sums.shape)
 
-    plot_with_xaxis_break(total_sums, 0, 50)
+
+    lns = [
+        62,81, 82,100,
+        102,119, 123,151,
+        152,171, 178,199,
+        206,222, 223,246,
+        247,272, 273,297,
+        298,320, 321,340,
+        341,364, 365,384
+    ]
+    plot_with_shading(total_sums, lns, 50)
 
     plot_specific_frames(total_sums, (62,81), (82,100), "1342 - Total pixel intensities - Cycle 1")
     plot_specific_frames(total_sums, (102,119), (123,151), "1342 - Total pixel intensities - Cycle 2")
