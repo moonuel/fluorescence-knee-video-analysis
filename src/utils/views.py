@@ -372,14 +372,16 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     idxs = [ord(str(n)) for n in [1,2,3,4,5,6,7,8,9,0]]
     fn_slcs = dict(zip(idxs, itvs))
 
+    if show_num:
+        for fn in range(nfs):
+            frame = video[fn]
+            cv2.rectangle(frame, (0, h-32), (75, h), color=0, thickness=-1)
+            cv2.putText(frame, str(fn), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, color = 255, thickness = 1, lineType=cv2.LINE_AA)
+    
     cf=0
     while True:
         frame = video[cf]
 
-        if show_num:
-            cv2.rectangle(frame, (0, h-32), (59, h), color=0, thickness=-1)
-            cv2.putText(frame, str(cf), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, color = 255, thickness = 1, lineType=cv2.LINE_AA)
-        
         cv2.imshow(title, frame)
 
         # Controls 
@@ -393,7 +395,7 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
         cf = cf%nfs # mod num_frames
     cv2.destroyAllWindows()
 
-    return
+    return video
 
 
 def show_regions(regions:Dict[str, np.ndarray], keys:List[str]) -> None:
@@ -551,21 +553,29 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.n
     video = video.copy() # for safety
     pts = np.asarray(pts)
 
+    bool_flag = False
+    if video.dtype != np.uint8:
+        print("draw_points() runtime warning: video.dtype is not np.uint8. Converting...")
+        video = video.astype(np.uint8)
+        bool_flag = True
+
     for cf in range(video.shape[0]):
         cpts = np.asarray(pts[cf])
         frame = np.asarray(video[cf])
-        if frame.dtype == bool: frame = (frame * 255).astype(np.uint8)
+        if bool_flag: 
+            frame = (frame * 255).astype(np.uint8)
         # print(cpts) # debug
         # print(cpts.size) # debug
         if cpts.size == 0: continue
         _draw_points(frame, cpts)
+        video[cf] = frame
 
     if show_video: show_frames(video)
     
     return video
 
 
-def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int]], show_video:bool=True) -> np.ndarray:
+def draw_line(video:np.ndarray, pt1:List[Tuple[int,int]], pt2:List[Tuple[int,int]], show_video:bool=False) -> np.ndarray:
     """Draws a line on a video between two points"""
     if VERBOSE: print("draw_line() called!")
 
@@ -625,6 +635,39 @@ def draw_radial_slice_numbers(video:np.ndarray, coords_on_circle:np.ndarray, sho
     if show_video: show_frames(video)
 
     return video
+
+
+def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: int = 255, thickness: int = 1) -> np.ndarray:
+    """
+    Draws mask boundaries on grayscale video frames.
+
+    Args:
+        video (np.ndarray): Grayscale video of shape (nframes, h, w), dtype uint8.
+        mask_labels (np.ndarray): Labeled mask array of shape (nframes, h, w), 
+                                  where 0 = background, 1..N = partitions.
+        intensity (int): Pixel intensity for boundary (0–255).
+        thickness (int): Thickness of boundary lines.
+
+    Returns:
+        np.ndarray: Video with mask boundaries drawn, shape (nframes, h, w), dtype uint8.
+    """
+    nframes, h, w = video.shape
+    output = video.copy()
+
+    for i in range(nframes):
+        frame = video[i]
+        labels = mask_labels[i]
+
+        # For each label > 0, find contours
+        for lbl in np.unique(labels):
+            if lbl == 0:
+                continue
+            mask = (labels == lbl).astype(np.uint8)
+
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(output[i], contours, -1, color=intensity, thickness=thickness)
+
+    return output
 
 
 def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True, show_num:bool=False) -> np.ndarray:
