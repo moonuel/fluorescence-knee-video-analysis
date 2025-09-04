@@ -6,10 +6,9 @@ import utils.io as io
 import numpy as np
 import pandas as pd
 import cv2
-
-
 from config import VERBOSE
 from typing import Tuple
+
 
 def analyze_video(video, radial_regions, 
                   lft: Tuple[int, int], mdl: Tuple[int, int], rgt: Tuple[int, int]) -> None:
