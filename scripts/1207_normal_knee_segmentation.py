@@ -5,42 +5,36 @@ from core import radial_segmentation as rdl
 from utils import utils, io, views
 from functools import partial
 
-def get_femur_mask():
+def get_femur_mask(video):
     
-    video = io.load_nparray("../data/processed/1342_knee_frames_ctrd.npy")[:500]
-    video = utils.crop_video_square(video, 500)
-    video = np.rot90(video, k=1, axes=(1,2))
-    video = np.flip(video, axis=2)
-    nfs, h, w = video.shape
-    print(nfs, h, w)
-    video = utils.rotate_video(video, 8)
-    video[video == 0] = 16 # Fill empty borders with I=16
-
     # Blur
     video = utils.blur_video(video)
+    # video = np.array([soft_knee_compression(frame, 190, 60, 10) for frame in video]) # idk if this is all that 
+    video[video > 160] = 160 # Hard clipping
 
     # Rescale intensities for more consistent segmentation
-    ref_fm = video[48]
+    ref_fm = video[100]
     video_hist = rdl.match_histograms_video(video, ref_fm)
 
     # Get outer mask
-    outer_mask = ks.get_otsu_masks(video_hist, thresh_scale=0.8)
+    outer_mask = ks.get_otsu_masks(video_hist, thresh_scale=0.7)
+    outer_mask = utils.morph_close(outer_mask, (45,45)) # Fill any holes
     outer_mask = utils.morph_erode(outer_mask, (25,25)) # To shrink it/remove noise a bit 
 
     # Get inner mask
-    inner_mask = ks.mask_adaptive(video_hist, 141, 8)
+    inner_mask = ks.mask_adaptive(video_hist, 161, 13)
 
     # Get femur mask
     femur_mask = rdl.interior_mask(outer_mask, inner_mask)
     femur_mask = utils.morph_open(femur_mask, (15,15))
-    femur_mask = utils.morph_close(femur_mask, (25,25))
+    femur_mask = utils.morph_close(femur_mask, (15,17))
     femur_mask = utils.blur_video(femur_mask)
     femur_mask = femur_mask > 127
 
     # views.show_frames(video, "video")
     views.show_frames(video_hist, "video hist")
-    # views.show_frames(outer_mask, "outer mask")
-    # views.show_frames(inner_mask, "inner mask")
+    views.show_frames(outer_mask, "outer mask")
+    views.show_frames(inner_mask, "inner mask")
     # views.show_frames(femur_mask, "femur mask")
     v0 = views.draw_mask_boundary(video, femur_mask)
     views.show_frames(v0, "mask boundary")
@@ -52,10 +46,10 @@ def get_boundary_points(mask, N_lns):
 
     mask = mask.copy()
 
-    # Manual refinements
-    mask[:, :182, :] = 0
-    mask[:, 320:, :] = 0
-    mask[:, :, 308:] = 0
+    # Manually truncate mask for better boundary point estimation
+    mask[:, 329:, :] = 0 # Cut y below 329 
+    mask[:, :180, :] = 0 # Cut y above 180
+    mask[:, :, 338:] = 0 # Cut x past 338
 
     boundary_points = rdl.sample_femur_interior_pts(mask, N_lns=N_lns)
 
@@ -123,17 +117,72 @@ def load_video():
     return video
 
 
-def main():
+def soft_knee_compression(img: np.ndarray, 
+                          knee: int = 235, 
+                          width: int = 20, 
+                          ratio: float = 4.0) -> np.ndarray:
+    """
+    Apply a soft-knee highlight compressor to a uint8 grayscale image.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input grayscale image (dtype=uint8).
+    knee : int
+        Knee center intensity (0–255). Around here, compression begins.
+    width : int
+        Width of the knee band (in intensity units).
+    ratio : float
+        Compression ratio > 1. Higher = stronger highlight compression.
+
+    Returns
+    -------
+    np.ndarray
+        Output image (dtype=uint8) with compressed highlights.
+    """
+    img_f = img.astype(np.float32)
+
+    # Knee boundaries
+    knee_low = knee - width / 2
+    knee_high = knee + width / 2
+
+    # Compressed mapping function (hard compression above knee)
+    def comp(I):
+        return knee + (I - knee) / ratio
+
+    # Output array
+    out = np.empty_like(img_f)
+
+    # Case 1: Below knee_low → unchanged
+    mask_low = img_f <= knee_low
+    out[mask_low] = img_f[mask_low]
+
+    # Case 2: Above knee_high → fully compressed
+    mask_high = img_f >= knee_high
+    out[mask_high] = comp(img_f[mask_high])
+
+    # Case 3: Inside knee band → smooth blend
+    mask_band = ~(mask_low | mask_high)
+    I_band = img_f[mask_band]
+    t = (I_band - knee_low) / width  # normalized [0,1]
+    s = t**2 * (3 - 2*t)  # smoothstep
+    out[mask_band] = (1 - s) * I_band + s * comp(I_band)
+
+    # Clamp to [0,255] and return uint8
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def get_1207_binary_mask():
     video = load_video()
     views.show_frames(video)
 
 
-    # mask = get_femur_mask()
-    # io.save_nparray(mask, "../data/processed/1342_aging_mask_0-499.npy")
+    mask = get_femur_mask(video)
+    views.show_frames(mask)
 
-    return
+    return mask
 
-    mask = io.load_nparray("../data/processed/1342_aging_mask_0-499.npy")[:497]
+    mask = io.load_nparray("../data/processed/1207_normal_mask.npy")
     
     boundary_points = get_boundary_points(mask, N_lns=128)
     
@@ -156,6 +205,14 @@ def main():
     io.save_nparray(radial_masks, "../data/processed/1342_aging_radial_masks_N16.npy")
 
 
+
+
 if __name__ == "__main__":
-    main()
+
+    # Get and save the binary mask
+    # mask = get_1207_binary_mask()
+    # io.save_nparray(mask, "../data/processed/1207_normal_mask.npy")
+
+    pass    
+
 
