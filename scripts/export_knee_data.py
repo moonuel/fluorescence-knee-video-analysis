@@ -15,7 +15,7 @@ def load_masks(filepath:str) -> np.ndarray:
     """Loads the mask at the specified location. 
     Handles both old uint8 radial masks with shape (nmasks, nframes, h, w) and new uint8 radial masks with shape (nframes, h, w).
     
-    Old mask arrays are very space-inefficient and have one """
+    Old mask arrays are very space-inefficient and have one dimension for each segment. New mask arrays use a unique numerical label from {1...N} instead."""
 
     masks = io.load_nparray(filepath)
 
@@ -27,7 +27,7 @@ def load_masks(filepath:str) -> np.ndarray:
         N = masks.shape[0] # Expected shape: (nmasks, nframes, h, w)
         masks_bool = np.zeros(shape=masks.shape[1:], dtype=np.uint8) # Expected shape: (nframes, h, w)
         for n in range(N):
-            masks_bool[masks[n] > 0] = n+1 # 
+            masks_bool[masks[n] > 0] = n+1 # Convert each slice of inefficient array to a numerical label from {1...N}
         masks = masks_bool
 
     assert len(masks.shape) == 3 # Soft check that output is shape (nfs, h, w)
