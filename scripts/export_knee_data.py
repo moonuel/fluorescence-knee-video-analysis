@@ -9,6 +9,8 @@ Data format:
 from utils import utils, io, views
 import numpy as np
 import pandas as pd
+import pandas as pd
+from pathlib import Path
 
 
 def load_masks(filepath:str) -> np.ndarray:
@@ -48,25 +50,132 @@ def load_video(filepath:str) -> np.ndarray:
     return video
 
 
-def main():
+def build_metadata_row(metadata: dict) -> dict:
+    """
+    Convert metadata dict (with nested cycles) into a flat dict suitable for a DataFrame row.
+    """
+    row = {}
+
+    for key, value in metadata.items():
+        if key != "cycle_frames":
+            if isinstance(value, list):
+                row[key] = ", ".join(map(str, value))
+            else:
+                row[key] = value
+
+    for cycle_name, cvals in metadata.get("cycle_frames", {}).items():
+        row[f"{cycle_name} flexion"] = f"{cvals['flexion'][0]}:{cvals['flexion'][1]}"
+        row[f"{cycle_name} extension"] = f"{cvals['extension'][0]}:{cvals['extension'][1]}"
+
+    return row
+
+
+def save_analysis_to_excel(total_sums: np.ndarray,
+                           total_nonzero: np.ndarray,
+                           metadata: dict,
+                           output_file: str | Path):
+    """
+    Save knee analysis results to an Excel file with three sheets:
+      - Total sums (N x nframes)
+      - Total nonzero (N x nframes)
+      - Metadata (one row)
+    """
+    output_file = Path(output_file)
+
+    # Metadata DataFrame
+    df_meta = pd.DataFrame([build_metadata_row(metadata)])
+
+    # Convert arrays to DataFrames
+    N, nframes = total_sums.shape[0], total_sums.shape[1]
+
+    df_sums = pd.DataFrame(total_sums.T, columns=[f"Segment {i}" for i in range(1, N + 1)])
+    df_sums.index.name = "Frame"
+
+    df_nonzero = pd.DataFrame(total_nonzero.T, columns=[f"Segment {i}" for i in range(1, N + 1)])
+    df_nonzero.index.name = "Frame"
+
+    # Write all three sheets
+    with pd.ExcelWriter(output_file) as writer:
+        df_sums.to_excel(writer, sheet_name="Sum of Pixel Intensities (0-255)")
+        df_nonzero.to_excel(writer, sheet_name="Number of Non-zero Pixels (Size of Mask)")
+        df_meta.to_excel(writer, sheet_name="Analysis Metadata", index=False)
+
+    print(f"✅ Analysis results saved to {output_file.resolve()}")
+
+
+def main(mask_path, video_path):
 
     # Load data 
     shared_dir = "../data/processed/"
-    mask_path =  shared_dir + "1339_knee_radial_masks_N16.npy" # Manually specify filenames 
-    video_path = shared_dir + "1339_knee_radial_video_N16.npy"
+    mask_path =  shared_dir + mask_path # Manually specify filenames 
+    video_path = shared_dir + video_path
 
     masks = load_masks(mask_path)
     video = load_video(video_path)
+    
     assert masks.shape == video.shape # Sanity check that we're using new mask format
+    nfs, h, w = video.shape
+    print(video.shape)
 
-    mask_lbls = np.unique(masks[masks > 0])
+    mask_lbls = np.unique(masks[masks > 0]).astype(int) # Returns sorted list of unique non-zero labels
+    N = len(mask_lbls)
 
     # Validate data
     print(f"{mask_lbls=}")
-    views.show_frames(masks * (255 // mask_lbls.max())) # Rescale label intensities for better viewing.
+    views.show_frames(masks * (255 // mask_lbls.max())) # Rescale label intensities for better viewing
     views.show_frames(video)
 
-    return
+    # Calculate total pixel intensities within each segment of the video
+    total_sums = np.zeros(shape=(N, nfs), dtype=int)
+    for n, lbl in enumerate(mask_lbls):
+        for f in range(nfs):
+            frame = video[f]
+            mask_f = masks[f]
+            total_sums[n, f] = frame[mask_f == lbl].sum()
+
+    # Calculate number of non-zero pixels within each segment of the video (for normalization purposes)
+    total_nonzero = np.zeros((N, nfs), dtype=int)
+    for n, lbl in enumerate(mask_lbls):
+        for f in range(nfs):
+            frame = video[f]
+            mask_f = masks[f]
+            total_nonzero[n, f] = np.count_nonzero(frame[mask_f == lbl])
+
+    assert total_sums.shape == total_nonzero.shape # Sanity check
+
+    print(f"{total_sums[:, 0]=}")
+    print(f"{total_nonzero[:, 0]=}")
+
+    return total_sums, total_nonzero
+
 
 if __name__ == "__main__":
-    main()
+    
+    mask_path = "1339_knee_radial_masks_N16.npy"
+    video_path = "1339_knee_radial_video_N16.npy"
+    
+    total_sums, total_nonzero = main(mask_path, video_path)
+
+    metadata = {
+        "Description": "Contains metadata about the knee analysis data. "
+            "All frame indices are given in 0-based indexing format, "
+            "i.e. video[0] denotes the first frame (as opposed to video[1] denoting the first frame). ",
+        "file_number": "1339",
+        "type_of_knee": "aging",
+        "frame_range": "289:608",
+        "cycle_frames": {
+            "Cycle 1": {"flexion": (290, 309), "extension": (312, 329)},
+            "Cycle 2": {"flexion": (331, 352), "extension": (355, 374)},
+            "Cycle 3": {"flexion": (375, 394), "extension": (398, 421)},
+            "Cycle 4": {"flexion": (422, 439), "extension": (441, 463)},
+            "Cycle 5": {"flexion": (464, 488), "extension": (490, 512)},
+            "Cycle 6": {"flexion": (513, 530), "extension": (532, 553)},
+            "Cycle 7": {"flexion": (554, 576), "extension": (579, 609)}
+        },
+        "num_of_segments": "16",
+        "left_segments": "11, 12, 13, 14, 15, 16, 1",
+        "middle_segments": "7, 8, 9, 10",
+        "right_segments": "1, 2, 3, 4, 5, 6"
+    }
+
+    save_analysis_to_excel(total_sums, total_nonzero, metadata, "1339_analysis_data.xlsx")
