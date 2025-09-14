@@ -176,8 +176,8 @@ def main(mask_path, video_path):
 
 if __name__ == "__main__":
     
-    mask_name = "normal_knee_radial_masks_N16.npy" # Path will be pre-pended
-    video_name = "normal_knee_radial_video_N16.npy"
+    mask_name = "XXXX_knee_radial_masks_N16.npy" # Path will be pre-pended
+    video_name = "XXXX_knee_radial_video_N16.npy"
     
     total_sums, total_nonzero = main(mask_name, video_name)
     
@@ -185,22 +185,19 @@ if __name__ == "__main__":
         "Description": "Contains metadata about the knee analysis data. "
             "All frame indices are given in 0-based indexing format, "
             "i.e. video[0] denotes the first frame (as opposed to video[1] denoting the first frame). ",
-        "file_number": "308",
+        "file_number": "XXXX",
         "type_of_knee": "normal", # "aging" or "normal"
-        "frame_range": "0:681",
+        "frame_range": "XXX:XXX",
         "cycle_frames": {
-            "Cycle 1": {"flexion": (71, 116), "extension": (117, 155)}, # Tuple[int, int]
-            "Cycle 2": {"flexion": (253, 298), "extension": (299, 335)}, # Tuple[int, int]
-            "Cycle 3": {"flexion": (585, 618), "extension": (630, 669)}, # Tuple[int, int]
-            "Cycle 4": {"flexion": (156, 199), "extension": (210, 250)}, # Tuple[int, int]
+            "Cycle 1": {"flexion": (), "extension": ()}, # Tuple[int, int]
         },
         "num_of_segments": "16",
-        "left_segments": "14,15,16,1",
-        "middle_segments": "9,10,11,12,13",
-        "right_segments": "2,3,4,5,6,7,8"
+        "left_segments": "",
+        "middle_segments": "",
+        "right_segments": ""
     }
 
-    save_analysis_to_excel(total_sums, total_nonzero, metadata, "308_analysis_data.xlsx")
+    save_analysis_to_excel(total_sums, total_nonzero, metadata, "XXXX_analysis_data.xlsx")
 
 
 
