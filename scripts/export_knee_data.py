@@ -149,10 +149,35 @@ def main(mask_path, video_path):
     return total_sums, total_nonzero
 
 
+# Example usage:
+
+#     mask_path = ".npy"
+#     video_path = ".npy"
+    
+#     total_sums, total_nonzero = main(mask_path, video_path)
+
+#     metadata = {
+#         "Description": "Contains metadata about the knee analysis data. "
+#             "All frame indices are given in 0-based indexing format, "
+#             "i.e. video[0] denotes the first frame (as opposed to video[1] denoting the first frame). ",
+#         "file_number": "",
+#         "type_of_knee": "",
+#         "frame_range": "",
+#         "cycle_frames": {
+#             "Cycle 1": {"flexion": (), "extension": ()}, # Tuple[int, int]
+#         },
+#         "num_of_segments": "16",
+#         "left_segments": "",
+#         "middle_segments": "",
+#         "right_segments": ""
+#     }
+
+#     save_analysis_to_excel(total_sums, total_nonzero, metadata, "_analysis_data.xlsx")
+
 if __name__ == "__main__":
     
-    mask_path = "1339_knee_radial_masks_N16.npy"
-    video_path = "1339_knee_radial_video_N16.npy"
+    mask_path = ".npy"
+    video_path = ".npy"
     
     total_sums, total_nonzero = main(mask_path, video_path)
 
@@ -160,22 +185,55 @@ if __name__ == "__main__":
         "Description": "Contains metadata about the knee analysis data. "
             "All frame indices are given in 0-based indexing format, "
             "i.e. video[0] denotes the first frame (as opposed to video[1] denoting the first frame). ",
-        "file_number": "1339",
-        "type_of_knee": "aging",
-        "frame_range": "289:608",
+        "file_number": "",
+        "type_of_knee": "",
+        "frame_range": "",
         "cycle_frames": {
-            "Cycle 1": {"flexion": (290, 309), "extension": (312, 329)},
-            "Cycle 2": {"flexion": (331, 352), "extension": (355, 374)},
-            "Cycle 3": {"flexion": (375, 394), "extension": (398, 421)},
-            "Cycle 4": {"flexion": (422, 439), "extension": (441, 463)},
-            "Cycle 5": {"flexion": (464, 488), "extension": (490, 512)},
-            "Cycle 6": {"flexion": (513, 530), "extension": (532, 553)},
-            "Cycle 7": {"flexion": (554, 576), "extension": (579, 609)}
+            "Cycle 1": {"flexion": (), "extension": ()}, # Tuple[int, int]
         },
         "num_of_segments": "16",
-        "left_segments": "11, 12, 13, 14, 15, 16, 1",
-        "middle_segments": "7, 8, 9, 10",
-        "right_segments": "1, 2, 3, 4, 5, 6"
+        "left_segments": "",
+        "middle_segments": "",
+        "right_segments": ""
     }
 
-    save_analysis_to_excel(total_sums, total_nonzero, metadata, "1339_analysis_data.xlsx")
+    save_analysis_to_excel(total_sums, total_nonzero, metadata, "_analysis_data.xlsx")
+
+
+
+
+
+
+
+
+
+"""aging 1339 data"""
+
+    # mask_path = "1339_knee_radial_masks_N16.npy"
+    # video_path = "1339_knee_radial_video_N16.npy"
+    
+    # total_sums, total_nonzero = main(mask_path, video_path)
+
+    # metadata = {
+    #     "Description": "Contains metadata about the knee analysis data. "
+    #         "All frame indices are given in 0-based indexing format, "
+    #         "i.e. video[0] denotes the first frame (as opposed to video[1] denoting the first frame). ",
+    #     "file_number": "1339",
+    #     "type_of_knee": "aging",
+    #     "frame_range": "289:608",
+    #     "cycle_frames": {
+    #         "Cycle 1": {"flexion": (290, 309), "extension": (312, 329)},
+    #         "Cycle 2": {"flexion": (331, 352), "extension": (355, 374)},
+    #         "Cycle 3": {"flexion": (375, 394), "extension": (398, 421)},
+    #         "Cycle 4": {"flexion": (422, 439), "extension": (441, 463)},
+    #         "Cycle 5": {"flexion": (464, 488), "extension": (490, 512)},
+    #         "Cycle 6": {"flexion": (513, 530), "extension": (532, 553)},
+    #         "Cycle 7": {"flexion": (554, 576), "extension": (579, 609)}
+    #     },
+    #     "num_of_segments": "16",
+    #     "left_segments": "11, 12, 13, 14, 15, 16, 1",
+    #     "middle_segments": "7, 8, 9, 10",
+    #     "right_segments": "1, 2, 3, 4, 5, 6"
+    # }
+
+    # save_analysis_to_excel(total_sums, total_nonzero, metadata, "1339_analysis_data.xlsx")
