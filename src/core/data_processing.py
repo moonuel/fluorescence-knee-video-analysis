@@ -135,3 +135,47 @@ def get_intensity_derivs(intensities:Dict[str,np.ndarray]) -> Dict[str,np.ndarra
     for k in keys:
         derivs[k] = np.gradient(intensities[k], edge_order=2)
     return derivs
+
+
+def compute_sums_nonzeros(masks, video):
+    """
+    Calculates the total pixel intensity sums and number of non-zero pixels 
+        in each segment of a knee video and radially segmented mask.
+        
+    Inputs: 
+        masks (np.ndarray): radially segmented mask with shape (nfs, h, w)
+        video (np.ndarray): associated video with shape (nfs, h, w)
+            
+    Outputs: 
+        total_sums (np.ndarray): total pixel intensity sum with shape (Nsegs, nfs)
+
+    """
+
+    assert masks.shape == video.shape # Sanity check
+
+    nfs, h, w = masks.shape
+    lbls = np.unique(masks[masks > 0])
+    N = len(lbls)
+
+    # Calculate total pixel intensities within each segment of the video
+    total_sums = np.zeros(shape=(N, nfs), dtype=int)
+    for n, lbl in enumerate(lbls):
+        for f in range(nfs):
+            frame = video[f]
+            mask_f = masks[f]
+            total_sums[n, f] = frame[mask_f == lbl].sum()
+
+    # Calculate number of non-zero pixels within each segment of the video (for normalization purposes)
+    total_nonzero = np.zeros((N, nfs), dtype=int)
+    for n, lbl in enumerate(lbls):
+        for f in range(nfs):
+            frame = video[f]
+            mask_f = masks[f]
+            total_nonzero[n, f] = np.count_nonzero(frame[mask_f == lbl])
+
+    assert total_sums.shape == total_nonzero.shape # Sanity check
+
+    print(f"{total_sums[:, 0]=}")
+    print(f"{total_nonzero[:, 0]=}")
+
+    return total_sums, total_nonzero
