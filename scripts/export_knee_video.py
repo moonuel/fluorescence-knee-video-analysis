@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pandas as pd
 from pathlib import Path
+import cv2
 
 
 def load_masks(filepath:str) -> np.ndarray:
@@ -45,6 +46,64 @@ def load_video(filepath:str) -> np.ndarray:
     return video
 
 
+def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, font_scale=0.5, color=255, thickness=1) -> np.ndarray:
+    """
+    Overlay region numbers at the centroid of each labeled region in a grayscale video.
+
+    Parameters
+    ----------
+    video : np.ndarray
+        Grayscale video array of shape (frames, height, width), dtype should be uint8 or compatible.
+    mask_video : np.ndarray
+        Integer-labeled mask video of the same shape, where 0 = background and 1..N = regions.
+    font_scale : float
+        Scale factor for the text font.
+    color : int
+        Grayscale color for the text (0-255).
+    thickness : int
+        Thickness of the text.
+
+    Returns
+    -------
+    modified_video : np.ndarray
+        Copy of the video with region numbers drawn at centroids.
+    """
+
+    modified_video = video.copy()
+
+    assert modified_video.shape == mask_video.shape
+
+    # Loop over frames
+    for t in range(video.shape[0]):
+        frame_mask = mask_video[t]
+        unique_labels = np.unique(frame_mask)
+        # Skip background
+        region_labels = unique_labels[unique_labels != 0]
+
+        for label in region_labels:
+            # Find coordinates of pixels belonging to this region
+            ys, xs = np.where(frame_mask == label)
+
+            # Skip if region is empty
+            if len(xs) == 0:
+                continue
+
+            # Compute centroid
+            centroid_x = int(xs.mean())
+            centroid_y = int(ys.mean())
+
+            # Overlay the label at the centroid
+            cv2.putText(modified_video[t],
+                        text=str(label),
+                        org=(centroid_x, centroid_y),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                        fontScale=font_scale,
+                        color=int(color),
+                        thickness=thickness)
+
+    return modified_video
+
+
 def main(mask_path, video_path):
 
     # Load data 
@@ -62,19 +121,27 @@ def main(mask_path, video_path):
     mask_lbls = np.unique(masks[masks > 0]).astype(int) # Returns sorted list of unique non-zero labels
     N = len(mask_lbls)
 
+    
     # Validate data
     print(f"{mask_lbls=}")
     views.show_frames(masks * (255 // mask_lbls.max())) # Rescale label intensities for better viewing
     views.show_frames(video)
-    v1 = views.draw_mask_boundaries(video, masks)
-    views.show_frames(v1)
 
-    return 
+    # Draw mask labels
+    video_out = views.draw_mask_boundaries(video, masks)
+    video_out = draw_region_numbers(video_out, masks)
+
+    return video_out
 
 
 if __name__ == "__main__":
-    mask_name = "normal_knee_radial_masks_N16.npy" # Path will be pre-pended
-    video_name = "normal_knee_radial_video_N16.npy"
+    mask_name = "1339_knee_radial_masks_N16.npy" # Path will be pre-pended
+    video_name = "1339_knee_radial_video_N16.npy"
     
-    main(mask_name, video_name)
+    video_out = main(mask_name, video_name)
+    video_out = views.show_frames(video_out, frame_offset=289) # Overwrite frame nums with offset
     
+    
+    filename = "1339_aging_validation_video"
+    io.save_avi(f"{filename}.avi", video_out)
+    io.save_mp4(f"{filename}.mp4", video_out)
