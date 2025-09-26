@@ -347,7 +347,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
     return
 
 
-def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
+def show_frames(video:np.ndarray, title:str=None, show_num:bool=True, frame_offset:int=0) -> None:
     """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit. Accepts a list of videos as input for horizontal concatenation"""
     if VERBOSE: print("show_frames() called!")
 
@@ -373,10 +373,12 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True) -> None:
     fn_slcs = dict(zip(idxs, itvs))
 
     if show_num:
-        for fn in range(nfs):
-            frame = video[fn]
+        for frame_num in range(nfs):
+            frame = video[frame_num]
             cv2.rectangle(frame, (0, h-32), (75, h), color=0, thickness=-1)
-            cv2.putText(frame, str(fn), btm_l_pos, fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, color = 255, thickness = 1, lineType=cv2.LINE_AA)
+            cv2.putText(frame, str(frame_num+frame_offset), btm_l_pos, 
+                        fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 0.7, 
+                        color = 255, thickness = 1, lineType=cv2.LINE_AA)
     
     cf=0
     while True:
@@ -547,11 +549,13 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.n
     """For every frame, draws a set of points [[x1,y1], [x2,y2], ..., [xn,yn]] and displays it"""
     if VERBOSE: print("draw_points() called!")
 
+    video = np.array(video)
+    pts = np.asarray(pts)
+
     if video.shape[0] != pts.shape[0]:
         raise ValueError("draw_points(): video and pts arrays must have same number of rows")
-
-    video = video.copy() # for safety
-    pts = np.asarray(pts)
+    
+    pts = np.reshape(pts, (video.shape[0], -1, 2)) # For safety 
 
     bool_flag = False
     if video.dtype != np.uint8:
