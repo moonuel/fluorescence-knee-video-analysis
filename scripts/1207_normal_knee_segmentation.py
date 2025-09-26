@@ -83,11 +83,28 @@ def forward_fill_jagged(arr):
     return filled
 
 
-def estimate_femur_tip(boundary_points, cutoff):
+def estimate_femur_tip(boundary_points, cutoff, weight=0.5):
 
     femur_tip_boundary = rdl.estimate_femur_tip_boundary(boundary_points, cutoff)
 
-    femur_tip = rdl.get_centroid_pts(femur_tip_boundary)
+    def jagged_slice(j_arr, start=None, stop=None, step=None):
+        return np.array([pts[start:stop:step] for pts in j_arr], dtype=object)
+
+    top_points = jagged_slice(femur_tip_boundary, step=2) # Every other point (even indices)
+    btm_points = jagged_slice(femur_tip_boundary, start=1, step=2) # Every other point (odd indices)
+
+    top_mean = rdl.get_centroid_pts(top_points)
+    btm_mean = rdl.get_centroid_pts(btm_points)
+
+    print(top_mean.shape)
+    print(btm_mean.shape)
+
+    femur_tip = 0.5*(weight*top_mean + (1-weight)*btm_mean) # Weighted average
+    femur_tip = femur_tip.astype(int)
+
+    print(femur_tip.shape)
+
+    # femur_tip = rdl.get_centroid_pts(femur_tip_boundary)
     femur_tip = rdl.smooth_points(femur_tip, window_size=9)
 
     return femur_tip
@@ -182,9 +199,13 @@ def get_1207_binary_mask():
 
     return mask
 
-    mask = io.load_nparray("../data/processed/1207_normal_mask.npy")
+
+def get_radial_segments(mask):
     
     boundary_points = get_boundary_points(mask, N_lns=128)
+    boundary_points = forward_fill_jagged(boundary_points)
+    print(boundary_points.shape)
+    print(boundary_points[0])
     
     femur_tip = estimate_femur_tip(boundary_points, cutoff=0.6)
 
@@ -201,18 +222,26 @@ def get_1207_binary_mask():
     v1 = views.draw_mask_boundaries( (mask*63).astype(np.uint8), radial_masks)
     views.show_frames(v1)
 
-    io.save_nparray(video, "../data/processed/1342_aging_radial_video_N16.npy")
-    io.save_nparray(radial_masks, "../data/processed/1342_aging_radial_masks_N16.npy")
-
-
+    return
 
 
 if __name__ == "__main__":
 
     # Get and save the binary mask
-    # mask = get_1207_binary_mask()
+    mask = get_1207_binary_mask()
+    views.show_frames(mask)
     # io.save_nparray(mask, "../data/processed/1207_normal_mask.npy")
 
-    pass    
+    # Perform radial segmentation
+    mask = io.load_nparray("../data/processed/1207_normal_mask.npy")
+
+    radial_masks = get_radial_segments(mask)
+
+    video = load_video()
+
+    # Save final results
+    # io.save_nparray(video, "../data/processed/1207_normal_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/processed/1207_normal_radial_masks_N16.npy")
+    
 
 
