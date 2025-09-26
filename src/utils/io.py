@@ -476,3 +476,40 @@ def load_hdf5_video_chunk(
         video_chunk = dset[start:end]
 
     return np.array(video_chunk)
+
+
+def load_masks(filepath:str) -> np.ndarray:
+    """Loads the mask at the specified location. 
+    Handles both old uint8 radial masks with shape (nmasks, nframes, h, w) and new uint8 radial masks with shape (nframes, h, w).
+    
+    Old mask arrays are very space-inefficient and have one dimension for each segment. New mask arrays use a unique numerical label from {1...N} instead."""
+
+    masks = load_nparray(filepath)
+
+    if not masks.dtype == np.uint8:
+        raise ValueError(f"File is not of type uint8. Is it a radial mask? Given: {masks.dtype=}")
+    
+    # Convert inefficient mask array to efficient array
+    if len(masks.shape) == 4:
+        N = masks.shape[0] # Expected shape: (nmasks, nframes, h, w)
+        masks_bool = np.zeros(shape=masks.shape[1:], dtype=np.uint8) # Expected shape: (nframes, h, w)
+        for n in range(N):
+            masks_bool[masks[n] > 0] = n+1 # Convert each slice of inefficient array to a numerical label from {1...N}
+        masks = masks_bool
+
+    assert len(masks.shape) == 3 # Soft check that output is shape (nfs, h, w)
+
+    return masks
+
+
+def load_video(filepath:str) -> np.ndarray:
+    """Loads the video at the specified location."""
+    video = load_nparray(filepath)
+
+    if not video.dtype == np.uint8: 
+        raise ValueError(f"File is not of type uint8. Is it a video? Given: {video.dtype=}")
+    
+    if not len(video.shape) == 3:
+        raise ValueError(f"File is not compatible with shape (nfs, h, w). Is it a grayscale video? Given: {video.shape=}")
+    
+    return video
