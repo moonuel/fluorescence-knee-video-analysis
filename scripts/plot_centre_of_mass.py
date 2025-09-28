@@ -44,7 +44,7 @@ def compute_centre_of_mass(total_sums: np.ndarray) -> np.ndarray:
 
 
 def parse_cycles(cycles:str) -> List[tuple]:
-    """Converts the frame number ranges from the Excel file into **0-indexed, endpoint-inclusive** ranges for downstream code.
+    """Converts the 1-indexed frame number ranges from the Excel file into **0-indexed, endpoint-inclusive** ranges for downstream code.
     
     Example:
         parse_cycles("71-116 117-155 
