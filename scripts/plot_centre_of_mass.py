@@ -87,6 +87,18 @@ def plot_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
     Inputs:
         centre_of_mass (np.ndarray): array of length (nfs) giving the position between 1-N of the centre of mass, for each frame
         cycles (List[list]): list containing frame ranges (0-indexed) of flexion and extension cycles to be plotted. 
+
+    Example usage:
+
+        # Plot individual cycles 
+        cycles = "71-116 117-155 " \\
+                "253-298 299-335 " \\
+                "585-618 630-669 " \\
+                "156-199 210-250"
+        cycles = parse_cycles(cycles)
+
+        plot_cycles(centre_of_mass, cycles)
+
     """
 
     if not isinstance(cycle_fs, list): raise TypeError(f"passed cycles is not a list. Given: {type(cycle_fs)}")
