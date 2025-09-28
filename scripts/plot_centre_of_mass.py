@@ -7,6 +7,8 @@ import core.data_processing as dp
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import List
+from copy import deepcopy
+import pdb
 
 
 def compute_centre_of_mass(total_sums: np.ndarray) -> np.ndarray:
@@ -42,6 +44,7 @@ def compute_centre_of_mass(total_sums: np.ndarray) -> np.ndarray:
 
 def parse_cycles(cycles:str) -> List[tuple]:
     """Converts the frame number ranges from the Excel file into usable frame ranges for downstream code.
+        Shifts all indices from 1-index to 0-index, and then adds 1 to all range endpoints to include it in the interval. 
     
     Example:
         parse_cycles("71-116 117-155 
@@ -49,12 +52,13 @@ def parse_cycles(cycles:str) -> List[tuple]:
                     "585-618 630-669 " \
                     "156-199 210-250")
 
-        Returns [(71, 116), (117, 155), 
-                    (253, 298), (299, 335), ... etc]
+        Returns [(70, 117), (116, 156), 
+                    (252, 299), (298, 336), ... etc]
 
         """
 
     if not isinstance(cycles, str): raise TypeError(f"Argument is not a string. Given: {type(cycles)}")
+    assert len(cycles) % 2 == 0 # check that we have flexion/extension pairs 
 
     cycles = cycles.split(" ")
 
@@ -66,8 +70,62 @@ def parse_cycles(cycles:str) -> List[tuple]:
     # Convert from 1-index to 0-index
     cycles = [[item - 1 for item in sublist] # 2. And within each sublist, subtract 1 from each item 
               for sublist in cycles] # 1. Parse each sublist 
+    
+    # But we want to include the last frame
+    for rng in cycles:
+        rng[1] += 1
 
     return cycles
+
+
+def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
+    """Accepts a centre_of_mass data array and plots the passed cycles. 
+    "cycles" should have structure [[flx1, flx2], [ext1, ext2], 
+                                    [flx3, flx4], [ext3, ext4], ...]
+        i.e. "cycles" is a list of frame range pairs 
+    
+    Inputs:
+        centre_of_mass (np.ndarray): array of length (nfs) giving the position between 1-N of the centre of mass, for each frame
+        cycles (List[list]): list containing frame ranges (0-indexed) of flexion and extension cycles to be plotted. 
+    """
+
+    if not isinstance(cycles, list): raise TypeError(f"passed cycles is not a list. Given: {type(cycles)}")
+    assert len(cycles) % 2 == 0 # sanity check that we have a complete set of pairs 
+
+    cycles = deepcopy(cycles) # protect internal list modification
+
+    plt.figure(figsize=(19, 7))
+
+    # We want contiguous frame ranges for flexion/extension frame range pairs
+    for i in np.arange(0, len(cycles), 2):
+
+        flx = [cycles[i][0], cycles[i][1]] # unpack the list of lists
+        ext = [cycles[i+1][0], cycles[i+1][1]]
+
+        mp = (flx[1] + ext[0]) // 2
+        # print(f"{flx[1]=}, {ext[0]=}, {mp=}") # sanity check
+
+        # Update values directly
+        cycles[i][1] = mp # flx[1]
+        cycles[i+1][0] = mp # ext[0]
+
+    # Plot all cycles, centered around the midpoint 
+    for i in np.arange(0, len(cycles), 2):
+        print(f"{i=}:", cycles[i], cycles[i+1])
+
+        flx = cycles[i][0], cycles[i][1] # unpack the list of lists
+        ext = cycles[i+1][0], cycles[i+1][1]
+
+        plt.plot(np.arange(flx[0] - flx[1] + 1, 1), # shifted to the left, ending at 0
+                 centre_of_mass[flx[0]:flx[1]], color='r') 
+
+        plt.plot(centre_of_mass[ext[0]:ext[1]], color='b') # plotted normally, from 0
+
+        # pdb.set_trace() # python debugger! pretty cool
+
+    pdb.set_trace()
+    plt.axvline(0, linestyle="--", color='k')
+    plt.show()
 
 
 def main():
@@ -104,7 +162,7 @@ def main():
     plt.plot(centre_of_mass)
     plt.show()
 
-    # Plot individual cycles
+    # Plot individual cycles 
     cycles = "71-116 117-155 " \
             "253-298 299-335 " \
             "585-618 630-669 " \
@@ -112,9 +170,9 @@ def main():
     
     cycles = parse_cycles(cycles)
 
-    print(cycles)
+    print(f"{cycles=}")
 
-    # plot_cycles(centre_of_mass, cycles)
+    plot_cycles(centre_of_mass, cycles)
 
     return
 
