@@ -6,6 +6,7 @@ from utils import io, utils, views
 import core.data_processing as dp
 import numpy as np
 import matplotlib.pyplot as plt
+from typing import List
 
 
 def compute_centre_of_mass(total_sums: np.ndarray) -> np.ndarray:
@@ -38,6 +39,35 @@ def compute_centre_of_mass(total_sums: np.ndarray) -> np.ndarray:
 
     return centre_of_mass
 
+
+def parse_cycles(cycles:str) -> List[tuple]:
+    """Converts the frame number ranges from the Excel file into usable frame ranges for downstream code.
+    
+    Example:
+        parse_cycles("71-116 117-155 
+                    "253-298 299-335 " \
+                    "585-618 630-669 " \
+                    "156-199 210-250")
+
+        Returns [(71, 116), (117, 155), 
+                    (253, 298), (299, 335), ... etc]
+
+        """
+
+    if not isinstance(cycles, str): raise TypeError(f"Argument is not a string. Given: {type(cycles)}")
+
+    cycles = cycles.split(" ")
+
+    # Parse into list of frame ranges 
+    for i, rng in enumerate(cycles):
+        cycles[i] = rng.split("-")
+        cycles[i] = list(map(int, cycles[i]))
+
+    # Convert from 1-index to 0-index
+    cycles = [[item - 1 for item in sublist] # 2. And within each sublist, subtract 1 from each item 
+              for sublist in cycles] # 1. Parse each sublist 
+
+    return cycles
 
 
 def main():
@@ -79,18 +109,15 @@ def main():
             "253-298 299-335 " \
             "585-618 630-669 " \
             "156-199 210-250"
+    
+    cycles = parse_cycles(cycles)
+
+    print(cycles)
+
+    # plot_cycles(centre_of_mass, cycles)
 
     return
 
 
 if __name__ == "__main__":
-
-    cycles = "71-116 117-155 " \
-            "253-298 299-335 " \
-            "585-618 630-669 " \
-            "156-199 210-250"
-
-
-    parse_cycles(cycles)
-
-    # main()
+    main()
