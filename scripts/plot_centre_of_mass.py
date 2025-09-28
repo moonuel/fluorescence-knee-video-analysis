@@ -5,8 +5,8 @@ Script for calculating the center of mass of grayscale intensity video across ra
 from utils import io, utils, views
 import core.data_processing as dp
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from typing import List
 from copy import deepcopy
 import pdb
@@ -44,8 +44,7 @@ def compute_centre_of_mass(total_sums: np.ndarray) -> np.ndarray:
 
 
 def parse_cycles(cycles:str) -> List[tuple]:
-    """Converts the frame number ranges from the Excel file into usable frame ranges for downstream code.
-        Shifts all indices from 1-index to 0-index, and then adds 1 to all range endpoints to include it in the interval. 
+    """Converts the frame number ranges from the Excel file into **0-indexed, endpoint-inclusive** ranges for downstream code.
     
     Example:
         parse_cycles("71-116 117-155 
@@ -53,8 +52,8 @@ def parse_cycles(cycles:str) -> List[tuple]:
                     "585-618 630-669 " \
                     "156-199 210-250")
 
-        Returns [(70, 117), (116, 156), 
-                    (252, 299), (298, 336), ... etc]
+        Returns [(70, 116), (116, 156), 
+                    (252, 298), (298, 336), ... etc]
 
         """
 
@@ -96,29 +95,28 @@ def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
     cycles = deepcopy(cycles) # protect internal list modification
 
     plt.figure(figsize=(19, 7))
-    cmap = cm.get_cmap('cool', len(cycles)//2)
+    cmap = plt.get_cmap('cool', len(cycles)//2)
 
     # We want contiguous frame ranges for flexion/extension frame range pairs
     for i in np.arange(0, len(cycles), 2):
 
-        flx = [cycles[i][0], cycles[i][1]] # unpack the list of lists
-        ext = [cycles[i+1][0], cycles[i+1][1]]
+        flx = cycles[i] # mutable
+        ext = cycles[i+1]
 
         mp = (flx[1] + ext[0]) // 2
         # print(f"{flx[1]=}, {ext[0]=}, {mp=}") # sanity check
 
-        # Update values directly
-        cycles[i][1] = mp # flx[1]
-        cycles[i+1][0] = mp # ext[0]
+        flx[1] = mp # flx[1]
+        ext[0] = mp # ext[0]
 
     # Plot all cycles, centered around the midpoint 
     for i in np.arange(0, len(cycles), 2):
         print(f"{i=}:", cycles[i], cycles[i+1])
 
-        flx = cycles[i][0], cycles[i][1] # unpack the list of lists
-        ext = cycles[i+1][0], cycles[i+1][1]
+        flx = cycles[i] # unpack the list of lists
+        ext = cycles[i+1]
 
-        assert flx[1] == ext[0] # by definition in prev. loop
+        assert flx[1] == ext[0] # sanity check; by definition in prev. loop
 
         ttl_f = ext[1] - flx[0] # last frame - first frame
         mp = flx[1] - flx[0] # midpoint shifted to origin
@@ -127,6 +125,32 @@ def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
                  centre_of_mass[flx[0]:ext[1]], 
                  label=f"Cycle {i//2 + 1}", color=cmap(i//2))
         
+    # Plot average of cycles (exclude NaN)
+    cycle_coms = [] 
+    for i in np.arange(0, len(cycles), 2): 
+
+        flx = cycles[i]
+        ext = cycles[i+1]
+
+        assert flx[1] == ext[0] # Ensure contiguous frame range
+
+        mp = flx[1] - flx[0] # shift midpoint towards origin
+
+        com = centre_of_mass[flx[0]:ext[1]]
+        com = pd.Series(com, index = np.arange(len(com)) - mp) # Cast to Series and centre it at 0
+
+        cycle_coms.append(com)
+
+    cycle_coms = pd.concat(cycle_coms, axis=1) # Unify in aligned df
+    avg_com = cycle_coms.mean(axis=1, skipna=True).sort_index()
+
+    plt.plot(avg_com, color='gray', linestyle='--', label="Average of cycles")
+
+    # Final formatting
+    plt.title("Average position of fluorescent fluid")
+    plt.xlabel("Frames from midpoint (left: flexion; right: extension)")
+    plt.ylabel("Segment number (Joint Cavity to Suprapatellar Bursa)")
+
     plt.axvline(0, linestyle="--", color='k')
     plt.legend()
     
