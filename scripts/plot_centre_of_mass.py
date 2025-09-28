@@ -78,7 +78,7 @@ def parse_cycles(cycles:str) -> List[tuple]:
     return cycles
 
 
-def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
+def plot_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
     """Accepts a centre_of_mass data array and plots the passed cycles. 
     "cycles" should have structure [[flx1, flx2], [ext1, ext2], 
                                     [flx3, flx4], [ext3, ext4], ...]
@@ -89,48 +89,32 @@ def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
         cycles (List[list]): list containing frame ranges (0-indexed) of flexion and extension cycles to be plotted. 
     """
 
-    if not isinstance(cycles, list): raise TypeError(f"passed cycles is not a list. Given: {type(cycles)}")
-    assert len(cycles) % 2 == 0 # sanity check that we have a complete set of pairs 
+    if not isinstance(cycle_fs, list): raise TypeError(f"passed cycles is not a list. Given: {type(cycle_fs)}")
+    assert len(cycle_fs) % 2 == 0 # sanity check that we have a complete set of pairs 
 
-    cycles = deepcopy(cycles) # protect internal list modification
+    cycle_fs = deepcopy(cycle_fs) # protect internal list modification
 
     plt.figure(figsize=(19, 7))
-    cmap = plt.get_cmap('cool', len(cycles)//2)
+    cmap = plt.get_cmap('cool', len(cycle_fs)//2)
 
     # We want contiguous frame ranges for flexion/extension frame range pairs
-    for i in np.arange(0, len(cycles), 2):
+    for i in np.arange(0, len(cycle_fs), 2):
 
-        flx = cycles[i] # mutable
-        ext = cycles[i+1]
+        flx = cycle_fs[i] # mutable
+        ext = cycle_fs[i+1]
 
         mp = (flx[1] + ext[0]) // 2
         # print(f"{flx[1]=}, {ext[0]=}, {mp=}") # sanity check
 
-        flx[1] = mp # flx[1]
-        ext[0] = mp # ext[0]
+        flx[1] = mp 
+        ext[0] = mp 
 
-    # Plot all cycles, centered around the midpoint 
-    for i in np.arange(0, len(cycles), 2):
-        print(f"{i=}:", cycles[i], cycles[i+1])
-
-        flx = cycles[i] # unpack the list of lists
-        ext = cycles[i+1]
-
-        assert flx[1] == ext[0] # sanity check; by definition in prev. loop
-
-        ttl_f = ext[1] - flx[0] # last frame - first frame
-        mp = flx[1] - flx[0] # midpoint shifted to origin
-
-        plt.plot(np.arange(-mp, ttl_f-mp), # shift so midpoint is at origin
-                 centre_of_mass[flx[0]:ext[1]], 
-                 label=f"Cycle {i//2 + 1}", color=cmap(i//2))
-        
-    # Plot average of cycles (exclude NaN)
+    # Cast cycles to Series for easier indexing 
     cycle_coms = [] 
-    for i in np.arange(0, len(cycles), 2): 
+    for i in np.arange(0, len(cycle_fs), 2): 
 
-        flx = cycles[i]
-        ext = cycles[i+1]
+        flx = cycle_fs[i]
+        ext = cycle_fs[i+1]
 
         assert flx[1] == ext[0] # Ensure contiguous frame range
 
@@ -141,19 +125,25 @@ def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
 
         cycle_coms.append(com)
 
-    cycle_coms = pd.concat(cycle_coms, axis=1) # Unify in aligned df
-    avg_com = cycle_coms.mean(axis=1, skipna=True).sort_index()
+    cycle_coms = pd.concat(cycle_coms, axis=1) # shape (nfs, ncycs)
 
-    plt.plot(avg_com, color='gray', linestyle='--', label="Average of cycles")
+    # Get average position
+    avg_com = cycle_coms.mean(axis=1, skipna=True)
+
+    # Plot all cycles, centered around the midpoint 
+    for i in range(cycle_coms.shape[1]):
+        com = cycle_coms.iloc[:, i]
+        plt.plot(com.sort_index(), label=f"Cycle {i + 1}", color=cmap(i))
+    plt.plot(avg_com.sort_index(), color='gray', linestyle='--', label="Average of cycles")
 
     # Final formatting
-    plt.title("Average position of fluorescent fluid")
-    plt.xlabel("Frames from midpoint (left: flexion; right: extension)")
-    plt.ylabel("Segment number (Joint Cavity to Suprapatellar Bursa)")
+    plt.title("Average position of fluorescence intensity")
+    plt.xlabel("Frames from midpoint (Left: flexion; Right: extension)")
+    plt.ylabel("Segment number (JC to SB)")
 
     plt.axvline(0, linestyle="--", color='k')
-    plt.legend()
     
+    plt.legend()
     plt.show()
 
 
