@@ -6,6 +6,7 @@ from utils import io, utils, views
 import core.data_processing as dp
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 from typing import List
 from copy import deepcopy
 import pdb
@@ -95,6 +96,7 @@ def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
     cycles = deepcopy(cycles) # protect internal list modification
 
     plt.figure(figsize=(19, 7))
+    cmap = cm.get_cmap('cool', len(cycles)//2)
 
     # We want contiguous frame ranges for flexion/extension frame range pairs
     for i in np.arange(0, len(cycles), 2):
@@ -116,15 +118,18 @@ def plot_cycles(centre_of_mass:np.ndarray, cycles:List[list]) -> None:
         flx = cycles[i][0], cycles[i][1] # unpack the list of lists
         ext = cycles[i+1][0], cycles[i+1][1]
 
-        plt.plot(np.arange(flx[0] - flx[1] + 1, 1), # shifted to the left, ending at 0
-                 centre_of_mass[flx[0]:flx[1]], color='r') 
+        assert flx[1] == ext[0] # by definition in prev. loop
 
-        plt.plot(centre_of_mass[ext[0]:ext[1]], color='b') # plotted normally, from 0
+        ttl_f = ext[1] - flx[0] # last frame - first frame
+        mp = flx[1] - flx[0] # midpoint shifted to origin
 
-        # pdb.set_trace() # python debugger! pretty cool
-
-    pdb.set_trace()
+        plt.plot(np.arange(-mp, ttl_f-mp), # shift so midpoint is at origin
+                 centre_of_mass[flx[0]:ext[1]], 
+                 label=f"Cycle {i//2 + 1}", color=cmap(i//2))
+        
     plt.axvline(0, linestyle="--", color='k')
+    plt.legend()
+    
     plt.show()
 
 
