@@ -7,7 +7,7 @@ import core.data_processing as dp
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import List
+from typing import List, Tuple
 from copy import deepcopy
 import pdb
 
@@ -47,7 +47,7 @@ def parse_cycles(cycles:str) -> List[tuple]:
     """Converts the 1-indexed frame number ranges from the Excel file into **0-indexed, endpoint-inclusive** ranges for downstream code.
     
     Example:
-        parse_cycles("71-116 117-155 
+        parse_cycles("71-116 117-155 " \
                     "253-298 299-335 " \
                     "585-618 630-669 " \
                     "156-199 210-250")
@@ -58,9 +58,9 @@ def parse_cycles(cycles:str) -> List[tuple]:
         """
 
     if not isinstance(cycles, str): raise TypeError(f"Argument is not a string. Given: {type(cycles)}")
-    assert len(cycles) % 2 == 0 # check that we have flexion/extension pairs 
+    cycles = cycles.split()
 
-    cycles = cycles.split(" ")
+    if not len(cycles) % 2 == 0: raise ValueError(f"Argument needs to have even length. Given: {len(cycles)=}") # check that we have flexion/extension pairs 
 
     # Parse into list of frame ranges 
     for i, rng in enumerate(cycles):
@@ -78,7 +78,7 @@ def parse_cycles(cycles:str) -> List[tuple]:
     return cycles
 
 
-def plot_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
+def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
     """Accepts a centre_of_mass data array and plots the passed cycles. 
     "cycles" should have structure [[flx1, flx2], [ext1, ext2], 
                                     [flx3, flx4], [ext3, ext4], ...]
@@ -159,11 +159,35 @@ def plot_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
     plt.show()
 
 
+def pad_empty_frames(array:np.ndarray, padding:Tuple[int,int]) -> np.ndarray:
+    """
+    Pads empty frames to the start and/or end of the passed numpy array.
+
+    Inputs: 
+        array (np.ndarray): the array with shape (nfs, h, w)
+        padding (Tuple[int,int]): for input (x,y), pads x frames to the front and y frames to the back
+
+    Outputs:
+        array_padded (np.ndarray): the padded array
+
+    """
+
+    array = np.asarray(array)
+    padding = tuple(padding)
+
+    if not len(padding) == 2: raise ValueError(f"padding must be 2-tuple. Given: {padding=}")
+
+    return np.pad(array, pad_width=(padding, (0,0), (0,0)), mode="constant")
+
+
 def main():
     
     # Import data and video
-    masks = io.load_masks("../data/processed/normal_knee_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/normal_knee_radial_video_N16.npy")
+    masks = io.load_masks("../data/processed/1339_knee_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/1339_knee_radial_video_N16.npy")
+
+    masks = pad_empty_frames(masks, (289, 0))
+    video = pad_empty_frames(video, (289, 0))
 
     masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
     
@@ -174,13 +198,14 @@ def main():
     N = len(lbls)
 
     print(f"{nfs = }, {h = }, {w = } \n{lbls = } \n{N = }") 
-    # views.show_frames([video, masks * (255 // masks.max())], "Validate data") # Sanity check
+    views.show_frames([video, masks * (255 // masks.max())], "Validate data") # Sanity check
 
     # Shift segment labels by one
     shift = 1
     masks[masks > 0] = (masks[masks > 0] - 1 - shift) % N + 1
     
-    # views.show_frames([video, masks * (255 // masks.max())], "Validate segment shift") # Sanity check
+    views.show_frames([video, masks * (255 // masks.max())], "Validate segment shift") # Sanity check
+
 
     # Calculate sums
     total_sums, total_counts = dp.compute_sums_nonzeros(masks, video)
@@ -191,19 +216,17 @@ def main():
     centre_of_mass = compute_centre_of_mass(total_sums)
 
     plt.plot(centre_of_mass)
+    plt.title("Centre of mass over non-zero frames"); plt.xlabel("Frame number"); plt.ylabel("Segment number (JC to SB)")
     plt.show()
 
+
     # Plot individual cycles 
-    cycles = "71-116 117-155 " \
-            "253-298 299-335 " \
-            "585-618 630-669 " \
-            "156-199 210-250"
-    
+    cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609"
     cycles = parse_cycles(cycles)
 
     print(f"{cycles=}")
 
-    plot_cycles(centre_of_mass, cycles)
+    plot_com_cycles(centre_of_mass, cycles)
 
     return
 
