@@ -78,7 +78,7 @@ def parse_cycles(cycles:str) -> List[tuple]:
     return cycles
 
 
-def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
+def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:bool = False) -> None:
     """Accepts a centre_of_mass data array and plots the passed cycles. 
     "cycles" should have structure [[flx1, flx2], [ext1, ext2], 
                                     [flx3, flx4], [ext3, ext4], ...]
@@ -87,6 +87,7 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
     Inputs:
         centre_of_mass (np.ndarray): array of length (nfs) giving the position between 1-N of the centre of mass, for each frame
         cycles (List[list]): list containing frame ranges (0-indexed) of flexion and extension cycles to be plotted. 
+        contiguous (bool): Set to True if flexion/extension cycles should be contiguous. False by default
 
     Example usage:
 
@@ -109,17 +110,18 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
     plt.figure(figsize=(19, 7))
     cmap = plt.get_cmap('cool', len(cycle_fs)//2)
 
-    # We want contiguous frame ranges for flexion/extension frame range pairs
-    for i in np.arange(0, len(cycle_fs), 2):
+    if contiguous:
+        # We want contiguous frame ranges for flexion/extension frame range pairs
+        for i in np.arange(0, len(cycle_fs), 2):
 
-        flx = cycle_fs[i] # mutable
-        ext = cycle_fs[i+1]
+            flx = cycle_fs[i] # mutable
+            ext = cycle_fs[i+1]
 
-        mp = (flx[1] + ext[0]) // 2
-        # print(f"{flx[1]=}, {ext[0]=}, {mp=}") # sanity check
+            mp = (flx[1] + ext[0]) // 2
+            # print(f"{flx[1]=}, {ext[0]=}, {mp=}") # sanity check
 
-        flx[1] = mp 
-        ext[0] = mp 
+            flx[1] = mp 
+            ext[0] = mp 
 
     # Cast cycles to Series for easier indexing 
     cycle_coms = [] 
@@ -128,14 +130,18 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> None:
         flx = cycle_fs[i]
         ext = cycle_fs[i+1]
 
-        assert flx[1] == ext[0] # Ensure contiguous frame range
+        flx_vals = centre_of_mass[flx[0]:flx[1]]
+        ext_vals = centre_of_mass[ext[0]:ext[1]]
 
-        mp = flx[1] - flx[0] # shift midpoint towards origin
+        end = min(ext[1], len(centre_of_mass)) # catch indexing errors for slices ending on last video frame
 
-        com = centre_of_mass[flx[0]:ext[1]]
-        com = pd.Series(com, index = np.arange(len(com)) - mp) # Cast to Series and centre it at 0
+        flx_idx = np.arange(flx[0], flx[1]) - flx[1] # shift endpoint to origin
+        ext_idx = np.arange(ext[0], end) - ext[0] # shift startpoint to origin
 
-        cycle_coms.append(com)
+        flx_vals = pd.Series(flx_vals, index=flx_idx)
+        ext_vals = pd.Series(ext_vals, index=ext_idx)
+
+        cycle_coms.append(pd.concat([flx_vals, ext_vals], axis=0))
 
     cycle_coms = pd.concat(cycle_coms, axis=1) # shape (nfs, ncycs)
 
@@ -186,7 +192,7 @@ def main():
     masks = io.load_masks("../data/processed/1339_knee_radial_masks_N16.npy")
     video = io.load_video("../data/processed/1339_knee_radial_video_N16.npy")
 
-    masks = pad_empty_frames(masks, (289, 0))
+    masks = pad_empty_frames(masks, (289, 0)) # assume from now on 
     video = pad_empty_frames(video, (289, 0))
 
     masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
@@ -226,7 +232,7 @@ def main():
 
     print(f"{cycles=}")
 
-    plot_com_cycles(centre_of_mass, cycles)
+    plot_com_cycles(centre_of_mass, cycles) # plotting function with midpoint shift for contiguous flx/ext frame ranges
 
     return
 
