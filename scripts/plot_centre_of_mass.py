@@ -78,7 +78,7 @@ def parse_cycles(cycles:str) -> List[tuple]:
     return cycles
 
 
-def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:bool = False) -> None:
+def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:bool = False, video_id:str = None) -> None:
     """Accepts a centre_of_mass data array and plots the passed cycles. 
     "cycles" should have structure [[flx1, flx2], [ext1, ext2], 
                                     [flx3, flx4], [ext3, ext4], ...]
@@ -88,6 +88,7 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
         centre_of_mass (np.ndarray): array of length (nfs) giving the position between 1-N of the centre of mass, for each frame
         cycles (List[list]): list containing frame ranges (0-indexed) of flexion and extension cycles to be plotted. 
         contiguous (bool): Set to True if flexion/extension cycles should be contiguous. False by default
+        video_id (str): For example "308 normal". Just for plot formatting
 
     Example usage:
 
@@ -98,7 +99,7 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
                 "156-199 210-250"
         cycles = parse_cycles(cycles)
 
-        plot_cycles(centre_of_mass, cycles)
+        plot_cycles(centre_of_mass, cycles, contiguous=False, video_id="308 normal")
 
     """
 
@@ -143,10 +144,12 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
 
         cycle_coms.append(pd.concat([flx_vals, ext_vals], axis=0))
 
+        pdb.set_trace()
+
     cycle_coms = pd.concat(cycle_coms, axis=1) # shape (nfs, ncycs)
 
     # Get average position
-    avg_com = cycle_coms.mean(axis=1, skipna=True)
+    avg_com = cycle_coms.mean(axis=1, skipna=False)
 
     # Plot all cycles, centered around the midpoint 
     for i in range(cycle_coms.shape[1]):
@@ -155,7 +158,9 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
     plt.plot(avg_com.sort_index(), color='gray', linestyle='--', label="Average of cycles")
 
     # Final formatting
-    plt.title("Average position of fluorescence intensity")
+    if video_id is not None: video_id = f" ({video_id})"
+    else: video_id = ""
+    plt.title("Average position of fluorescence intensity" + video_id)
     plt.xlabel("Frames from midpoint (Left: flexion; Right: extension)")
     plt.ylabel("Segment number (JC to SB)")
 
@@ -163,6 +168,10 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
     
     plt.legend()
     plt.show()
+
+    print(cycle_coms)
+    print(cycle_coms.shape)
+    print(cycle_coms.info())
 
 
 def pad_empty_frames(array:np.ndarray, padding:Tuple[int,int]) -> np.ndarray:
@@ -189,11 +198,13 @@ def pad_empty_frames(array:np.ndarray, padding:Tuple[int,int]) -> np.ndarray:
 def main():
     
     # Import data and video
-    masks = io.load_masks("../data/processed/1339_knee_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/1339_knee_radial_video_N16.npy")
+    # masks = io.load_masks("../data/processed/1339_knee_radial_masks_N16.npy")
+    # video = io.load_video("../data/processed/1339_knee_radial_video_N16.npy")
+    # masks = pad_empty_frames(masks, (289, 0)) # for 1339 aging video
+    # video = pad_empty_frames(video, (289, 0))
 
-    masks = pad_empty_frames(masks, (289, 0)) # assume from now on 
-    video = pad_empty_frames(video, (289, 0))
+    masks = io.load_masks("../data/processed/normal_knee_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/normal_knee_radial_video_N16.npy")
 
     masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
     
@@ -204,13 +215,13 @@ def main():
     N = len(lbls)
 
     print(f"{nfs = }, {h = }, {w = } \n{lbls = } \n{N = }") 
-    views.show_frames([video, masks * (255 // masks.max())], "Validate data") # Sanity check
+    # views.show_frames([video, masks * (255 // masks.max())], "Validate data") # Sanity check
 
     # Shift segment labels by one
     shift = 1
     masks[masks > 0] = (masks[masks > 0] - 1 - shift) % N + 1
     
-    views.show_frames([video, masks * (255 // masks.max())], "Validate segment shift") # Sanity check
+    # views.show_frames([video, masks * (255 // masks.max())], "Validate segment shift") # Sanity check
 
 
     # Calculate sums
@@ -227,12 +238,13 @@ def main():
 
 
     # Plot individual cycles 
-    cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609"
+    # cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
+    cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" # 308 normal
     cycles = parse_cycles(cycles)
 
     print(f"{cycles=}")
 
-    plot_com_cycles(centre_of_mass, cycles) # plotting function with midpoint shift for contiguous flx/ext frame ranges
+    plot_com_cycles(centre_of_mass, cycles, video_id = "308 Normal") # plotting function with midpoint shift for contiguous flx/ext frame ranges
 
     return
 
