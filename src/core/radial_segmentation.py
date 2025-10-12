@@ -292,7 +292,7 @@ def sample_femur_interior_pts(mask: np.ndarray, N_lns: int) -> np.ndarray:
     """
     if VERBOSE: print("sample_femur_interior_pts() called!")
 
-    mask = mask.copy()
+    mask = np.asarray(mask).copy()
     nframes, h, w = mask.shape
 
     # Step 1 – choose equally-spaced column indices (x-coords)
@@ -610,6 +610,8 @@ def label_radial_masks(
     labels_video = np.zeros_like(masks, dtype=int)
     sector_size = 2 * np.pi / N
 
+    centers, references = references, centers # for some reason this fixes it. idk lol
+
     for f in range(nfs):
         mask = masks[f]
         cx, cy = centers[f, 0]
@@ -633,4 +635,4 @@ def label_radial_masks(
         # Place labels into output array
         labels_video[f, ys, xs] = labels
 
-    return labels_video
+    return labels_video.astype(np.uint8)
