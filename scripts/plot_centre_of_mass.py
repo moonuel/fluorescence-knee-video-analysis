@@ -144,8 +144,6 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
 
         cycle_coms.append(pd.concat([flx_vals, ext_vals], axis=0))
 
-        pdb.set_trace()
-
     cycle_coms = pd.concat(cycle_coms, axis=1) # shape (nfs, ncycs)
 
     # Get average position
@@ -156,6 +154,8 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
         com = cycle_coms.iloc[:, i]
         plt.plot(com.sort_index(), label=f"Cycle {i + 1}", color=cmap(i))
     plt.plot(avg_com.sort_index(), color='gray', linestyle='--', label="Average of cycles")
+
+    breakpoint()
 
     # Final formatting
     if video_id is not None: video_id = f" ({video_id})"
@@ -195,38 +195,22 @@ def pad_empty_frames(array:np.ndarray, padding:Tuple[int,int]) -> np.ndarray:
     return np.pad(array, pad_width=(padding, (0,0), (0,0)), mode="constant")
 
 
-def main():
+def main(masks:np.ndarray, video:np.ndarray, cycles:str):
     
-    # Import data and video
-    # masks = io.load_masks("../data/processed/1339_knee_radial_masks_N16.npy")
-    # video = io.load_video("../data/processed/1339_knee_radial_video_N16.npy")
-    # masks = pad_empty_frames(masks, (289, 0)) # for 1339 aging video
-    # video = pad_empty_frames(video, (289, 0))
-
-    masks = io.load_masks("../data/processed/normal_knee_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/normal_knee_radial_video_N16.npy")
-
-    masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
-    
+    # Validate data 
     if masks.shape != video.shape: raise ValueError(f"{masks.shape=} != {video.shape=}. Is the data correct?")
 
     nfs, h, w = masks.shape
     lbls = np.unique(masks[masks > 0])
     N = len(lbls)
 
+    assert N == np.max(lbls)
+
     print(f"{nfs = }, {h = }, {w = } \n{lbls = } \n{N = }") 
-    # views.show_frames([video, masks * (255 // masks.max())], "Validate data") # Sanity check
-
-    # Shift segment labels by one
-    shift = 1
-    masks[masks > 0] = (masks[masks > 0] - 1 - shift) % N + 1
-    
-    # views.show_frames([video, masks * (255 // masks.max())], "Validate segment shift") # Sanity check
-
+    views.show_frames([video, masks * (255 // masks.max())], "Validate data") # Sanity check
 
     # Calculate sums
     total_sums, total_counts = dp.compute_sums_nonzeros(masks, video)
-    
     print(f"{total_sums.shape=}, {total_counts.shape=}")
 
     # Calculate center of mass
@@ -236,12 +220,8 @@ def main():
     plt.title("Centre of mass over non-zero frames"); plt.xlabel("Frame number"); plt.ylabel("Segment number (JC to SB)")
     plt.show()
 
-
     # Plot individual cycles 
-    # cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
-    cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" # 308 normal
     cycles = parse_cycles(cycles)
-
     print(f"{cycles=}")
 
     plot_com_cycles(centre_of_mass, cycles, video_id = "308 Normal") # plotting function with midpoint shift for contiguous flx/ext frame ranges
@@ -249,5 +229,41 @@ def main():
     return
 
 
+def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/1339_aging_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/1339_aging_radial_video_N16.npy")
+    cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
+
+    return masks, video, cycles
+
+
+def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/normal_knee_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/normal_knee_radial_video_N16.npy")
+    cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" # 308 normal
+
+    masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
+    masks[masks > 0] = (masks[masks > 0] - 2) % 16 + 1 # Shift segment labels by one for 308 N16 video
+
+    return masks, video, cycles
+
+
+def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/308_normal_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/308_normal_radial_video_N64.npy")
+    cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" # 308 normal
+
+    return masks, video, cycles
+
+
 if __name__ == "__main__":
-    main()
+    
+    # Import data and video
+    # masks, video, cycles = load_308_N16()
+    # masks, video, cycles = load_308_N64()
+    masks, video, cycles = load_1339_N16()
+    
+    main(masks, video, cycles)
