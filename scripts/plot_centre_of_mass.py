@@ -195,7 +195,7 @@ def pad_empty_frames(array:np.ndarray, padding:Tuple[int,int]) -> np.ndarray:
     return np.pad(array, pad_width=(padding, (0,0), (0,0)), mode="constant")
 
 
-def main(masks:np.ndarray, video:np.ndarray, cycles:str):
+def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
     
     # Validate data 
     if masks.shape != video.shape: raise ValueError(f"{masks.shape=} != {video.shape=}. Is the data correct?")
@@ -224,7 +224,7 @@ def main(masks:np.ndarray, video:np.ndarray, cycles:str):
     cycles = parse_cycles(cycles)
     print(f"{cycles=}")
 
-    plot_com_cycles(centre_of_mass, cycles, video_id = "308 Normal") # plotting function with midpoint shift for contiguous flx/ext frame ranges
+    plot_com_cycles(centre_of_mass, cycles, video_id = num_type) # plotting function with optional contiguous frame ranges
 
     return
 
@@ -235,6 +235,15 @@ def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
     video = io.load_video("../data/processed/1339_aging_radial_video_N16.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
 
+    return masks, video, cycles
+
+
+def load_1339_N64() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/1339_aging_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/1339_aging_radial_video_N64.npy")
+    cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
+    
     return masks, video, cycles
 
 
@@ -261,9 +270,7 @@ def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
 
 if __name__ == "__main__":
     
-    # Import data and video
-    # masks, video, cycles = load_308_N16()
-    # masks, video, cycles = load_308_N64()
-    masks, video, cycles = load_1339_N16()
-    
-    main(masks, video, cycles)
+    masks, video, cycles = load_308_N16(); main(masks, video, cycles, "308 Normal (16 segs)")
+    masks, video, cycles = load_308_N64(); main(masks, video, cycles, "308 Normal (64 segs)")
+    masks, video, cycles = load_1339_N16(); main(masks, video, cycles, "1339 Aging (16 segs)")
+    masks, video, cycles = load_1339_N64(); main(masks, video, cycles, "1339 Aging (64 segs)")
