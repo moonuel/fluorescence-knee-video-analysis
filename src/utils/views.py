@@ -347,7 +347,7 @@ def plot_three_derivs(derivs:Dict[str, np.ndarray], metadata:Dict, show_figs=Tru
     return
 
 
-def show_frames(video:np.ndarray, title:str=None, show_num:bool=True, frame_offset:int=0) -> None:
+def show_frames(video:np.ndarray, title:str=None, show_num:bool=True, frame_offset:int=0) -> np.ndarray:
     """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit. Accepts a list of videos as input for horizontal concatenation"""
     if VERBOSE: print("show_frames() called!")
 
@@ -542,7 +542,7 @@ def _draw_points(frame:np.ndarray, pts:np.ndarray) -> np.ndarray:
         raise ValueError(f"_draw_points(): 'pts' must be 2D array with shape (N, 2). Shape {pts.shape} was given")
     
     for pt in pts:
-        cv2.circle(frame, tuple(pt), 1, (255,255,255))
+        cv2.circle(frame, tuple(pt), 1, (127,127,127))
     
 
 def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.ndarray:
@@ -555,7 +555,8 @@ def draw_points(video:np.ndarray, pts:np.ndarray, show_video:bool=False) -> np.n
     if video.shape[0] != pts.shape[0]:
         raise ValueError("draw_points(): video and pts arrays must have same number of rows")
     
-    pts = np.reshape(pts, (video.shape[0], -1, 2)) # For safety 
+    if not pts.dtype == "object":
+        pts = np.reshape(pts, (video.shape[0], -1, 2)) # For safety 
 
     bool_flag = False
     if video.dtype != np.uint8:
