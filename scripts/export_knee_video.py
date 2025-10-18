@@ -7,7 +7,8 @@ import pandas as pd
 import pandas as pd
 from pathlib import Path
 import cv2
-
+from multiprocessing import Pool 
+from typing import Tuple
 
 def load_masks(filepath:str) -> np.ndarray:
     """Loads the mask at the specified location. 
@@ -46,7 +47,7 @@ def load_video(filepath:str) -> np.ndarray:
     return video
 
 
-def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, font_scale=0.5, color=255, thickness=1) -> np.ndarray:
+def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, step:int = 1, font_scale=0.5, color=255, thickness=1) -> np.ndarray:
     """
     Overlay region numbers at the centroid of each labeled region in a grayscale video.
 
@@ -56,6 +57,8 @@ def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, font_scale=0.
         Grayscale video array of shape (frames, height, width), dtype should be uint8 or compatible.
     mask_video : np.ndarray
         Integer-labeled mask video of the same shape, where 0 = background and 1..N = regions.
+    step : int
+        Sets the step for segment labeling. Defaults to 1 (every segment will be labeled).
     font_scale : float
         Scale factor for the text font.
     color : int
@@ -69,6 +72,8 @@ def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, font_scale=0.
         Copy of the video with region numbers drawn at centroids.
     """
 
+    from scipy.stats import trim_mean
+
     modified_video = video.copy()
 
     assert modified_video.shape == mask_video.shape
@@ -78,7 +83,7 @@ def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, font_scale=0.
         frame_mask = mask_video[t]
         unique_labels = np.unique(frame_mask)
         # Skip background
-        region_labels = unique_labels[unique_labels != 0]
+        region_labels = unique_labels[unique_labels != 0][::step] # Choose only every "step" labels
 
         for label in region_labels:
             # Find coordinates of pixels belonging to this region
@@ -88,9 +93,11 @@ def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, font_scale=0.
             if len(xs) == 0:
                 continue
 
-            # Compute centroid
-            centroid_x = int(xs.mean())
-            centroid_y = int(ys.mean())
+            # Compute position of label
+            # centroid_x, centroid_y = int(xs.mean()), int(ys.mean())
+            centroid_x, centroid_y = int(np.median(xs)), int(np.median(ys))
+            # centroid_x, centroid_y = int(trim_mean(xs, 0.25)), int(trim_mean(ys, 0.25))
+            
 
             # Overlay the label at the centroid
             cv2.putText(modified_video[t],
@@ -104,44 +111,101 @@ def draw_region_numbers(video: np.ndarray, mask_video: np.ndarray, font_scale=0.
     return modified_video
 
 
-def main(mask_path, video_path):
+def process_batch(video_batch, masks_batch):
 
-    # Load data 
-    shared_dir = "../data/processed/"
-    mask_path =  shared_dir + mask_path # Manually specify filenames 
-    video_path = shared_dir + video_path
+        out = views.draw_mask_boundaries(video_batch, masks_batch, intensity=159)
+        out = draw_region_numbers(out, masks_batch, step=STEP, color=191)
 
-    masks = load_masks(mask_path)
-    video = load_video(video_path)
-    
+        return out
+
+
+def main(masks:np.ndarray, video:np.ndarray):
+
     assert masks.shape == video.shape # Sanity check that we're using new mask format
+    
     nfs, h, w = video.shape
-    print(f"{video.shape=}")
-
     mask_lbls = np.unique(masks[masks > 0]).astype(int) # Returns sorted list of unique non-zero labels
     N = len(mask_lbls)
-
+    assert N == np.max(mask_lbls)
     
     # Validate data
+    print(f"{video.shape=}")
     print(f"{mask_lbls=}")
-    views.show_frames(masks * (255 // mask_lbls.max())) # Rescale label intensities for better viewing
-    views.show_frames(video)
+    # views.show_frames([video, masks * (255 // mask_lbls.max())]) # Rescale label intensities for better viewing
 
     # Draw mask labels
-    video_out = views.draw_mask_boundaries(video, masks)
-    video_out = draw_region_numbers(video_out, masks)
+    N_batches = 10
+    video_batches = np.array_split(video, N_batches, 0)
+    mask_batches = np.array_split(masks, N_batches, 0)
+
+    # Distribute batches to subprocesses
+    with Pool(N_batches) as pool:
+        results = pool.starmap(process_batch, zip(video_batches, mask_batches))
+
+    # Collate batches 
+    video_out = np.concatenate(results, axis=0)
+
+
+    # video_out = views.draw_mask_boundaries(video, masks)
+    # video_out = draw_region_numbers(video_out, masks)
+
+    video_out = views.show_frames(video_out)
+
+    breakpoint()
 
     return video_out
 
 
+def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/1339_aging_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/1339_aging_radial_video_N16.npy")
+    cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
+
+    return masks, video #, cycles
+
+
+def load_1339_N64() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/1339_aging_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/1339_aging_radial_video_N64.npy")
+    
+    return masks, video 
+
+
+def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/308_normal_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/308_normal_radial_video_N16.npy")
+
+    masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
+    masks[masks > 0] = (masks[masks > 0] - 2) % 16 + 1 # Shift segment labels by one for 308 N16 video
+
+    return masks, video 
+
+
+def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/308_normal_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/308_normal_radial_video_N64.npy")
+
+    return masks, video
+
+
+# Global variable for setting step in segment labeling... lazy i know
+STEP = 4 
+
 if __name__ == "__main__":
-    mask_name = "1339_knee_radial_masks_N16.npy" # Path will be pre-pended
-    video_name = "1339_knee_radial_video_N16.npy"
+
+    masks, video = load_1339_N64()
+
+    video_out = main(masks, video)
+    views.show_frames(video_out)
+    # video_out = views.show_frames(video_out, frame_offset=289) # Overwrite frame nums with offset
     
-    video_out = main(mask_name, video_name)
-    video_out = views.show_frames(video_out, frame_offset=289) # Overwrite frame nums with offset
     
-    
-    filename = "1339_aging_validation_video"
-    io.save_avi(f"{filename}.avi", video_out)
-    io.save_mp4(f"{filename}.mp4", video_out)
+
+
+    # filename = "1339_aging_validation_video"
+    # io.save_avi(f"{filename}.avi", video_out)
+    # io.save_mp4(f"{filename}.mp4", video_out)
