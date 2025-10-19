@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from typing import List, Tuple
 from copy import deepcopy
 import pdb
+import scipy as sp
 
 
 def compute_centre_of_mass(total_sums: np.ndarray) -> np.ndarray:
@@ -158,7 +159,7 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
     breakpoint()
 
     # Final formatting
-    if video_id is not None: video_id = f" ({video_id})"
+    if video_id is not None: video_id = f" [{video_id}]"
     else: video_id = ""
     plt.title("Average position of fluorescence intensity" + video_id)
     plt.xlabel("Frames from midpoint (Left: flexion; Right: extension)")
@@ -195,6 +196,38 @@ def pad_empty_frames(array:np.ndarray, padding:Tuple[int,int]) -> np.ndarray:
     return np.pad(array, pad_width=(padding, (0,0), (0,0)), mode="constant")
 
 
+def compute_cycle_coms(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> pd.DataFrame:
+
+    if not isinstance(cycle_fs, list): raise TypeError(f"passed cycles is not a list. Given: {type(cycle_fs)}")
+
+    cycle_fs = deepcopy(cycle_fs) # protect internal list modification
+
+    # Cast cycles to Series for easier indexing 
+    cycle_coms = [] 
+    for i in np.arange(0, len(cycle_fs), 2): 
+
+        # Unpack ranges 
+        flx = cycle_fs[i]
+        ext = cycle_fs[i+1]
+
+        flx_vals = centre_of_mass[flx[0]:flx[1]]
+        ext_vals = centre_of_mass[ext[0]:ext[1]]
+
+        end = min(ext[1], len(centre_of_mass)) # catch indexing errors for slices ending on last video frame
+
+        flx_idx = np.arange(flx[0], flx[1]) - flx[1] # shift endpoint to origin
+        ext_idx = np.arange(ext[0], end) - ext[0] # shift startpoint to origin
+
+        flx_vals = pd.Series(flx_vals, index=flx_idx)
+        ext_vals = pd.Series(ext_vals, index=ext_idx)
+
+        cycle_coms.append(pd.concat([flx_vals, ext_vals], axis=0))
+
+    cycle_coms = pd.concat(cycle_coms, axis=1) # shape (nfs, ncycs)
+
+    return cycle_coms
+
+
 def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
     
     # Validate data 
@@ -213,17 +246,21 @@ def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
     total_sums, total_counts = dp.compute_sums_nonzeros(masks, video)
     print(f"{total_sums.shape=}, {total_counts.shape=}")
 
-    # Calculate center of mass
+    # Calculate center of mass over entire video
     centre_of_mass = compute_centre_of_mass(total_sums)
+
+    # Get COMs per cycle
+    cycle_coms = compute_cycle_coms(centre_of_mass, cycles)
+
+    
+    breakpoint()
 
     plt.plot(centre_of_mass)
     plt.title("Centre of mass over non-zero frames"); plt.xlabel("Frame number"); plt.ylabel("Segment number (JC to SB)")
     plt.show()
 
     # Plot individual cycles 
-    cycles = parse_cycles(cycles)
     print(f"{cycles=}")
-
     plot_com_cycles(centre_of_mass, cycles, video_id = num_type) # plotting function with optional contiguous frame ranges
 
     return
@@ -281,6 +318,6 @@ def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
 if __name__ == "__main__":
     
     masks, video, cycles = load_308_N16(); main(masks, video, cycles, "308 Normal (16 segs)")
-    masks, video, cycles = load_308_N64(); main(masks, video, cycles, "308 Normal (64 segs)")
-    masks, video, cycles = load_1339_N16(); main(masks, video, cycles, "1339 Aging (16 segs)")
-    masks, video, cycles = load_1339_N64(); main(masks, video, cycles, "1339 Aging (64 segs)")
+    # masks, video, cycles = load_308_N64(); main(masks, video, cycles, "308 Normal (64 segs)")
+    # masks, video, cycles = load_1339_N16(); main(masks, video, cycles, "1339 Aging (16 segs)")
+    # masks, video, cycles = load_1339_N64(); main(masks, video, cycles, "1339 Aging (64 segs)")
