@@ -234,6 +234,8 @@ def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
     masks = io.load_masks("../data/processed/1339_aging_radial_masks_N16.npy")
     video = io.load_video("../data/processed/1339_aging_radial_video_N16.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
+    assert len(cycles.split()) % 2 == 0 # ensure flexion/extension pairs 
+    cycles = parse_cycles(cycles)
 
     return masks, video, cycles
 
@@ -243,15 +245,20 @@ def load_1339_N64() -> Tuple[np.ndarray, np.ndarray]:
     masks = io.load_masks("../data/processed/1339_aging_radial_masks_N64.npy")
     video = io.load_video("../data/processed/1339_aging_radial_video_N64.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
-    
+    assert len(cycles.split()) % 2 == 0 # ensure flexion/extension pairs 
+    cycles = parse_cycles(cycles)
+
     return masks, video, cycles
 
 
 def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_knee_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/normal_knee_radial_video_N16.npy")
-    cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" # 308 normal
+    masks = io.load_masks("../data/processed/308_normal_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/308_normal_radial_video_N16.npy")
+    # cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" 
+    cycles = "71-116 117-155 253-298 299-335 585-629 630-669 156-199 210-250" # added 12 frames to cycle 3 flexion
+    assert len(cycles.split()) % 2 == 0 # ensure flexion/extension pairs 
+    cycles = parse_cycles(cycles)
 
     masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
     masks[masks > 0] = (masks[masks > 0] - 2) % 16 + 1 # Shift segment labels by one for 308 N16 video
@@ -263,7 +270,10 @@ def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
 
     masks = io.load_masks("../data/processed/308_normal_radial_masks_N64.npy")
     video = io.load_video("../data/processed/308_normal_radial_video_N64.npy")
-    cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" # 308 normal
+    # cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" 
+    cycles = "71-116 117-155 253-298 299-335 585-629 630-669 156-199 210-250" # added 12 frames to cycle 3 flexion
+    assert len(cycles.split()) % 2 == 0 # ensure flexion/extension pairs 
+    cycles = parse_cycles(cycles)
 
     return masks, video, cycles
 
