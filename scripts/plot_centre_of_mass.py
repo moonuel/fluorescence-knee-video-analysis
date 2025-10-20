@@ -79,17 +79,17 @@ def parse_cycles(cycles:str) -> List[tuple]:
     return cycles
 
 
-def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:bool = False, video_id:str = None) -> None:
+def plot_cycle_coms(cycle_coms:pd.DataFrame, video_id:str = None) -> None:
     """Accepts a centre_of_mass data array and plots the passed cycles. 
     "cycles" should have structure [[flx1, flx2], [ext1, ext2], 
                                     [flx3, flx4], [ext3, ext4], ...]
         i.e. "cycles" is a list of frame range pairs 
     
     Inputs:
-        centre_of_mass (np.ndarray): array of length (nfs) giving the position between 1-N of the centre of mass, for each frame
-        cycles (List[list]): list containing frame ranges (0-indexed) of flexion and extension cycles to be plotted. 
-        contiguous (bool): Set to True if flexion/extension cycles should be contiguous. False by default
-        video_id (str): For example "308 normal". Just for plot formatting
+        cycle_coms : (pd.DataFrame)
+            DataFrame with shape (nframes_rel, ncycles) containing COMs per cycle, aligned and centered with each other.
+        video_id : (str) 
+            For example "308 normal". Just for plot formatting
 
     Example usage:
 
@@ -104,54 +104,16 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
 
     """
 
-    if not isinstance(cycle_fs, list): raise TypeError(f"passed cycles is not a list. Given: {type(cycle_fs)}")
-    assert len(cycle_fs) % 2 == 0 # sanity check that we have a complete set of pairs 
-
-    cycle_fs = deepcopy(cycle_fs) # protect internal list modification
+    nfrs, ncycs = cycle_coms.shape
 
     plt.figure(figsize=(19, 7))
-    cmap = plt.get_cmap('cool', len(cycle_fs)//2)
-
-    if contiguous:
-        # We want contiguous frame ranges for flexion/extension frame range pairs
-        for i in np.arange(0, len(cycle_fs), 2):
-
-            flx = cycle_fs[i] # mutable
-            ext = cycle_fs[i+1]
-
-            mp = (flx[1] + ext[0]) // 2
-            # print(f"{flx[1]=}, {ext[0]=}, {mp=}") # sanity check
-
-            flx[1] = mp 
-            ext[0] = mp 
-
-    # Cast cycles to Series for easier indexing 
-    cycle_coms = [] 
-    for i in np.arange(0, len(cycle_fs), 2): 
-
-        flx = cycle_fs[i]
-        ext = cycle_fs[i+1]
-
-        flx_vals = centre_of_mass[flx[0]:flx[1]]
-        ext_vals = centre_of_mass[ext[0]:ext[1]]
-
-        end = min(ext[1], len(centre_of_mass)) # catch indexing errors for slices ending on last video frame
-
-        flx_idx = np.arange(flx[0], flx[1]) - flx[1] # shift endpoint to origin
-        ext_idx = np.arange(ext[0], end) - ext[0] # shift startpoint to origin
-
-        flx_vals = pd.Series(flx_vals, index=flx_idx)
-        ext_vals = pd.Series(ext_vals, index=ext_idx)
-
-        cycle_coms.append(pd.concat([flx_vals, ext_vals], axis=0))
-
-    cycle_coms = pd.concat(cycle_coms, axis=1) # shape (nfs, ncycs)
+    cmap = plt.get_cmap('cool', ncycs)
 
     # Get average position
     avg_com = cycle_coms.mean(axis=1, skipna=False)
 
     # Plot all cycles, centered around the midpoint 
-    for i in range(cycle_coms.shape[1]):
+    for i in range(ncycs):
         com = cycle_coms.iloc[:, i]
         plt.plot(com.sort_index(), label=f"Cycle {i + 1}", color=cmap(i))
     plt.plot(avg_com.sort_index(), color='gray', linestyle='--', label="Average of cycles")
@@ -227,6 +189,41 @@ def compute_cycle_coms(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> pd.Dat
 
 
 def rescale_cycle_coms(cycle_coms:pd.DataFrame) -> pd.DataFrame:
+    """
+    Resamples the flexion and extension parts of a centered cycle_com DataFrame 
+    to ensure equal duration. 
+    
+    Inputs:
+    -------
+        cycle_coms : pd.DataFrame
+            A centered df with rows "Frame Numbers (Relative)" and columns "cycle numbers". 
+            Contains NaN for cycles (columns) that are shorter than the others. 
+            Flexion parts should end at frame index -1, and extension parts should start at frame index 0,
+            so that all cycles are aligned. 
+
+    Outputs:
+    --------
+        cycle_coms_rescaled : pd.DataFrame
+            A centered df with same structure as the input df, but with rescaled columns to resolve all NaN.
+        
+    Example usage:
+    --------------
+        
+        # Compute COM over video and prepare cycles 
+        total_sums, total_counts = dp.compute_sums_nonzeros(masks, video)
+        centre_of_mass = compute_centre_of_mass(total_sums)
+        cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
+        cycles = parse_cycles(cycles) # Validate and convert to List[list]
+
+        ...
+
+        # Select cycle COMS and rescale
+        cycle_coms = compute_cycle_coms(centre_of_mass, cycles)
+        cycle_coms_rescaled = rescale_cycle_coms(cycle_coms)          
+
+    """
+
+    cycle_coms.sort_index(inplace=True)
 
     idx_flx = cycle_coms.loc[:-1].index.to_numpy()
     idx_ext = cycle_coms.loc[0:].index.to_numpy()
@@ -240,12 +237,14 @@ def rescale_cycle_coms(cycle_coms:pd.DataFrame) -> pd.DataFrame:
     flx_stretch = []
     for col in range(ncols):
 
+        # breakpoint()
+
         # No need to stretch the longest cycle
         if len(flx[col].dropna()) == len(flx[col]): 
             flx_stretch.append(flx[col])
             continue 
 
-        # Normalize flx frames to [0,1]
+        # Remap domain to frames to [0,1]
         x_old = np.linspace(0, 1, len(flx[col].dropna()))
         y_old = flx[col].dropna()
 
@@ -264,6 +263,8 @@ def rescale_cycle_coms(cycle_coms:pd.DataFrame) -> pd.DataFrame:
     # Stretch extension frames
     ext_stretch = []
     for col in range(ncols):
+
+        # breakpoint()
 
         # No need to stretch the longest cycle
         if len(ext[col].dropna()) == len(ext[col]): 
@@ -290,6 +291,7 @@ def rescale_cycle_coms(cycle_coms:pd.DataFrame) -> pd.DataFrame:
     cycle_coms_stretch = pd.concat([flx_stretch, ext_stretch], axis=0)
 
     return cycle_coms_stretch
+
 
 def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
     
@@ -322,9 +324,18 @@ def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
     plt.title("Centre of mass over non-zero frames"); plt.xlabel("Frame number"); plt.ylabel("Segment number (JC to SB)")
     plt.show()
 
+    # Get COMs per cycle
+    cycle_coms = compute_cycle_coms(centre_of_mass, cycles)
+    cycle_coms_rescaled = rescale_cycle_coms(cycle_coms) # Rescale COMs per cycle
+
+    breakpoint()
+   
     # Plot individual cycles 
     print(f"{cycles=}")
-    plot_com_cycles(centre_of_mass, cycles, video_id = num_type) # plotting function with optional contiguous frame ranges
+    print(cycle_coms.info())
+    print(cycle_coms)
+    plot_cycle_coms(cycle_coms, video_id = num_type) 
+    plot_cycle_coms(cycle_coms_rescaled, video_id = num_type)
 
     return
 
