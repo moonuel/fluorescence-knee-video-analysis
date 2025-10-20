@@ -128,13 +128,41 @@ with pd.ExcelWriter(excel_path) as writer:
 pdf_path = fr"video{video_number}N{segment_count}_heatmap.pdf"
 with PdfPages(pdf_path) as pdf:
     fig, ax = plt.subplots(figsize=(10, 5))
+    
     combined = np.concatenate([avg_flex, avg_ext], axis=0)
     im = ax.imshow(combined.T, aspect="auto", cmap="viridis", origin="lower")
-    ax.axvline(x=avg_flex.shape[0]-0.5, color="white", linestyle="--", linewidth=1.5)
+    
+    # --- Flexion/Extension split ---
+    split_index = avg_flex.shape[0]
+    ax.axvline(x=split_index - 0.5, color="white", linestyle="--", linewidth=1.5)
+    
+    # --- Define angle mappings ---
+    flex_labels = np.linspace(30, 130, avg_flex.shape[0])
+    ext_labels = np.linspace(135, 30, avg_ext.shape[0])
+    joint_angles = np.concatenate([flex_labels, ext_labels])
+    
+    # --- Define desired ticks for each phase ---
+    flex_tick_labels = np.arange(30, 131, 15)   # 30 → 130
+    ext_tick_labels  = np.arange(135, 29, -15)  # 135 → 30
+
+    # Find corresponding indices within each phase
+    flex_tick_positions = [np.abs(flex_labels - deg).argmin() for deg in flex_tick_labels]
+    ext_tick_positions  = split_index + np.array([np.abs(ext_labels - deg).argmin() for deg in ext_tick_labels])
+
+    # Combine both
+    tick_positions = np.concatenate([flex_tick_positions, ext_tick_positions])
+    tick_labels = [f"{d}" for d in np.concatenate([flex_tick_labels, ext_tick_labels])]
+
+    # --- Apply ticks and labels ---
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Joint Angle (degrees)")
+
+    # --- Titles and colorbar ---
     ax.set_title("Averaged Normalized Intensity: Flexion (Left) | Extension (Right)")
-    ax.set_xlabel("Rescaled Frame Index")
     ax.set_ylabel("Segment Index")
     plt.colorbar(im, ax=ax, label="Avg Normalized Intensity (%)")
+    
     pdf.savefig(fig)
     plt.close(fig)
 
@@ -151,13 +179,42 @@ with pd.ExcelWriter(excel_path_50) as writer:
 
 with PdfPages(pdf_path_50) as pdf:
     fig, ax = plt.subplots(figsize=(10, 5))
+    
     combined = np.concatenate([avg_flex_50, avg_ext_50], axis=0)
     im = ax.imshow(combined.T, aspect="auto", cmap="viridis", origin="lower")
-    ax.axvline(x=avg_flex_50.shape[0]-0.5, color="white", linestyle="--", linewidth=1.5)
+    
+    # --- Flexion/Extension split ---
+    split_index = avg_flex_50.shape[0]
+    ax.axvline(x=split_index - 0.5, color="white", linestyle="--", linewidth=1.5)
+
+    # --- Define angle mapping ---
+    flex_labels = np.linspace(30, 130, avg_flex_50.shape[0])
+    ext_labels = np.linspace(135, 30, avg_ext_50.shape[0])
+    joint_angles = np.concatenate([flex_labels, ext_labels])
+
+    # --- Define tick labels for both halves ---
+    # flexion: 30 → 130; extension: 135 → 30
+    flex_ticks = np.arange(30, 131, 15)
+    ext_ticks = np.arange(135, 29, -15)
+
+    # Find corresponding indices within each phase
+    flex_tick_positions = [np.abs(flex_labels - deg).argmin() for deg in flex_tick_labels]
+    ext_tick_positions  = split_index + np.array([np.abs(ext_labels - deg).argmin() for deg in ext_tick_labels])
+
+    # Combine both
+    tick_positions = np.concatenate([flex_tick_positions, ext_tick_positions])
+    tick_labels = [f"{d}" for d in np.concatenate([flex_tick_labels, ext_tick_labels])]
+
+    # --- Apply ticks and labels ---
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Joint Angle (degrees)")
+
+    # --- Titles and colorbar ---
     ax.set_title("Averaged Normalized Intensity: Flexion (Left) | Extension (Right)")
-    ax.set_xlabel("Rescaled Frame Index")
     ax.set_ylabel("Segment Index")
     plt.colorbar(im, ax=ax, label="Avg Normalized Intensity (%)")
+
     pdf.savefig(fig)
     plt.close(fig)
 
