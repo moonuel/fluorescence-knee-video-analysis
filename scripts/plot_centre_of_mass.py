@@ -156,8 +156,6 @@ def plot_com_cycles(centre_of_mass:np.ndarray, cycle_fs:List[list], contiguous:b
         plt.plot(com.sort_index(), label=f"Cycle {i + 1}", color=cmap(i))
     plt.plot(avg_com.sort_index(), color='gray', linestyle='--', label="Average of cycles")
 
-    breakpoint()
-
     # Final formatting
     if video_id is not None: video_id = f" [{video_id}]"
     else: video_id = ""
@@ -228,6 +226,71 @@ def compute_cycle_coms(centre_of_mass:np.ndarray, cycle_fs:List[list]) -> pd.Dat
     return cycle_coms
 
 
+def rescale_cycle_coms(cycle_coms:pd.DataFrame) -> pd.DataFrame:
+
+    idx_flx = cycle_coms.loc[:-1].index.to_numpy()
+    idx_ext = cycle_coms.loc[0:].index.to_numpy()
+
+    flx = cycle_coms.loc[:-1, :]
+    ext = cycle_coms.loc[0:, :]
+
+    nfs, ncols = cycle_coms.shape
+
+    # Stretch flexion frames
+    flx_stretch = []
+    for col in range(ncols):
+
+        # No need to stretch the longest cycle
+        if len(flx[col].dropna()) == len(flx[col]): 
+            flx_stretch.append(flx[col])
+            continue 
+
+        # Normalize flx frames to [0,1]
+        x_old = np.linspace(0, 1, len(flx[col].dropna()))
+        y_old = flx[col].dropna()
+
+        # Define interpolation func
+        f = sp.interpolate.interp1d(x_old, y_old, kind="linear")
+
+        # Resample new values in [0,1]
+        x_new = np.linspace(0, 1, len(flx))
+        y_new = pd.Series(f(x_new), idx_flx, name=col)
+
+        # Map back to longest frame range 
+        flx_stretch.append(pd.Series(y_new, idx_flx))
+
+    flx_stretch = pd.DataFrame(flx_stretch).T
+
+    # Stretch extension frames
+    ext_stretch = []
+    for col in range(ncols):
+
+        # No need to stretch the longest cycle
+        if len(ext[col].dropna()) == len(ext[col]): 
+            ext_stretch.append(ext[col])
+            continue 
+
+        # Normalize ext frames to [0,1]
+        x_old = np.linspace(0, 1, len(ext[col].dropna()))
+        y_old = ext[col].dropna()
+
+        # Define interpolation func
+        f = sp.interpolate.interp1d(x_old, y_old, kind="linear")
+
+        # Resample new values in [0,1]
+        x_new = np.linspace(0, 1, len(ext))
+        y_new = pd.Series(f(x_new), idx_ext, name=col)
+
+        # Map back to longest frame range 
+        ext_stretch.append(pd.Series(y_new, idx_ext))
+
+    ext_stretch = pd.DataFrame(ext_stretch).T
+
+    # Stitch together stretched cycles
+    cycle_coms_stretch = pd.concat([flx_stretch, ext_stretch], axis=0)
+
+    return cycle_coms_stretch
+
 def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
     
     # Validate data 
@@ -252,8 +315,8 @@ def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
     # Get COMs per cycle
     cycle_coms = compute_cycle_coms(centre_of_mass, cycles)
 
-    
-    breakpoint()
+    # Rescale COMs per cycle
+    cycle_coms_rescaled = rescale_cycle_coms(cycle_coms)
 
     plt.plot(centre_of_mass)
     plt.title("Centre of mass over non-zero frames"); plt.xlabel("Frame number"); plt.ylabel("Segment number (JC to SB)")
