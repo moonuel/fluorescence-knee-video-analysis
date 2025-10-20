@@ -8,7 +8,8 @@ video_number = 308
 segment_count = 64
 num_cycles = 4
 
-INPUT_XLSX = fr"C:\research\kneevideo\me\Heatmap\video{video_number}N{segment_count}.xlsx"  
+# INPUT_XLSX = fr"C:\research\kneevideo\me\Heatmap\video{video_number}N{segment_count}.xlsx"  
+INPUT_XLSX = fr"video{video_number}N{segment_count}.xlsx"  
 #Oliver, you shall change the directory path
 
 # --- Load sheets ---
@@ -37,7 +38,7 @@ starts_flex, ends_flex = clean_intervals(df_flex)
 starts_ext, ends_ext = clean_intervals(df_ext)
 
 # --- Step (1): normalize intensity per frame ---
-norm_intensity = df_intensity.copy()
+norm_intensity = df_intensity.copy().astype(float)
 for i in range(norm_intensity.shape[0]):
     row = norm_intensity.iloc[i, :]
     min_val, max_val = row.min(), row.max()
@@ -68,10 +69,44 @@ for s, e in zip(starts_ext, ends_ext):
     rescaled_ext_all.append(rescaled)
 avg_ext = np.mean(rescaled_ext_all, axis=0)
 
-
 # --- Step (4): Rescale flextion:extension = 50%:50% and convert the horizontal axis to be angles---
 #Oliver please finish this step
 
+# Compute individual durations
+len_flex = ends_flex - starts_flex + 1
+len_ext = ends_ext - starts_ext + 1
+
+# Find the *average* duration across all cycles (flex + ext)
+avg_duration = int(np.round(np.mean(np.concatenate([len_flex, len_ext]))))
+
+rescaled_flex_all_50 = []
+for s, e in zip(starts_flex, ends_flex):
+    data = norm_intensity.iloc[s:e+1, :].to_numpy()
+    old_x = np.linspace(0, 1, data.shape[0])
+    new_x = np.linspace(0, 1, avg_duration)
+    rescaled = np.array([
+        np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])
+    ]).T
+    rescaled_flex_all_50.append(rescaled)
+
+rescaled_ext_all_50 = []
+for s, e in zip(starts_ext, ends_ext):
+    data = norm_intensity.iloc[s:e+1, :].to_numpy()
+    old_x = np.linspace(0, 1, data.shape[0])
+    new_x = np.linspace(0, 1, avg_duration)
+    rescaled = np.array([
+        np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])
+    ]).T
+    rescaled_ext_all_50.append(rescaled)
+
+# Compute the average cycle for each phase
+avg_flex_50 = np.mean(rescaled_flex_all_50, axis=0)
+avg_ext_50  = np.mean(rescaled_ext_all_50, axis=0)
+
+
+
+
+breakpoint()
 
 ## --- Step (5): Find the peak value for each frame---
 #Oliver please finish this step. The peak intensity value will form a contuour line to indicates how the peak intensity move.
@@ -81,14 +116,16 @@ avg_ext = np.mean(rescaled_ext_all, axis=0)
 # --- Step (6): Save to Excel ---
 #Oliver, you need to modify the following to save more information such as angles (horizontal axis of heatmap)
 ##  and the peak "intensity" value of each frame
-excel_path = fr"C:\research\kneevideo\me\Heatmap\video{video_number}N{segment_count}_results.xlsx"
+# excel_path = fr"C:\research\kneevideo\me\Heatmap\video{video_number}N{segment_count}_results.xlsx"
+excel_path = fr"video{video_number}N{segment_count}_results.xlsx"
 with pd.ExcelWriter(excel_path) as writer:
     norm_intensity.to_excel(writer, sheet_name="normalized_frames", index=False, header=False)
     pd.DataFrame(avg_flex).to_excel(writer, sheet_name="avg_flexion", index=False, header=False)
     pd.DataFrame(avg_ext).to_excel(writer, sheet_name="avg_extension", index=False, header=False)
 
 # --- Step (7): Plot heatmap ---
-pdf_path = fr"C:\research\kneevideo\me\Heatmap\video{video_number}N{segment_count}_heatmap.pdf"
+# pdf_path = fr"C:\research\kneevideo\me\Heatmap\video{video_number}N{segment_count}_heatmap.pdf"
+pdf_path = fr"video{video_number}N{segment_count}_heatmap.pdf"
 with PdfPages(pdf_path) as pdf:
     fig, ax = plt.subplots(figsize=(10, 5))
     combined = np.concatenate([avg_flex, avg_ext], axis=0)
@@ -102,6 +139,29 @@ with PdfPages(pdf_path) as pdf:
     plt.close(fig)
 
 print("Exported:", excel_path, pdf_path)
+
+# Plot 50:50 heatmap
+excel_path_50 = fr"video{video_number}N{segment_count}_50_results.xlsx"
+pdf_path_50 = fr"video{video_number}N{segment_count}_50_heatmap.pdf"
+
+with pd.ExcelWriter(excel_path_50) as writer:
+    norm_intensity.to_excel(writer, sheet_name="normalized_frames", index=False, header=False)
+    pd.DataFrame(avg_flex_50).to_excel(writer, sheet_name="avg_flexion", index=False, header=False)
+    pd.DataFrame(avg_ext_50).to_excel(writer, sheet_name="avg_extension", index=False, header=False)
+
+with PdfPages(pdf_path_50) as pdf:
+    fig, ax = plt.subplots(figsize=(10, 5))
+    combined = np.concatenate([avg_flex_50, avg_ext_50], axis=0)
+    im = ax.imshow(combined.T, aspect="auto", cmap="viridis", origin="lower")
+    ax.axvline(x=avg_flex_50.shape[0]-0.5, color="white", linestyle="--", linewidth=1.5)
+    ax.set_title("Averaged Normalized Intensity: Flexion (Left) | Extension (Right)")
+    ax.set_xlabel("Rescaled Frame Index")
+    ax.set_ylabel("Segment Index")
+    plt.colorbar(im, ax=ax, label="Avg Normalized Intensity (%)")
+    pdf.savefig(fig)
+    plt.close(fig)
+
+print("Exported:", excel_path_50, pdf_path_50)
 
 #~~~~~~~~~~ The following part is used to calculate averaged COM curves based on normalized intensity
 # # --- Step (1): Normalize intensity per frame ---
