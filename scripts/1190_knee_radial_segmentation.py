@@ -4,6 +4,7 @@ from core import radial_segmentation as rdl
 import numpy as np
 from functools import partial
 import cv2
+import pandas as pd
 
 """
 Steps:
@@ -64,7 +65,6 @@ def main():
     video = io.load_nparray("../data/processed/1190_knee_frames_ctrd.npy")
     video = utils.crop_video_square(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
-    video = np.flip(video, axis=2)
 
     # Fill empty regions with L=18
     video[video == 0] = 18
@@ -79,6 +79,7 @@ def main():
 
     # Estimate femur tip 
     femur_tip_ = rdl.estimate_femur_tip_boundary(femur_boundary, 0.6)
+    femur_tip_ = rdl.forward_fill_jagged(femur_tip_)
     # femur_tip_ = rdl.filter_outlier_points_centroid(femur_tip_, 100) # Not necessary?   
     
     femur_tip = rdl.get_centroid_pts(femur_tip_)
@@ -86,6 +87,7 @@ def main():
 
     # Estimate femur midpoint
     femur_midpt_ = rdl.estimate_femur_midpoint_boundary(femur_boundary, 0.1, 0.4)
+    femur_midpt_ = rdl.forward_fill_jagged(femur_midpt_)
     # femur_midpt_ = rdl.filter_outlier_points_centroid(femur_midpt_, 100)
     # views.draw_points(video, femur_midpt_)
 
@@ -96,16 +98,23 @@ def main():
     # views.draw_points(video, femur_midpt)
 
     # Radially segment 
-    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_midpt, N=16)
-    radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.8)
+    # circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_midpt, N=64)
+    # radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.8)
 
-    v1 = views.draw_radial_masks(video, radial_masks, False)
-    views.draw_radial_slice_numbers(v1, circle_pts)
+    video_for_mask = utils.blur_video(video)
+    video_for_mask = rdl.match_histograms_video(video_for_mask, video_for_mask[562])
+    otsu_mask = ks.get_otsu_masks(video_for_mask, 0.7)
+
+    breakpoint()
+
+    radial_masks = rdl.label_radial_masks(otsu_mask, femur_tip, femur_midpt, 64)
+    views.draw_mask_boundary
+    v1 = views.show_frames(radial_masks * (255 // 64))
+
 
     # Save segmentation data
-    # io.save_nparray(video, "../data/processed/1190_knee_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/processed/1190_knee_radial_masks_N16.npy")
-    # io.save_nparray(radial_regions, "../data/processed/1190_knee_radial_regions_N16.npy")
+    # io.save_nparray(video, "../data/processed/1190_normal_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/processed/1190_normal_radial_masks_N16.npy")
 
 
 
