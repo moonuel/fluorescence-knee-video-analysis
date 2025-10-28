@@ -21,3 +21,4 @@ docs/comparison of aging radial segmentation old 16 vs. 64 slices/
 docs/comparison of aging radial segmentation old vs new methods/
 scripts/temp.py
 scripts/*.mp4
+scripts/reference/*

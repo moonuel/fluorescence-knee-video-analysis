@@ -168,7 +168,8 @@ with PdfPages(pdf_path) as pdf:
 
 print("Exported:", excel_path, pdf_path)
 
-# Plot 50:50 heatmap
+# --- Step (7.1): Plot 50/50 heatmap ---
+
 excel_path_50 = fr"video{video_number}N{segment_count}_50_results.xlsx"
 pdf_path_50 = fr"video{video_number}N{segment_count}_50_heatmap.pdf"
 
