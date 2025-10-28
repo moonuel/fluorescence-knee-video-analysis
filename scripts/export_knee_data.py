@@ -9,8 +9,88 @@ Data format:
 from utils import utils, io, views
 import numpy as np
 import pandas as pd
-import pandas as pd
 from pathlib import Path
+from dataclasses import dataclass, field, asdict, is_dataclass
+from typing import List, Tuple
+
+
+@dataclass
+class Cycle:
+    flexion: Tuple[int, int]
+    extension: Tuple[int, int]
+
+    def validate(self) -> None:
+        for name, rng in {"flexion": self.flexion, "extension": self.extension}.items():
+            if rng[0] > rng[1]:
+                raise ValueError(f"{name} range {rng} is invalid: start must be <= end")
+
+
+@dataclass
+class Metadata:
+    description: str = (
+        "Contains metadata about the knee analysis data. "
+        "All frame indices are given in 0-based indexing format, "
+        "i.e. video[0] denotes the first frame (as opposed to video[1] denoting the first frame). "
+        "All frame ranges are given in inclusive format, "
+        "i.e. 'cycle1.flexion = (100, 200)' means that 200 is the last frame in the cycle, "
+        "for 101 total frames."
+    )
+    file_number: int = 0
+    type_of_knee: str = ""
+    frame_start: int = 0
+    frame_end: int = 0
+    total_frames: int = field(init=False)
+    cycle_frames: List[Cycle] = field(default_factory=list)  # ✅ now an ordered list
+    num_of_segments: int = 0
+    segment_labels: List[int] = field(default_factory=list)
+    left_segments: List[int] = field(default_factory=list)
+    middle_segments: List[int] = field(default_factory=list)
+    right_segments: List[int] = field(default_factory=list)
+
+    def __post_init__(self):
+        # Automatically compute total_frames
+        self.total_frames = self.frame_end - self.frame_start + 1
+
+    def validate(self) -> None:
+        # frame range
+        if self.frame_start >= self.frame_end:
+            raise ValueError(
+                f"frame_start={self.frame_start} must be less than frame_end={self.frame_end}"
+            )
+        
+        print(f"frame_start={self.frame_start}, frame_end={self.frame_end}")
+        print(f"total_frames={self.total_frames}")
+
+        # validate cycles
+        for i, cycle in enumerate(self.cycle_frames):
+            cycle.validate()
+            for rng in (cycle.flexion, cycle.extension):
+                if not (self.frame_start <= rng[0] and rng[1] <= self.frame_end):
+                    raise ValueError(
+                        f"Cycle {i} {rng} is outside frame range "
+                        f"[{self.frame_start}, {self.frame_end}]"
+                    )
+
+        print("all cycles in the frame range")
+
+        # check number of segments matches
+        all_segments = set(self.left_segments + self.middle_segments + self.right_segments)
+        if len(all_segments) != self.num_of_segments:
+            raise ValueError(
+                f"num_of_segments={self.num_of_segments} does not match "
+                f"unique segments provided={len(all_segments)}"
+            )
+
+        print("number of segments matches")
+
+        # check segment_labels matches declared segments
+        if sorted(all_segments) != sorted(self.segment_labels):
+            raise ValueError(
+                f"segment_labels {self.segment_labels} do not match segments declared in "
+                f"left/middle/right {sorted(all_segments)}"
+            )
+        
+        print("all segments accounted for ")
 
 
 def load_masks(filepath:str) -> np.ndarray:
@@ -72,7 +152,7 @@ def build_metadata_row(metadata: dict) -> dict:
 
 def save_analysis_to_excel(total_sums: np.ndarray,
                            total_nonzero: np.ndarray,
-                           metadata: dict,
+                           metadata: "Metadata",
                            output_file: str | Path):
     """
     Save knee analysis results to an Excel file with three sheets:
@@ -82,19 +162,32 @@ def save_analysis_to_excel(total_sums: np.ndarray,
     """
     output_file = Path(output_file)
 
-    # Metadata DataFrame
-    df_meta = pd.DataFrame([build_metadata_row(metadata)])
+    # --- Convert Metadata dataclass into a dict row ---
+    meta_dict = asdict(metadata)
 
-    # Convert arrays to DataFrames
+    df_meta = pd.DataFrame([meta_dict])
+
+    # --- Convert arrays to DataFrames ---
     N, nframes = total_sums.shape[0], total_sums.shape[1]
 
-    df_sums = pd.DataFrame(total_sums.T, columns=[f"Segment {i}" for i in range(1, N + 1)])
+    # Use the true frame numbers from metadata
+    frame_index = range(metadata.frame_start, metadata.frame_end + 1)
+
+    df_sums = pd.DataFrame(
+        total_sums.T,
+        index=frame_index,
+        columns=[f"Segment {i}" for i in range(1, N + 1)]
+    )
     df_sums.index.name = "Frame"
 
-    df_nonzero = pd.DataFrame(total_nonzero.T, columns=[f"Segment {i}" for i in range(1, N + 1)])
+    df_nonzero = pd.DataFrame(
+        total_nonzero.T,
+        index=frame_index,
+        columns=[f"Segment {i}" for i in range(1, N + 1)]
+    )
     df_nonzero.index.name = "Frame"
 
-    # Write all three sheets
+    # --- Write all three sheets ---
     with pd.ExcelWriter(output_file) as writer:
         df_sums.to_excel(writer, sheet_name="Sum of Pixel Intensities (0-255)")
         df_nonzero.to_excel(writer, sheet_name="Number of Non-zero Pixels (Size of Mask)")
@@ -103,7 +196,7 @@ def save_analysis_to_excel(total_sums: np.ndarray,
     print(f"✅ Analysis results saved to {output_file.resolve()}")
 
 
-def main(mask_path, video_path):
+def compute_sums_nonzeros(mask_path, video_path):
 
     # Load data 
     shared_dir = "../data/processed/"
@@ -174,36 +267,49 @@ def main(mask_path, video_path):
 
 #     save_analysis_to_excel(total_sums, total_nonzero, metadata, "_analysis_data.xlsx")
 
+def main():
+    
+    mask_name = "1339_knee_radial_masks_N16.npy" # Path will be pre-pended
+    video_name = "1339_knee_radial_video_N16.npy"
+    
+    total_sums, total_nonzero = compute_sums_nonzeros(mask_name, video_name)
+    
+    # Create cycle objects
+    c1 = Cycle(flexion=(289, 308), extension=(311, 328))
+    c2 = Cycle(flexion=(330, 351), extension=(354, 373))
+    c3 = Cycle(flexion=(374, 393), extension=(397, 420))
+    c4 = Cycle(flexion=(421, 438), extension=(440, 462))
+    c5 = Cycle(flexion=(463, 487), extension=(489, 511))
+    c6 = Cycle(flexion=(512, 529), extension=(531, 552))
+    c7 = Cycle(flexion=(553, 575), extension=(578, 608))
+
+    # Create metadata object
+    metadata = Metadata(
+        file_number=1339,
+        type_of_knee="aging",
+        frame_start=289,
+        frame_end=608,
+        cycle_frames=[c1, c2, c3, c4, c5, c6, c7],
+        num_of_segments=16,
+        segment_labels=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
+        left_segments=[11,12,13,14,15,16,1],
+        middle_segments=[7,8,9,10],
+        right_segments=[1,2,3,4,5,6],
+    )
+
+    # Validate consistency
+    metadata.validate()
+
+    print(metadata.total_frames)  # 320
+
+    save_analysis_to_excel(total_sums, total_nonzero, metadata, "1339_analysis_data.xlsx")
+
+
+
+
+
 if __name__ == "__main__":
-    
-    mask_name = "XXXX_knee_radial_masks_N16.npy" # Path will be pre-pended
-    video_name = "XXXX_knee_radial_video_N16.npy"
-    
-    total_sums, total_nonzero = main(mask_name, video_name)
-    
-    metadata = {
-        "Description": "Contains metadata about the knee analysis data. "
-            "All frame indices are given in 0-based indexing format, "
-            "i.e. video[0] denotes the first frame (as opposed to video[1] denoting the first frame). ",
-        "file_number": "XXXX",
-        "type_of_knee": "normal", # "aging" or "normal"
-        "frame_range": "XXX:XXX",
-        "cycle_frames": {
-            "Cycle 1": {"flexion": (), "extension": ()}, # Tuple[int, int]
-        },
-        "num_of_segments": "16",
-        "left_segments": "",
-        "middle_segments": "",
-        "right_segments": ""
-    }
-
-    save_analysis_to_excel(total_sums, total_nonzero, metadata, "XXXX_analysis_data.xlsx")
-
-
-
-
-
-
+    main()
 
 
 
@@ -231,7 +337,7 @@ if __name__ == "__main__":
     #         "Cycle 7": {"flexion": (554, 576), "extension": (579, 609)}
     #     },
     #     "num_of_segments": "16",
-    #     "left_segments": "11, 12, 13, 14, 15, 16, 1",
+    #     "left_segments": "11, 12, 13, 14, 15, 16",
     #     "middle_segments": "7, 8, 9, 10",
     #     "right_segments": "1, 2, 3, 4, 5, 6"
     # }
