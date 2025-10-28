@@ -113,6 +113,7 @@ def estimate_femur_tip(boundary_points, cutoff, weight=0.5):
 def estimate_femur_midpoint(boundary_points, start, end):
 
     femur_midpt_boundary = rdl.estimate_femur_midpoint_boundary(boundary_points, start, end)
+    femur_midpt_boundary = forward_fill_jagged(femur_midpt_boundary)
 
     femur_midpt = rdl.get_centroid_pts(femur_midpt_boundary)
     femur_midpt = rdl.smooth_points(femur_midpt, window_size=9)
@@ -120,12 +121,12 @@ def estimate_femur_midpoint(boundary_points, start, end):
     return femur_midpt
 
 
-def load_video():
+def load_1207_normal_video():
 
     video = io.load_nparray("../data/processed/1207_knee_frames_ctrd.npy")
     video = utils.crop_video_square(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
-    video = np.flip(video, axis=2)
+    # video = np.flip(video, axis=2)
     nfs, h, w = video.shape
     print(nfs, h, w)
     video = utils.rotate_video(video, 8)
@@ -190,7 +191,7 @@ def soft_knee_compression(img: np.ndarray,
 
 
 def get_1207_binary_mask():
-    video = load_video()
+    video = load_1207_normal_video()
     views.show_frames(video)
 
 
@@ -200,48 +201,70 @@ def get_1207_binary_mask():
     return mask
 
 
-def get_radial_segments(mask):
+def get_femur_points(mask):
     
     boundary_points = get_boundary_points(mask, N_lns=128)
     boundary_points = forward_fill_jagged(boundary_points)
     print(boundary_points.shape)
     print(boundary_points[0])
     
-    femur_tip = estimate_femur_tip(boundary_points, cutoff=0.6)
+    # Get femur tip
+    femur_tip = rdl.estimate_femur_tip_boundary(boundary_points, midpoint=0.6)
+    femur_tip = forward_fill_jagged(femur_tip)
+    femur_tip = rdl.get_centroid_pts(femur_tip)
+    femur_tip = rdl.smooth_points(femur_tip, 9) # Moving average filter
 
-    femur_midpt = estimate_femur_midpoint(boundary_points, start=0.1, end=0.5)
+    # Get femur midpoint
+    femur_midpt = rdl.estimate_femur_midpoint_boundary(boundary_points, start=0.1, end=0.5)
+    femur_midpt = forward_fill_jagged(femur_midpt)
+    femur_midpt = rdl.get_centroid_pts(femur_midpt)
+    femur_midpt = rdl.smooth_points(femur_midpt, 9) # Moving average filter
 
-    radial_masks = rdl.label_radial_masks(mask, femur_tip, femur_midpt, N=16)
-
-    v0 = views.draw_points((mask*31).astype(np.uint8), femur_tip)
-    v0 = views.draw_points(v0, femur_midpt)
-    v0 = views.draw_points(v0, boundary_points)
-    v0 = views.draw_line(v0, femur_midpt, femur_tip)
-    views.show_frames(v0)
-
-    v1 = views.draw_mask_boundaries( (mask*63).astype(np.uint8), radial_masks)
-    views.show_frames(v1)
-
-    return
+    return femur_tip, femur_midpt
 
 
-if __name__ == "__main__":
-
+def main():
     # Get and save the binary mask
-    mask = get_1207_binary_mask()
-    views.show_frames(mask)
+    # mask = get_1207_binary_mask()
+    # views.show_frames(mask)
     # io.save_nparray(mask, "../data/processed/1207_normal_mask.npy")
+
+    # Get video
+    video = load_1207_normal_video()
+
+    # Get Otsu mask
+    views.show_frames(video)
+    video_hist = utils.blur_video(video)
+    video_hist = rdl.match_histograms_video(video_hist, video_hist[175])
+    
+    otsu_mask = ks.get_otsu_masks(video_hist, 0.65)
+    otsu_mask = utils.morph_close(otsu_mask, (55,55))
+    views.show_frames(otsu_mask, "otsu_mask")
+    breakpoint()
 
     # Perform radial segmentation
     mask = io.load_nparray("../data/processed/1207_normal_mask.npy")
+    mask = np.flip(mask, axis=2)
 
-    radial_masks = get_radial_segments(mask)
+    femur_tip, femur_midpt = get_femur_points(mask)
 
-    video = load_video()
+    radial_masks = rdl.label_radial_masks(otsu_mask, femur_tip, femur_midpt, N=64)
 
+    v0 = views.draw_points((otsu_mask*31).astype(np.uint8), femur_tip)
+    v0 = views.draw_points(v0, femur_midpt)
+    v0 = views.draw_line(v0, femur_midpt, femur_tip)
+    views.show_frames(v0)
+
+    v1 = views.draw_mask_boundaries( (otsu_mask*63).astype(np.uint8), radial_masks)
+    views.show_frames(v1)
+
+    breakpoint()
     # Save final results
     # io.save_nparray(video, "../data/processed/1207_normal_radial_video_N16.npy")
     # io.save_nparray(radial_masks, "../data/processed/1207_normal_radial_masks_N16.npy")
+
+if __name__ == "__main__":
+    main()
     
 
 
