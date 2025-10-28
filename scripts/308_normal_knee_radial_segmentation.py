@@ -13,6 +13,7 @@ from config import VERBOSE
 from core import data_processing as dp
 import core.radial_segmentation as rdl
 from pathlib import Path
+import pdb
 
 
 def estimate_femur_position(mask:np.ndarray, init_guess:Tuple[int,int]) -> Tuple[np.ndarray, np.ndarray]:
@@ -566,6 +567,41 @@ def analyze_video(video, radial_masks, radial_regions,
 
     return total_sums, fig, axes
 
+
+def get_femur_mask(video:np.ndarray) -> np.ndarray:
+    """Intersects the adaptive mean mask with the Otsu mask to get a good mask around the femur"""
+
+    # Get outer mask
+    out_mask = ks.get_otsu_masks(video, 0.5)
+    out_mask = utils.morph_erode(out_mask, (25,25))
+
+    # Get inner mask
+    in_mask = ks.mask_adaptive(video, 141, 14)
+
+    # Exclude noise from inner mask
+    femur_mask = rdl.interior_mask(out_mask, in_mask)
+    femur_mask = utils.morph_open(femur_mask, (11,11))
+
+    femur_mask = utils.morph_close(femur_mask, (27,27))
+
+    # Manual refinements
+    femur_mask[:, 330:, :] = 0 
+    femur_mask[:, :121, :] = 0
+    femur_mask[:, :, :143] = 0
+
+    return femur_mask
+
+
+def get_mask(video):
+    video_hist = rdl.match_histograms_video(video)
+    mask = ks.get_otsu_masks(video_hist, 0.5)
+    mask = utils.morph_open(mask, (5, 5))
+    mask = utils.morph_close(mask, (15,15))
+    mask = utils.blur_video(mask, (11,11))
+    mask = mask > 0
+
+    return mask
+
 def main():
     """Performs the radial segmentation analysis on the normal knee data. 
     
@@ -589,119 +625,49 @@ def main():
     # Slight rotation
     angle = -15
     video = utils.rotate_video(video, angle)
+    video[video == 0] = 22 # fill empty pixels
     video = utils.crop_video_square(video, 500, 450)
+    video = np.flip(video, axis=2)
 
-    # Get adaptive mean mask
-    # mask_src = utils.log_transform_video(video) # TODO dude this doesn't do anything lol
-    mask_src = utils.blur_video(video, (25,25), sigma=0) # sigma is variance
-    mask = ks.mask_adaptive(mask_src, 141, 14) # increase thresholding to get better femur boundary
-    # mask = utils.morph_open(mask, (31,31)) # clean small artifacts
-    # views.show_frames(mask)
+    # Get femur mask
+    femur_mask = get_femur_mask(video)
 
-    # Get otsu mask
-    otsu_mask = ks.get_otsu_masks(mask_src, thresh_scale=0.5)
-    otsu_mask = utils.morph_close(otsu_mask, (31,31)) # Close gaps in otsu mask
-    otsu_mask = utils.morph_erode(otsu_mask, (21,21))
-    # otsu_mask = get_mask_convex_hull(otsu_mask) # works as intended but results are not good
-    # views.show_frames(np.concatenate([mask, otsu_mask], axis=2), "mask vs boundary mask") # type: ignore
+    # Get boundary points
+    bndry = rdl.sample_femur_interior_pts(femur_mask, N_lns=128)
 
-    # Exclude intr_mask region outside of otsu mask
-    intr_mask = rdl.interior_mask(otsu_mask, mask)
-    intr_mask = utils.morph_open(intr_mask, (31,31)) # clean small artifacts
-    intr_mask = utils.morph_close(intr_mask, (15,15)) # try to remove the dip
+    # Estimate tip and midpoint
+    tip_bndry = rdl.estimate_femur_tip_boundary(bndry, 0.4)
+    tip = rdl.get_centroid_pts(tip_bndry)
+    tip = rdl.smooth_points(tip, 9)
 
-    # views.show_frames(np.concatenate([mask, intr_mask], axis=2), "mask vs interior mask")
-    # views.show_frames(np.concatenate([video, intr_mask, otsu_mask], axis=2), "video vs interior mask vs otsu boundary")
-    # views.draw_mask_boundary(video, intr_mask)
+    midpt_bndry = rdl.estimate_femur_midpoint_boundary(bndry, 0.1, 0.5)
+    midpt = rdl.get_centroid_pts(midpt_bndry)
+    midpt = rdl.smooth_points(midpt, 9)
 
-    # Sample points along the interior of the mask 
-    sample_pts = sample_femur_interior_pts(intr_mask, N_lns=128)
-    # views.draw_points(video, sample_pts)
+    # views.draw_points(video, np.concat([tip, midpt], axis=1), True)
 
-    # --- Estimate the tip of the femur ---
-    femur_tip_bndry = estimate_femur_tip_boundary(sample_pts, 0.55)
+    # Get radial segmentation
+    mask = get_mask(video)
+
+    radial_mask = rdl.label_radial_masks(mask, tip, midpt, 64)
+
+
+    v1 = views.show_frames(radial_mask * (255 // 64))
+
+    views.draw_points(v1, np.concat([tip, midpt], axis=1), True)
+
+    fn = "../data/processed/308_normal_radial_masks_N64.npy"
     
-    # femur_bndry_filtered = filter_outlier_points_dbscan(femur_tip_bndry, eps=20, min_samples=2) # not great 
-    # femur_bndry_filtered = filter_outlier_points_hdbscan(femur_tip_bndry, min_cluster_size=5, allow_single_cluster=True) # better but not perfect
-    femur_bndry_filtered = filter_outlier_points_centroid(femur_tip_bndry, 70) # Best results so far but rigid due to fixed threshold value?
-    femur_endpts = get_centroid_pts(femur_bndry_filtered)
-
-    # Smooth femur tip points
-    femur_endpts = np.reshape(femur_endpts, shape=(-1, 2)) # Resize for rdl.smooth_points() 
-    femur_endpts = rdl.smooth_points(femur_endpts, window_size=10) 
-    femur_endpts = np.array(femur_endpts) # Cast back to array
-    femur_endpts = np.reshape(femur_endpts, (-1, 1, 2)) # Reshape for views.draw_points()
-
-    # pvw1 = views.draw_points(video, femur_bndry); # All sampling points
-    pvw = views.draw_points(video, sample_pts, show_video=False); # Femur tip points only (already filtered)
-    pvw = views.draw_points(pvw, femur_endpts, show_video=False)
-    # views.show_frames(np.concatenate([pvw1, pvw], axis=2))
-
-    # --- Estimate midpoint of femur ---
-    femur_midpoint_bndry = estimate_femur_midpoint_boundary(sample_pts, 0.1, 0.5)
-    femur_midpts = get_centroid_pts(femur_midpoint_bndry)
-
-    femur_midpts = np.reshape(femur_midpts, (-1, 2)) # Reshape for coordinate smoothing
-    femur_midpts = rdl.smooth_points(femur_midpts, window_size=10)
-    femur_midpts = np.array(femur_midpts)
-    femur_midpts = np.reshape(femur_midpts, (-1, 1, 2)) # Reshape back to expected format for views.draw_points()
-    
-    # print(femur_midpoint)
-    # pvw2 = views.draw_points(pvw, femur_midpts)
-    # views.show_frames(np.concatenate([pvw, pvw2], axis=2))
-
-    # Validate femur estimation
-    # femur_endpts = np.reshape(femur_endpts, (-1, 2))
-    # femur_endpts = [tuple(pts) for pts in femur_endpts]
-
-    # femur_midpts = np.reshape(femur_midpts, (-1, 2))
-    # femur_midpts = [tuple(pts) for pts in femur_midpts]
-
-    # views.draw_line(video, femur_endpts, femur_midpts) # Validate femur estimation
-    
-    # --- Get radial segments ---
-    circle_pts = rdl.get_N_points_on_circle(femur_endpts, femur_midpts, N=16, radius_scale=1.5) 
-    # views.draw_points(video, circle_pts) # Validate points on circle
-
-    radial_regions, radial_masks = rdl.get_radial_segments(mask_src, femur_endpts, circle_pts, thresh_scale=0.5)
-
-    video = mask_src # Switch the video used for display
-    video_demo = views.draw_radial_masks(video, radial_masks, show_video=False) # Validate radial segments
-    video_demo = views.draw_line(video_demo, femur_endpts, femur_midpts, show_video=False)
-    video_demo = views.draw_radial_slice_numbers(video_demo, circle_pts, show_video=False)
-    # video_demo = views.rescale_video(video_demo, 1, True)
-    
-    # io.save_avi("early_normal_knee_radial_segmentation.avi", video_demo)
-
-    # --- Get plots ---
-
-    analyze_all_aging_knees(video, radial_masks, radial_regions, show_figs=False, save_figs=True)
-
-
-    io.save_nparray(video, "../data/processed/normal_knee_radial_video_N16.npy")
-    io.save_nparray(radial_masks, "../data/processed/normal_knee_radial_masks_N16.npy")
-    io.save_nparray(radial_regions, "../data/processed/normal_knee_radial_regions_N16.npy")
+    if input(f"Save to file {fn}? Press 'y' to confirm.\n") == 'y': 
+        io.save_nparray(radial_mask, fn)
+        fn_vid = fn.replace("masks", "video")
+        io.save_nparray(video, fn_vid)
+        print(f"Files saved:\n\t{fn}\n\t{fn_vid}")
+    else: print("File not saved.")
 
     return
 
-    """Analyze intensity for whole video"""
-    # views.plot_radial_segment_intensities(radial_intensities, f0=1, fN=None)
 
-    lft = (14,2)
-    mdl = (9,14)
-    rgt = (2,9)
-
-    total_sums, figs, axes = analyze_video(video, radial_masks, radial_regions, lft, mdl, rgt, 
-                                           show_figs=False, save_dir="../docs/meetings/16-Jul-2025/normal_intensity_plots/")
-
-    lft_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, lft))
-    mdl_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, mdl))
-    rgt_mask = rdl.combine_masks(rdl.circular_slice(radial_masks, rgt))
-    v_out = views.draw_radial_masks(video, [lft_mask, mdl_mask, rgt_mask])
-    io.save_avi("../docs/meetings/16-Jul-2025/normal_knee_new_method.avi", v_out)
-    
-
-    return
 
 
 if __name__ == "__main__":

@@ -47,7 +47,15 @@ def match_histograms_video(video, reference_frame=None):
     """
     if reference_frame is None:
         reference_frame = video[0]
+
+    if isinstance(reference_frame, int):
+        print(f"reference_frame is type(int). Taking reference_frame = video[{reference_frame}] instead.")
+        reference_frame = video[reference_frame]
+
+    if not isinstance(reference_frame, np.ndarray):
+        raise TypeError(f"{reference_frame=} should be of type: np.ndarray. Given: {type(reference_frame)=}")
         
+
     matched_video = np.empty_like(video)
     for i in range(video.shape[0]):
         matched_video[i] = match_histograms(video[i], reference_frame)
@@ -55,15 +63,39 @@ def match_histograms_video(video, reference_frame=None):
     return matched_video
 
 
+def forward_fill_jagged(arr):
+    """
+    Forward fills empty frames in a jagged NumPy array (dtype=object).
+    
+    Parameters:
+        arr (np.ndarray): jagged array of shape (nframes, npts*, 2)
+        
+    Returns:
+        np.ndarray: forward-filled jagged array (same shape/dtype)
+    """
+    filled = arr.copy()
+    last_valid = None
+    
+    for i, frame in enumerate(filled):
+        frame = np.asarray(frame)
+        if frame.size == 0:
+            if last_valid is not None:
+                filled[i] = last_valid
+        else:
+            last_valid = frame
+    
+    return filled
+
+
 def get_mask_around_femur(video:np.ndarray) -> np.ndarray:
     """Takes the centered grayscale 1339 video and returns a binary mask appropriate for estimating the position of the femur."""
 
     video_blrd = utils.blur_video(video)
-    video_blrd_hist = match_histograms_video(video_blrd) # For consistency of Otsu segmentation
+    video_blrd_hist = match_histograms_video(video_blrd, 155) # For consistency of Otsu segmentation
 
     # Get outer mask
     otsu_mask = ks.get_otsu_masks(video_blrd_hist, 0.6)
-    otsu_mask = utils.morph_erode(otsu_mask, (41,41))
+    # otsu_mask = utils.morph_erode(otsu_mask, (41,41))
     
     # views.show_frames(otsu_mask, "debugging otsu mask params")
     # views.draw_mask_boundary(video_blrd_hist, otsu_mask)
@@ -78,6 +110,10 @@ def get_mask_around_femur(video:np.ndarray) -> np.ndarray:
     femur_mask = utils.blur_video(femur_mask, (5,5)) 
     femur_mask = (femur_mask > 0).astype(np.uint8) * 255 # clip blurred mask to binary mask
 
+    femur_mask[:, 352:, :] = 0
+    femur_mask[:, :157, :] = 0
+    femur_mask[:, :, :192] = 0
+
     return femur_mask
 
 
@@ -85,12 +121,16 @@ def get_mask_around_femur(video:np.ndarray) -> np.ndarray:
 def main():
     print("main() called!")
 
-    video = load_1339_data()[289:608] # aka 210 - 609, when written in 1-based indexing
-    video = utils.blur_video(video, kernel_dims=(11,11), sigma=3)
+    video = load_1339_data()
+    video = np.flip(video, axis=2)
     nfs, h, w = video.shape
+    print(f"{video.shape=}")
     
-    agl = 22
+    agl = -26
     video = utils.rotate_video(video, agl)
+    video[video==0] = 17 # Fill empty pixels with background noise 
+
+    video = utils.blur_video(video, kernel_dims=(11,11), sigma=3)
 
     # Estimate femur position
     mask = get_mask_around_femur(video)
@@ -100,6 +140,7 @@ def main():
     # Estimate femur tip
     femur_tip_bndry = rdl.estimate_femur_tip_boundary(femur_bndry)
     femur_tip_bndry = rdl.filter_outlier_points_centroid(femur_tip_bndry, eps=60)
+    # femur_tip_bndry = forward_fill_jagged(femur_tip_bndry)
     # v1 = views.draw_points(video, femur_tip_bndry)
 
     femur_tip = rdl.get_centroid_pts(femur_tip_bndry)
@@ -108,19 +149,22 @@ def main():
 
     # Estimate femur midpoint
     femur_mid_bndry = rdl.estimate_femur_midpoint_boundary(femur_bndry, 0.1, 0.4)
-    # v2 = views.draw_points(video, femur_mid_bndry, False)
+    # femur_mid_bndry = forward_fill_jagged(femur_mid_bndry)
+    v2 = views.draw_points(video, femur_mid_bndry, False)
     
     femur_mid = rdl.get_centroid_pts(femur_mid_bndry)
     femur_mid = rdl.smooth_points(femur_mid, 10)    
+    
     # views.draw_points(v2, femur_mid)
 
-    # Radially segment video
-    circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_mid, N=16, radius_scale=2)
-    # views.draw_points(v2, circle_pts)
+    # Get Otsu mask
+    video_hist = rdl.match_histograms_video(video, video[244])
+    otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=0.6)
 
-    radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.6)
-    v1 = views.draw_radial_masks(video, radial_masks, False)
-    # views.draw_radial_slice_numbers(v1, circle_pts)
+    # Radially segment video
+    radial_masks = rdl.label_radial_masks(otsu_masks, femur_tip, femur_mid, 16)
+
+    breakpoint()
 
     return
 

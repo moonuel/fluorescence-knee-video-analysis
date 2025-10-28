@@ -139,12 +139,15 @@ def main():
     video = io.load_nparray("../data/processed/1193_knee_frames_ctrd.npy")#[0:100]
     video = utils.crop_video_square(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
-    video = np.flip(video, axis=2)
+    # video = np.flip(video, axis=2)
     video[video == 0] = 19 # Fill empty borders for histogram matching stability
 
     mask = io.load_nparray("../data/processed/1193_normal_mask.npy")#[0:100]
+    mask = np.flip(mask, axis=2)
 
     print(video.shape, mask.shape)
+
+    breakpoint()
 
     # views.show_frames(video)
     # views.draw_mask_boundary(video, mask) # Validate results
@@ -180,12 +183,14 @@ def main():
     otsu_masks = ks.get_otsu_masks(video_hist, 0.8, bool)
     otsu_masks = utils.morph_open(otsu_masks, (31,31))
 
-    radial_masks = rdl.label_radial_masks(otsu_masks, femur_tip, femur_midpt, N=16)
+    radial_masks = rdl.label_radial_masks(otsu_masks, femur_tip, femur_midpt, N=64)
 
     # views.show_frames(radial_masks) # Validate results
-    # v_out = draw_mask_boundaries(video, radial_masks, intensity=127)
-    # v_out = views.draw_line(v_out, femur_tip, femur_midpt, show_video=False)
-    # views.show_frames(v_out)
+    v_out = draw_mask_boundaries(video, radial_masks, intensity=127)
+    v_out = views.draw_line(v_out, femur_tip, femur_midpt, show_video=False)
+    views.show_frames(v_out)
+
+    breakpoint()
 
     # Save segmentation data
     io.save_nparray(video, "../data/processed/1193_normal_radial_video_N16.npy")
