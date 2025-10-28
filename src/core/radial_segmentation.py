@@ -636,3 +636,27 @@ def label_radial_masks(
         labels_video[f, ys, xs] = labels
 
     return labels_video.astype(np.uint8)
+
+
+def forward_fill_jagged(arr):
+    """
+    Forward fills empty frames in a jagged NumPy array (dtype=object).
+    
+    Parameters:
+        arr (np.ndarray): jagged array of shape (nframes, npts*, 2)
+        
+    Returns:
+        np.ndarray: forward-filled jagged array (same shape/dtype)
+    """
+    filled = arr.copy()
+    last_valid = None
+    
+    for i, frame in enumerate(filled):
+        frame = np.asarray(frame)
+        if frame.size == 0:
+            if last_valid is not None:
+                filled[i] = last_valid
+        else:
+            last_valid = frame
+    
+    return filled
