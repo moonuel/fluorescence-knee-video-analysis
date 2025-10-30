@@ -242,6 +242,64 @@ def compute_sums_nonzeros(mask_path, video_path):
     return total_sums, total_nonzero
 
 
+def main():
+    
+    # Select data
+    video_id = 1207
+    type = "normal"
+    N = 64
+    cycles_raw = "242-254	264-280	281-293	299-312	318-335	337-352	353-372	373-389	391-411	412-431	434-451	453-467	472-486	488-505	614-632	633-651	652-671	672-690	693-708	709-727	731-748	751-767	768-786	787-804	807-822	824-841	844-862	863-877"
+    
+    # -------------------------------------------------------------------------------
+    masks = load_masks(f"../data/processed/{video_id}_{type}_radial_masks_N{64}.npy")
+    video = load_video(f"../data/processed/{video_id}_{type}_radial_video_N{64}.npy")
+    cycles = [c.split("-") for c in cycles_raw.split()]
+
+    # Compute within-segment total intensities, and number of pixels in each segment
+    nfs = video.shape[0]
+    mask_lbls = np.unique(masks[masks > 0]).astype(int) # Returns sorted list of unique non-zero labels
+
+    total_sums = np.zeros(shape=(N, nfs), dtype=int)
+    for n, lbl in enumerate(mask_lbls):
+        for f in range(nfs):
+            frame = video[f]
+            mask_f = masks[f]
+            total_sums[n, f] = frame[mask_f == lbl].sum()
+
+    total_nonzero = np.zeros((N, nfs), dtype=int)
+    for n, lbl in enumerate(mask_lbls):
+        for f in range(nfs):
+            frame = video[f]
+            mask_f = masks[f]
+            total_nonzero[n, f] = np.count_nonzero(frame[mask_f == lbl])
+
+    # Write intensity data and cycle data into Excel spreadsheet
+    total_sums = pd.DataFrame(total_sums.T)
+    total_nonzero = pd.DataFrame(total_nonzero.T)
+    flex = pd.DataFrame(cycles[::2])
+    ext = pd.DataFrame(cycles[1::2])
+
+    total_sums.index = total_sums.index + 1; total_nonzero.index = total_nonzero.index + 1 # 1-indexing
+    flex.index = flex.index + 1; ext.index = ext.index + 1
+
+    total_sums.columns = total_sums.columns + 1; total_nonzero.columns = total_nonzero.columns + 1 # Formatting
+    flex.columns = ["Start", "End"]; ext.columns = ["Start", "End"]
+
+    print("-----------------------------------------------------------")
+    print(total_sums)
+    print(flex)
+    print(ext)
+
+    breakpoint()
+
+    with pd.ExcelWriter(f"../data/video_intensities/video{video_id}N{N}.xlsx") as writer:
+        total_sums.to_excel(writer, sheet_name="Segment Intensities", index=True)
+        flex.to_excel(writer, sheet_name="Flexion Frames", index=True)
+        ext.to_excel(writer, sheet_name="Extension Frames", index=True)
+        # total_nonzero.to_excel(writer, sheet_name="Number of Mask Pixels", index=True)
+
+
+
 # Example usage:
 
 #     mask_path = ".npy"
@@ -267,42 +325,42 @@ def compute_sums_nonzeros(mask_path, video_path):
 
 #     save_analysis_to_excel(total_sums, total_nonzero, metadata, "_analysis_data.xlsx")
 
-def main():
+# def main():
     
-    mask_name = "1339_knee_radial_masks_N16.npy" # Path will be pre-pended
-    video_name = "1339_knee_radial_video_N16.npy"
+#     mask_name = "1339_knee_radial_masks_N16.npy" # Path will be pre-pended
+#     video_name = "1339_knee_radial_video_N16.npy"
     
-    total_sums, total_nonzero = compute_sums_nonzeros(mask_name, video_name)
+#     total_sums, total_nonzero = compute_sums_nonzeros(mask_name, video_name)
     
-    # Create cycle objects
-    c1 = Cycle(flexion=(289, 308), extension=(311, 328))
-    c2 = Cycle(flexion=(330, 351), extension=(354, 373))
-    c3 = Cycle(flexion=(374, 393), extension=(397, 420))
-    c4 = Cycle(flexion=(421, 438), extension=(440, 462))
-    c5 = Cycle(flexion=(463, 487), extension=(489, 511))
-    c6 = Cycle(flexion=(512, 529), extension=(531, 552))
-    c7 = Cycle(flexion=(553, 575), extension=(578, 608))
+#     # Create cycle objects
+#     c1 = Cycle(flexion=(289, 308), extension=(311, 328))
+#     c2 = Cycle(flexion=(330, 351), extension=(354, 373))
+#     c3 = Cycle(flexion=(374, 393), extension=(397, 420))
+#     c4 = Cycle(flexion=(421, 438), extension=(440, 462))
+#     c5 = Cycle(flexion=(463, 487), extension=(489, 511))
+#     c6 = Cycle(flexion=(512, 529), extension=(531, 552))
+#     c7 = Cycle(flexion=(553, 575), extension=(578, 608))
 
-    # Create metadata object
-    metadata = Metadata(
-        file_number=1339,
-        type_of_knee="aging",
-        frame_start=289,
-        frame_end=608,
-        cycle_frames=[c1, c2, c3, c4, c5, c6, c7],
-        num_of_segments=16,
-        segment_labels=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
-        left_segments=[11,12,13,14,15,16,1],
-        middle_segments=[7,8,9,10],
-        right_segments=[1,2,3,4,5,6],
-    )
+#     # Create metadata object
+#     metadata = Metadata(
+#         file_number=1339,
+#         type_of_knee="aging",
+#         frame_start=289,
+#         frame_end=608,
+#         cycle_frames=[c1, c2, c3, c4, c5, c6, c7],
+#         num_of_segments=16,
+#         segment_labels=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
+#         left_segments=[11,12,13,14,15,16,1],
+#         middle_segments=[7,8,9,10],
+#         right_segments=[1,2,3,4,5,6],
+#     )
 
-    # Validate consistency
-    metadata.validate()
+#     # Validate consistency
+#     metadata.validate()
 
-    print(metadata.total_frames)  # 320
+#     print(metadata.total_frames)  # 320
 
-    save_analysis_to_excel(total_sums, total_nonzero, metadata, "1339_analysis_data.xlsx")
+#     save_analysis_to_excel(total_sums, total_nonzero, metadata, "1339_analysis_data.xlsx")
 
 
 
