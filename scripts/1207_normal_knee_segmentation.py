@@ -10,10 +10,10 @@ def get_femur_mask(video):
     # Blur
     video = utils.blur_video(video)
     # video = np.array([soft_knee_compression(frame, 190, 60, 10) for frame in video]) # idk if this is all that 
-    video[video > 160] = 160 # Hard clipping
+    video[video > 165] = 165 # Hard clipping
 
     # Rescale intensities for more consistent segmentation
-    ref_fm = video[100]
+    ref_fm = video[142]
     video_hist = rdl.match_histograms_video(video, ref_fm)
 
     # Get outer mask
@@ -22,14 +22,18 @@ def get_femur_mask(video):
     outer_mask = utils.morph_erode(outer_mask, (25,25)) # To shrink it/remove noise a bit 
 
     # Get inner mask
-    inner_mask = ks.mask_adaptive(video_hist, 161, 13)
+    inner_mask = ks.mask_adaptive(video_hist, 161, 11)
 
     # Get femur mask
     femur_mask = rdl.interior_mask(outer_mask, inner_mask)
-    femur_mask = utils.morph_open(femur_mask, (15,15))
-    femur_mask = utils.morph_close(femur_mask, (15,17))
-    femur_mask = utils.blur_video(femur_mask)
-    femur_mask = femur_mask > 127
+
+    breakpoint()
+
+    # femur_mask = utils.morph_close(femur_mask, (19,19))
+
+    # Manual refinements
+    femur_mask = utils.morph_open(femur_mask, (11,11))
+    femur_mask[:, 333:, :] = 0
 
     # views.show_frames(video, "video")
     views.show_frames(video_hist, "video hist")
@@ -129,8 +133,11 @@ def load_1207_normal_video():
     # video = np.flip(video, axis=2)
     nfs, h, w = video.shape
     print(nfs, h, w)
-    video = utils.rotate_video(video, 8)
-    video[video == 0] = 18 # Fill empty borders with I=16
+
+    breakpoint()
+
+    video = utils.rotate_video(video, -27)
+    video[video == 0] = 17 # Fill empty borders with I=16
 
     return video
 
@@ -224,10 +231,6 @@ def get_femur_points(mask):
 
 
 def main():
-    # Get and save the binary mask
-    # mask = get_1207_binary_mask()
-    # views.show_frames(mask)
-    # io.save_nparray(mask, "../data/processed/1207_normal_mask.npy")
 
     # Get video
     video = load_1207_normal_video()
@@ -240,11 +243,9 @@ def main():
     otsu_mask = ks.get_otsu_masks(video_hist, 0.65)
     otsu_mask = utils.morph_close(otsu_mask, (55,55))
     views.show_frames(otsu_mask, "otsu_mask")
-    breakpoint()
 
     # Perform radial segmentation
     mask = io.load_nparray("../data/processed/1207_normal_mask.npy")
-    mask = np.flip(mask, axis=2)
 
     femur_tip, femur_midpt = get_femur_points(mask)
 
@@ -258,6 +259,7 @@ def main():
     v1 = views.draw_mask_boundaries( (otsu_mask*63).astype(np.uint8), radial_masks)
     views.show_frames(v1)
 
+    print("save results if happy")
     breakpoint()
     # Save final results
     # io.save_nparray(video, "../data/processed/1207_normal_radial_video_N16.npy")
@@ -265,6 +267,10 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+
+    # Get and save the binary mask
+    # mask = get_1207_binary_mask()
+    # views.show_frames(mask)
+    # io.save_nparray(mask, "../data/processed/1207_normal_mask.npy")    
 
 
