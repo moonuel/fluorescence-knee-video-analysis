@@ -241,19 +241,26 @@ def compute_sums_nonzeros(mask_path, video_path):
 
     return total_sums, total_nonzero
 
+# Store cycle ranges here
+CYCLES = {
+    1207: "242-254	264-280	281-293	299-312	318-335	337-352	353-372	373-389	391-411	412-431	434-451	453-467	472-486	488-505	614-632	633-651	652-671	672-690	693-708	709-727	731-748	751-767	768-786	787-804	807-822	824-841	844-862	863-877",
+    1190: "66-89	92-109 421-452	470-492	503-532	533-569 737-767	770-793	794-822	823-860",
+    1193: "1793-1802 1803-1813 1814-1823 1824-1834 1835-1844 1845-1853 1854-1864 1865-1873 1874-1882 1882-1890"
+}
 
 def main():
     
     # Select data
-    video_id = 1207
+    video_id = 1193
     type = "normal"
     N = 64
-    cycles_raw = "242-254	264-280	281-293	299-312	318-335	337-352	353-372	373-389	391-411	412-431	434-451	453-467	472-486	488-505	614-632	633-651	652-671	672-690	693-708	709-727	731-748	751-767	768-786	787-804	807-822	824-841	844-862	863-877"
     
+    print(f"{video_id=}, {type=}, {N=}")
+    breakpoint()
     # -------------------------------------------------------------------------------
-    masks = load_masks(f"../data/processed/{video_id}_{type}_radial_masks_N{64}.npy")
-    video = load_video(f"../data/processed/{video_id}_{type}_radial_video_N{64}.npy")
-    cycles = [c.split("-") for c in cycles_raw.split()]
+    masks = load_masks(f"../data/processed/{video_id}_{type}_radial_masks_N{N}.npy")
+    video = load_video(f"../data/processed/{video_id}_{type}_radial_video_N{N}.npy")
+    cycles = [c.split("-") for c in CYCLES[video_id].split()]
 
     # Compute within-segment total intensities, and number of pixels in each segment
     nfs = video.shape[0]

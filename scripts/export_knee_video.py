@@ -192,12 +192,36 @@ def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
     return masks, video
 
 
+def load_1207_N64() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/1207_normal_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/1207_normal_radial_video_N64.npy")
+
+    return masks, video
+
+
+def load_1190_N64() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/1190_normal_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/1190_normal_radial_video_N64.npy")
+
+    return masks, video
+
+
+def load_1193_N64() -> Tuple[np.ndarray, np.ndarray]:
+
+    masks = io.load_masks("../data/processed/1193_normal_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/1193_normal_radial_video_N64.npy")
+
+    return masks, video
+
+
 # Global variable for setting step in segment labeling... lazy i know
 STEP = 4 
 
 if __name__ == "__main__":
 
-    masks, video = load_1339_N64()
+    masks, video = load_1193_N64()
 
     video_out = main(masks, video)
     views.show_frames(video_out)
