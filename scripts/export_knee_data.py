@@ -245,22 +245,34 @@ def compute_sums_nonzeros(mask_path, video_path):
 CYCLES = {
     1207: "242-254	264-280	281-293	299-312	318-335	337-352	353-372	373-389	391-411	412-431	434-451	453-467	472-486	488-505	614-632	633-651	652-671	672-690	693-708	709-727	731-748	751-767	768-786	787-804	807-822	824-841	844-862	863-877",
     1190: "66-89	92-109 421-452	470-492	503-532	533-569 737-767	770-793	794-822	823-860",
-    1193: "1793-1802 1803-1813 1814-1823 1824-1834 1835-1844 1845-1853 1854-1864 1865-1873 1874-1882 1882-1890"
+    1193: "1792-1801 1802-1812 1813-1822 1823-1833 1834-1843 1844-1852 1853-1863 1864-1872 1873-1881 1881-1889",
+    308: "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250",
+
+    1339: "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609"
+}
+
+TYPES = {
+    1207: "normal",
+    1193: "normal",
+    1190: "normal",
+    308: "normal",
+
+    1339: "aging"
 }
 
 def main():
     
     # Select data
-    video_id = 1193
-    type = "normal"
+    video_id = 1339
     N = 64
-    
-    print(f"{video_id=}, {type=}, {N=}")
-    breakpoint()
     # -------------------------------------------------------------------------------
+    type = TYPES[video_id]    
     masks = load_masks(f"../data/processed/{video_id}_{type}_radial_masks_N{N}.npy")
     video = load_video(f"../data/processed/{video_id}_{type}_radial_video_N{N}.npy")
     cycles = [c.split("-") for c in CYCLES[video_id].split()]
+
+    print(f"---------- {video_id=}, {type=}, {N=} ----------")
+    breakpoint()
 
     # Compute within-segment total intensities, and number of pixels in each segment
     nfs = video.shape[0]
@@ -301,9 +313,9 @@ def main():
 
     with pd.ExcelWriter(f"../data/video_intensities/video{video_id}N{N}.xlsx") as writer:
         total_sums.to_excel(writer, sheet_name="Segment Intensities", index=True)
+        total_nonzero.to_excel(writer, sheet_name="Number of Mask Pixels", index=True)
         flex.to_excel(writer, sheet_name="Flexion Frames", index=True)
         ext.to_excel(writer, sheet_name="Extension Frames", index=True)
-        # total_nonzero.to_excel(writer, sheet_name="Number of Mask Pixels", index=True)
 
 
 
