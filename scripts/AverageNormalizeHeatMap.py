@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 # --- Input file ---
-video_number = 308
+video_number = 1339
 segment_count = 64
 # num_cycles = 4
 
@@ -13,12 +13,18 @@ INPUT_XLSX = fr"../data/video_intensities/video{video_number}N{segment_count}.xl
 # --- Load sheets ---
 xls = pd.ExcelFile(INPUT_XLSX)
 df_intensity_raw = pd.read_excel(xls, sheet_name="Segment Intensities", header=None)
+df_num_pixels_raw = pd.read_excel(xls, sheet_name="Number of Mask Pixels", header=None)
 df_flex = pd.read_excel(xls, sheet_name="Flexion Frames", header=None)
 df_ext = pd.read_excel(xls, sheet_name="Extension Frames", header=None)
 
 # --- Clean intensity data ---
 # Skip the first row (header: "Frame", "Segment 1", ..., "Segment 16")
 df_intensity = df_intensity_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
+df_num_pixels = df_num_pixels_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
+
+# Optional: take average intensity per pixel, per segment?
+df_intensity = df_intensity / df_num_pixels
+# df_intensity.fillna(0) # TODO: Proposed fix to NaN in the heatmap. npixels = 0 -> intensity = 0 anyways 
 
 # --- Function to clean interval sheets ---
 def clean_intervals(df):
