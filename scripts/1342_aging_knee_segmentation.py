@@ -114,7 +114,7 @@ def load_video():
     video = io.load_nparray("../data/processed/1342_knee_frames_ctrd.npy")[:497]
     video = utils.crop_video_square(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
-    video = np.flip(video, axis=2)
+    # video = np.flip(video, axis=2)
     nfs, h, w = video.shape
     print(nfs, h, w)
     video = utils.rotate_video(video, 8)
@@ -132,14 +132,14 @@ if __name__ == "__main__":
     # io.save_nparray(mask, "../data/processed/1342_aging_mask_0-499.npy")
 
     mask = io.load_nparray("../data/processed/1342_aging_mask_0-499.npy")[:497]
-    
+
     boundary_points = get_boundary_points(mask, N_lns=128)
     
     femur_tip = estimate_femur_tip(boundary_points, cutoff=0.6)
 
     femur_midpt = estimate_femur_midpoint(boundary_points, start=0.1, end=0.5)
 
-    radial_masks = rdl.label_radial_masks(mask, femur_tip, femur_midpt, N=16)
+    radial_masks = rdl.label_radial_masks(mask, femur_tip, femur_midpt, N=64)
 
     v0 = views.draw_points((mask*31).astype(np.uint8), femur_tip)
     v0 = views.draw_points(v0, femur_midpt)
@@ -150,5 +150,7 @@ if __name__ == "__main__":
     v1 = views.draw_mask_boundaries( (mask*63).astype(np.uint8), radial_masks)
     views.show_frames(v1)
 
-    io.save_nparray(video, "../data/processed/1342_aging_radial_video_N16.npy")
-    io.save_nparray(radial_masks, "../data/processed/1342_aging_radial_masks_N16.npy")
+    breakpoint()
+
+    # io.save_nparray(video, "../data/processed/1342_aging_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/processed/1342_aging_radial_masks_N16.npy")
