@@ -84,7 +84,8 @@ def main(video_path, output_path, chunk_size=100):
         raise ValueError("Failed to read video for metadata.")
     frame_shape = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).shape
 
-    queue = Queue(maxsize=cpu_count() * 2)
+    # queue = Queue(maxsize=cpu_count())
+    queue = Queue(maxsize=10)
     temp_dir = tempfile.mkdtemp()
 
     print("[Main] Spawning worker processes")
@@ -127,5 +128,5 @@ if __name__ == "__main__":
 
     breakpoint()
 
-    main(file_in, file_out, chunk_size=200)
+    main(file_in, file_out, chunk_size=100)
 
