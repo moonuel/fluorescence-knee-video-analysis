@@ -334,7 +334,7 @@ def blur_video(video:np.ndarray, kernel_dims:Tuple[int,int]=(25,25), sigma:int=0
     return video_b
 
 
-def morph_open(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
+def morph_open(video:np.ndarray, kernel_size:Tuple[int,int], repeats:int = 1) -> np.ndarray:
     "Implements a morphological opening operation over a grayscale video with dimensions (nframes,hgt,wth)"
     if VERBOSE: print("morph_open() called!")
 
@@ -346,20 +346,20 @@ def morph_open(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
     video_o = []
     for _, frame in enumerate(video):
         if dtype != np.uint8: frame = frame.astype(np.uint8)
-        frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, kernel)
+        frame = cv2.morphologyEx(frame, cv2.MORPH_OPEN, kernel, iterations=repeats)
         video_o.append(frame.astype(dtype))
     video_o = np.array(video_o, dtype=dtype)
 
     return video_o
 
-def morph_close(video:np.ndarray, kernel_size:Tuple[int,int]) -> np.ndarray:
+def morph_close(video:np.ndarray, kernel_size:Tuple[int,int], repeats:int = 1) -> np.ndarray:
     "Implements a morphological closing operation over a grayscale video with dimensions (nframes,hgt,wth)"
     if VERBOSE: print("morph_close() called!")
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size)
     video_c = []
     for _, frame in enumerate(video):
-        frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel)
+        frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel, iterations=repeats)
         video_c.append(frame)
     video_c = np.array(video_c)
 
