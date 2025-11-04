@@ -9,7 +9,7 @@ OPTIONS = {"total": "Normalized total intensities, per segment",
            "unit": "Normalized average intensity per pixel, per segment"}
 
 # --- Input file ---
-if len(sys.argv[1:]) != 3:
+if len(sys.argv[1:]) != 3 or sys.argv[3] not in OPTIONS.keys(): 
     options_str = "\n\t" + "\n\t".join(f"     '{k}': {v}" for k, v in OPTIONS.items())
     raise SyntaxError(
         f"\n\tExample usage: {sys.argv[0]} 1339 64 total"
