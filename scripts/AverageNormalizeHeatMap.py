@@ -2,13 +2,32 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import sys
+import os.path
+
+OPTIONS = {"total": "Normalized total intensities, per segment", 
+           "unit": "Normalized average intensity per pixel, per segment"}
 
 # --- Input file ---
-video_number = 1339
-segment_count = 64
+if len(sys.argv[1:]) != 3:
+    options_str = "\n\t" + "\n\t".join(f"     '{k}': {v}" for k, v in OPTIONS.items())
+    raise SyntaxError(
+        f"\n\tExample usage: {sys.argv[0]} 1339 64 total"
+        f"\n\tOptions for the third argument are:{options_str}"
+    )
+
+# if not sys.argv[3] in OPTIONS: raise SyntaxError(f"")
+
+video_number = int(sys.argv[1])
+segment_count = int(sys.argv[2])
+opt = sys.argv[3]
+# video_number = 1339
+# segment_count = 64
 # num_cycles = 4
 
 INPUT_XLSX = fr"../data/video_intensities/video{video_number}N{segment_count}.xlsx"  
+
+if not os.path.isfile(INPUT_XLSX): raise ValueError(f"File 'video{video_number}N{segment_count}.xlsx' doesn't exist. \n\t    Is {video_number=} and {segment_count=} correct?")
 
 # --- Load sheets ---
 xls = pd.ExcelFile(INPUT_XLSX)
@@ -108,6 +127,18 @@ avg_flex_50 = np.mean(rescaled_flex_all_50, axis=0)
 avg_ext_50  = np.mean(rescaled_ext_all_50, axis=0)
 
 
+# --- Step (2): Compute COM per frame ---
+segments = np.arange(1, norm_intensity.shape[1] + 1)
+com_values = []
+for i in range(norm_intensity.shape[0]):
+    intensities = norm_intensity.iloc[i, :].to_numpy()
+    total = np.sum(intensities)
+    if total > 0:
+        com = np.sum(segments * intensities) / total
+    else:
+        com = np.nan
+    com_values.append(com)
+com_series = pd.Series(com_values, name="COM")
 
 
 breakpoint()
