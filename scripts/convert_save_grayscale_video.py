@@ -11,6 +11,7 @@ import h5py
 import tempfile
 import os
 from multiprocessing import Process, Queue, cpu_count
+import sys
 
 
 def frame_reader(video_path, queue, chunk_size):
@@ -111,8 +112,20 @@ def main(video_path, output_path, chunk_size=100):
 
 if __name__ == "__main__":
 
-    avi_path = "../data/raw/dmm-0 min-fluid movement_00001207.avi"
-    h5_out_path = avi_path[:-4] + ".h5"
+    if len(sys.argv) != 3: raise SyntaxError(f"{sys.argv[0]} expects two args: [file_in] [file_out]"
+                                             "\n\tExample usage: {sys.argv[0]} video1339.avi video1339gray.h5")
 
-    main(avi_path, h5_out_path, chunk_size=200)
+    file_in = sys.argv[1]
+    file_out = sys.argv[2]
+
+    if not os.path.isfile(file_in): raise FileNotFoundError("Input video not found.")
+    if not file_out[-3:] == ".h5": raise SyntaxError(f"Output file isn't a .h5 file. "
+                                                     "\n\tExample usage: {sys.argv[0]} video1339.avi video1339gray.h5")
+
+    # avi_path = "../data/raw/dmm-0 min-fluid movement_00001207.avi"
+    # h5_out_path = avi_path[:-4] + ".h5"
+
+    breakpoint()
+
+    main(file_in, file_out, chunk_size=200)
 

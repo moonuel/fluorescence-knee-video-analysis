@@ -9,6 +9,8 @@ import utils.io as io
 import utils.views as views
 import numpy as np
 from typing import Tuple
+import sys
+import os
 
 
 
@@ -26,15 +28,20 @@ def main(file_path:str, frames:Tuple[int, int], save_path:str):
 
     return
 
-# Example usage:
-    # main(
-        # "1 con-0 min-fluid movement_00001190.h5", 
-        # frames, 
-        # "1190_knee_frames_ctrd.npy")
 
 if __name__ == "__main__":
-    h5_path = "../data/raw/dmm-0 min-fluid movement_00001207.h5"
-    npy_path = "../data/processed/1207_knee_frames_ctrd.npy"
+    # h5_path = "../data/raw/dmm-0 min-fluid movement_00001207.h5"
+    # npy_path = "../data/processed/1207_knee_frames_ctrd.npy"
+
+    if len(sys.argv) != 3: raise SyntaxError(f"{sys.argv[0]} expects two args: [file_in] [file_out]"
+                                            f"\n\tExample usage: {sys.argv[0]} aging1339.h5 aging1339.npy")
+
+    h5_path = sys.argv[1]
+    npy_path = sys.argv[2]
+
+    if not os.path.isfile(h5_path): raise FileNotFoundError("Input file not found.")
+    if not npy_path[-4:] == ".npy": raise SyntaxError("Output file isn't a .npy file."
+                                                    f"\n\tExample usage: {sys.argv[0]} aging1339.h5 aging1339.npy")
 
     frames = None # None defaults to all
 
