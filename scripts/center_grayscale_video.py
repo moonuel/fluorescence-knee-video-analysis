@@ -24,7 +24,7 @@ def main(file_path:str, frames:Tuple[int, int], save_path:str):
 
     views.show_frames(views.rescale_video(video, scale_factor=0.5, show_video=False, show_num=False))
 
-    io.save_nparray(video, save_path)
+    io.save_nparray(video.astype(np.uint8), save_path)
 
     return
 
