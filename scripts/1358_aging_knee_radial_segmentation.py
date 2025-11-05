@@ -6,14 +6,7 @@ from utils import utils, io, views
 from functools import partial
 import pandas as pd
 
-def get_femur_mask():
-    
-    video = io.load_nparray("../data/processed/aging1358video.npy")
-    video = utils.crop_video_square(video, 500)
-    video = np.rot90(video, k=1, axes=(1,2))
-    video = (video*1.95).astype(np.uint8) # Increase brightness (without overflow)
-    video[video==0] = 32
-
+def get_mask_femur_outer(video:np.ndarray):
 
     video = utils.blur_video(video)
 
@@ -35,7 +28,7 @@ def get_femur_mask():
     femur_mask[:, 332:, :] = 0
     femur_mask[:, :, :205] = 0
 
-    return femur_mask
+    return femur_mask, outer_mask
 
 
 def get_boundary_points(mask, N_lns):
@@ -48,6 +41,7 @@ def get_boundary_points(mask, N_lns):
     mask[:, :, 308:] = 0
 
     boundary_points = rdl.sample_femur_interior_pts(mask, N_lns=N_lns)
+    boundary_points = rdl.forward_fill_jagged(boundary_points)
 
     # v0 = views.draw_points((mask*63).astype(np.uint8), boundary_points)
     # views.show_frames(v0)
@@ -82,6 +76,7 @@ def forward_fill_jagged(arr):
 def estimate_femur_tip(boundary_points, cutoff):
 
     femur_tip_boundary = rdl.estimate_femur_tip_boundary(boundary_points, cutoff)
+    femur_tip_boundary = rdl.forward_fill_jagged(femur_tip_boundary)
 
     femur_tip = rdl.get_centroid_pts(femur_tip_boundary)
     femur_tip = rdl.smooth_points(femur_tip, window_size=9)
@@ -92,6 +87,7 @@ def estimate_femur_tip(boundary_points, cutoff):
 def estimate_femur_midpoint(boundary_points, start, end):
 
     femur_midpt_boundary = rdl.estimate_femur_midpoint_boundary(boundary_points, start, end)
+    femur_midpt_boundary = rdl.forward_fill_jagged(femur_midpt_boundary)
 
     femur_midpt = rdl.get_centroid_pts(femur_midpt_boundary)
     femur_midpt = rdl.smooth_points(femur_midpt, window_size=9)
@@ -99,55 +95,46 @@ def estimate_femur_midpoint(boundary_points, start, end):
     return femur_midpt
 
 
-def load_video():
+def load_1358_video():
 
-    video = io.load_nparray("../data/processed/1342_knee_frames_ctrd.npy")[:497]
+    video = io.load_nparray("../data/processed/aging1358video.npy")
     video = utils.crop_video_square(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
-    # video = np.flip(video, axis=2)
-    nfs, h, w = video.shape
-    print(nfs, h, w)
-    video = utils.rotate_video(video, 8)
-    video[video == 0] = 16 # Fill empty borders with I=16
+    video = (video*1.95).astype(np.uint8) # Increase brightness (without overflow)
+    video[video==0] = 32
 
     return video
 
 
-def main():
+def main(video, femur_mask, outer_mask):
 
-    video = load_video()
-
-    # mask = get_femur_mask()
-    # io.save_nparray(mask, "../data/processed/1342_aging_mask_0-499.npy")
-
-    mask = io.load_nparray("../data/processed/1342_aging_mask_0-499.npy")[:497]
-
-    boundary_points = get_boundary_points(mask, N_lns=128)
-    
+    # Get radial masks
+    boundary_points = get_boundary_points(femur_mask, N_lns=128)
     femur_tip = estimate_femur_tip(boundary_points, cutoff=0.6)
+    femur_midpt = estimate_femur_midpoint(boundary_points, start=0.6, end=0.95)
+    radial_masks = rdl.label_radial_masks(outer_mask, femur_tip, femur_midpt, N=64)
 
-    femur_midpt = estimate_femur_midpoint(boundary_points, start=0.1, end=0.5)
-
-    radial_masks = rdl.label_radial_masks(mask, femur_tip, femur_midpt, N=64)
-
-    v0 = views.draw_points((mask*31).astype(np.uint8), femur_tip)
+    v0 = views.draw_points((femur_mask*31).astype(np.uint8), femur_tip)
     v0 = views.draw_points(v0, femur_midpt)
     v0 = views.draw_points(v0, boundary_points)
     v0 = views.draw_line(v0, femur_midpt, femur_tip)
     views.show_frames(v0)
 
-    v1 = views.draw_mask_boundaries( (mask*63).astype(np.uint8), radial_masks)
-    views.show_frames(v1)
-
+    # v1 = views.draw_mask_boundaries( (outer_mask*63).astype(np.uint8), radial_masks)
+    # views.show_frames(v1)
+    
     breakpoint()
 
-    # io.save_nparray(video, "../data/processed/1342_aging_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/processed/1342_aging_radial_masks_N16.npy")
+    # io.save_nparray(video, "../data/processed/1358_aging_radial_video_N64.npy")
+    # io.save_nparray(radial_masks, "../data/processed/1358_aging_radial_masks_N64.npy")
 
 
 if __name__ == "__main__":
     
-    get_femur_mask()
     
-    # main()
+    video = load_1358_video()
+    femur_mask, otsu_mask = get_mask_femur_outer(video)
+
+
+    main(video, femur_mask, otsu_mask)
 
