@@ -250,7 +250,8 @@ CYCLES = {
     308: "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250",
 
     1339: "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609",
-    1342: "62-81	82-100	102-119	123-151	152-171	178-199"
+    1342: "62-81	82-100	102-119	123-151	152-171	178-199",
+    1358: "1360-1384	1385-1406	1407-1433	1434-1454	1461-1483	1484-1508	1509-1540	1541-1559	1618-1648	1649-1669	1672-1696	1697-1720	1721-1748"
 }
 
 # Store knee types here
@@ -261,7 +262,8 @@ TYPES = {
     308: "normal",
 
     1339: "aging",
-    1342: "aging"
+    1342: "aging",
+    1358: "aging"
 }
 
 assert CYCLES.keys() == TYPES.keys()
@@ -278,6 +280,7 @@ def main(video_id:int, N:int):
     cycles = [c.split("-") for c in CYCLES[video_id].split()]
 
     print(f"---------- {video_id=}, {type=}, {N=} ----------")
+    views.show_frames([masks * (255 // np.max(masks)), video])
     breakpoint()
 
     # Compute within-segment total intensities, and number of pixels in each segment
