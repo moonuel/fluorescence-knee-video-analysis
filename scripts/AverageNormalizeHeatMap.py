@@ -4,15 +4,17 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
+from config import TYPES
 
 OPTIONS = {"total": "Normalized total intensities, per segment", 
            "unit": "Normalized average intensity per pixel, per segment"}
 
-# --- Input file ---
+# --- Input validation  ---
 if len(sys.argv[1:]) != 3 or sys.argv[3] not in OPTIONS.keys(): 
     options_str = "\n\t" + "\n\t".join(f"     '{k}': {v}" for k, v in OPTIONS.items())
     raise SyntaxError(
         f"\n\tExample usage: {sys.argv[0]} 1339 64 total"
+        f"\n\tValid types are: {list(TYPES)}"
         f"\n\tOptions for the third argument are:{options_str}"
     )
 
@@ -42,8 +44,11 @@ df_intensity = df_intensity_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce
 df_num_pixels = df_num_pixels_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
 
 # Optional: take average intensity per pixel, per segment?
-df_intensity = df_intensity / df_num_pixels
-# df_intensity.fillna(0) # TODO: Proposed fix to NaN in the heatmap. npixels = 0 -> intensity = 0 anyways 
+if opt == "total": 
+    pass
+if opt == "unit":
+    df_intensity = df_intensity / df_num_pixels
+    df_intensity.fillna(0, inplace=True)
 
 # --- Function to clean interval sheets ---
 def clean_intervals(df):
@@ -93,7 +98,6 @@ for s, e in zip(starts_ext, ends_ext):
 avg_ext = np.mean(rescaled_ext_all, axis=0)
 
 # --- Step (4): Rescale flextion:extension = 50%:50% and convert the horizontal axis to be angles---
-#Oliver please finish this step
 
 # Compute individual durations
 len_flex = ends_flex - starts_flex + 1
@@ -141,7 +145,7 @@ for i in range(norm_intensity.shape[0]):
 com_series = pd.Series(com_values, name="COM")
 
 
-breakpoint()
+# breakpoint()
 
 ## --- Step (5): Find the peak value for each frame---
 #Oliver please finish this step. The peak intensity value will form a contuour line to indicates how the peak intensity move.
@@ -151,14 +155,15 @@ breakpoint()
 # --- Step (6): Save to Excel ---
 #Oliver, you need to modify the following to save more information such as angles (horizontal axis of heatmap)
 ##  and the peak "intensity" value of each frame
-excel_path = fr"../figures/spatiotemporal_maps/video{video_number}N{segment_count}_results.xlsx"
+excel_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}_{video_number}N{segment_count}.xlsx"
+pdf_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}_{video_number}N{segment_count}.pdf"
+
 with pd.ExcelWriter(excel_path) as writer:
     norm_intensity.to_excel(writer, sheet_name="normalized_frames", index=False, header=False)
     pd.DataFrame(avg_flex).to_excel(writer, sheet_name="avg_flexion", index=False, header=False)
     pd.DataFrame(avg_ext).to_excel(writer, sheet_name="avg_extension", index=False, header=False)
 
 # --- Step (7): Plot heatmap ---
-pdf_path = fr"../figures/spatiotemporal_maps/video{video_number}N{segment_count}_heatmap.pdf"
 with PdfPages(pdf_path) as pdf:
     fig, ax = plt.subplots(figsize=(10, 5))
     
@@ -203,8 +208,8 @@ print("Exported:", excel_path, pdf_path)
 
 # --- Step (7.1): Plot 50/50 heatmap ---
 
-excel_path_50 = fr"../figures/spatiotemporal_maps/video{video_number}N{segment_count}_50_results.xlsx"
-pdf_path_50 = fr"../figures/spatiotemporal_maps/video{video_number}N{segment_count}_50_heatmap.pdf"
+excel_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}_rescaled_{video_number}N{segment_count}.xlsx"
+pdf_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}_rescaled_{video_number}N{segment_count}.pdf"
 
 with pd.ExcelWriter(excel_path_50) as writer:
     norm_intensity.to_excel(writer, sheet_name="normalized_frames", index=False, header=False)
