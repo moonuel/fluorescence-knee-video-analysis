@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
-from typing import Optional
 from config import TYPES
 
 OPTIONS = {"total": "Normalized total intensities, per segment", 
@@ -33,185 +32,10 @@ else:
     video_ids = [int(video_ids_str)]
     multiple_videos = False
 
-# --- COM Cycle Functions ---
-
-def resample_cycle_half(values: np.ndarray, target_len: int) -> np.ndarray:
-    """
-    Resamples a 1-D array to the specified target length using linear interpolation.
-    """
-    values = np.asarray(values, dtype=float)
-
-    if target_len <= 0:
-        raise ValueError(f"target_len must be positive. Received {target_len}")
-
-    if values.size == 0:
-        return np.full(target_len, np.nan)
-
-    if np.all(np.isnan(values)):
-        return np.full(target_len, np.nan)
-
-    old_x = np.linspace(0, 1, values.size)
-    new_x = np.linspace(0, 1, target_len)
-
-    if np.isnan(values).any():
-        valid_mask = ~np.isnan(values)
-        # If only one valid value, repeat it
-        if valid_mask.sum() == 1:
-            return np.full(target_len, values[valid_mask][0])
-        values = np.interp(old_x, old_x[valid_mask], values[valid_mask])
-
-    return np.interp(new_x, old_x, values)
-
-
-def compute_target_half_length(starts_flex: np.ndarray,
-                               ends_flex: np.ndarray,
-                               starts_ext: np.ndarray,
-                               ends_ext: np.ndarray) -> int:
-    """
-    Computes the average duration across all half-cycles (flexion + extension)
-    and returns it as an integer length for resampling.
-    """
-    flex_lengths = (ends_flex - starts_flex + 1)
-    ext_lengths = (ends_ext - starts_ext + 1)
-
-    all_lengths = np.concatenate([flex_lengths, ext_lengths])
-
-    if all_lengths.size == 0:
-        raise ValueError("No half-cycle lengths provided for rescaling.")
-
-    target_len = int(np.round(np.mean(all_lengths)))
-    target_len = max(target_len, 1)
-
-    return target_len
-
-
-def compute_cycle_coms_from_excel(com_series: pd.Series, 
-                                   starts_flex: np.ndarray, 
-                                   ends_flex: np.ndarray,
-                                   starts_ext: np.ndarray, 
-                                   ends_ext: np.ndarray,
-                                   target_half_len: Optional[int] = None) -> pd.DataFrame:
-    """
-    Extracts and centers COM values for each flexion-extension cycle pair.
-    
-    Adapts compute_cycle_coms from plot_centre_of_mass.py to work with Excel-based data structure.
-    Cycles are centered: flexion frames get negative indices (ending at -1), 
-    extension frames get positive indices (starting at 0).
-    
-    Inputs:
-        com_series: pd.Series with COM values per frame
-        starts_flex, ends_flex: arrays of flexion cycle boundaries (0-indexed, inclusive)
-        starts_ext, ends_ext: arrays of extension cycle boundaries (0-indexed, inclusive)
-        Cycles are paired by index (i-th flexion pairs with i-th extension)
-    
-    Outputs:
-        cycle_coms: pd.DataFrame with shape (nframes_rel, ncycles), each column is a centered cycle
-    """
-    n_cycles = len(starts_flex)
-    if len(starts_ext) != n_cycles:
-        raise ValueError(f"Number of flexion cycles ({n_cycles}) != extension cycles ({len(starts_ext)})")
-    
-    cycle_coms = []
-    for i in range(n_cycles):
-        # Extract flexion and extension values
-        flx_start, flx_end = starts_flex[i], ends_flex[i] + 1  # +1 for inclusive end
-        ext_start, ext_end = starts_ext[i], ends_ext[i] + 1  # +1 for inclusive end
-
-        # Ensure indices are within bounds
-        flx_end = min(flx_end, len(com_series))
-        ext_end = min(ext_end, len(com_series))
-
-        flx_vals = com_series.iloc[flx_start:flx_end].values
-        ext_vals = com_series.iloc[ext_start:ext_end].values
-
-        if target_half_len is not None:
-            flx_vals = resample_cycle_half(flx_vals, target_half_len)
-            ext_vals = resample_cycle_half(ext_vals, target_half_len)
-            flx_idx = np.arange(-target_half_len, 0)
-            ext_idx = np.arange(0, target_half_len)
-        else:
-            # Center indices: flexion ends at -1, extension starts at 0
-            flx_idx = np.arange(flx_start, flx_end) - flx_end
-            ext_idx = np.arange(ext_start, ext_end) - ext_start
-
-        flx_vals_series = pd.Series(flx_vals, index=flx_idx, name=i)
-        ext_vals_series = pd.Series(ext_vals, index=ext_idx, name=i)
-        
-        # Concatenate flexion and extension
-        cycle_coms.append(pd.concat([flx_vals_series, ext_vals_series], axis=0))
-    
-    # Combine all cycles into DataFrame
-    cycle_coms_df = pd.concat(cycle_coms, axis=1)  # shape (nframes_rel, ncycles)
-    
-    return cycle_coms_df
-
-
-def compute_average_cycle(cycle_coms: pd.DataFrame) -> pd.Series:
-    """
-    Computes the average cycle across all cycles in the DataFrame.
-    
-    Inputs:
-        cycle_coms: pd.DataFrame with shape (nframes_rel, ncycles)
-    
-    Outputs:
-        average_cycle: pd.Series with average COM values, indexed by relative frame numbers
-    """
-    average_cycle = cycle_coms.mean(axis=1, skipna=False)
-    return average_cycle
-
-
-def plot_average_cycle(average_cycle: pd.Series, 
-                       video_id: str = None, 
-                       pdf_path: str = None) -> None:
-    """
-    Plots the average center of mass cycle.
-    
-    Adapts plot_cycle_coms from plot_centre_of_mass.py but plots only the average.
-    Saves to PDF and shows interactively.
-    
-    Inputs:
-        average_cycle: pd.Series with average COM values, indexed by relative frame numbers
-        video_id: Optional string identifier for the video (e.g., "308 Normal")
-        pdf_path: Optional path to save PDF. If None, saves to default location.
-    """
-    plt.figure(figsize=(19, 7))
-    
-    # Plot average cycle
-    plt.plot(average_cycle.sort_index(), color='blue', linewidth=2, label="Average of cycles")
-    
-    # Vertical line at midpoint (x=0)
-    plt.axvline(0, linestyle="--", color='k', linewidth=1)
-    
-    # Formatting
-    if video_id is not None:
-        title_suffix = f" [{video_id}]"
-    else:
-        title_suffix = ""
-    plt.title("Average position of fluorescence intensity" + title_suffix)
-    plt.xlabel("Frames from midpoint (Left: flexion; Right: extension)")
-    plt.ylabel("Segment number (JC to SB)")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # Save to PDF if path provided
-    if pdf_path is not None:
-        with PdfPages(pdf_path) as pdf:
-            pdf.savefig(plt.gcf())
-        print(f"Exported COM plot to: {pdf_path}")
-    
-    # Show interactively
-    plt.show()
-
-
 # Validate video IDs are in TYPES
 for vid_id in video_ids:
     if vid_id not in TYPES:
         print(f"Warning: Video {vid_id} not found in TYPES config, but will attempt to process anyway.")
-
-target_half_len = None  # will be determined per single-video mode
-video_number = None
-com_series = None
-starts_flex = ends_flex = starts_ext = ends_ext = None
 
 # For single video, use original behavior
 if not multiple_videos:
@@ -254,8 +78,6 @@ if not multiple_videos:
     # --- Extract intervals ---
     starts_flex, ends_flex = clean_intervals(df_flex)
     starts_ext, ends_ext = clean_intervals(df_ext)
-
-    target_half_len = compute_target_half_length(starts_flex, ends_flex, starts_ext, ends_ext)
 
     # --- Step (1): normalize intensity per frame ---
     norm_intensity = df_intensity.copy().astype(float)
@@ -337,6 +159,119 @@ if not multiple_videos:
     com_series = pd.Series(com_values, name="COM")
 
 
+# --- COM Cycle Functions ---
+
+def compute_cycle_coms_from_excel(com_series: pd.Series, 
+                                   starts_flex: np.ndarray, 
+                                   ends_flex: np.ndarray,
+                                   starts_ext: np.ndarray, 
+                                   ends_ext: np.ndarray) -> pd.DataFrame:
+    """
+    Extracts and centers COM values for each flexion-extension cycle pair.
+    
+    Adapts compute_cycle_coms from plot_centre_of_mass.py to work with Excel-based data structure.
+    Cycles are centered: flexion frames get negative indices (ending at -1), 
+    extension frames get positive indices (starting at 0).
+    
+    Inputs:
+        com_series: pd.Series with COM values per frame
+        starts_flex, ends_flex: arrays of flexion cycle boundaries (0-indexed, inclusive)
+        starts_ext, ends_ext: arrays of extension cycle boundaries (0-indexed, inclusive)
+        Cycles are paired by index (i-th flexion pairs with i-th extension)
+    
+    Outputs:
+        cycle_coms: pd.DataFrame with shape (nframes_rel, ncycles), each column is a centered cycle
+    """
+    n_cycles = len(starts_flex)
+    if len(starts_ext) != n_cycles:
+        raise ValueError(f"Number of flexion cycles ({n_cycles}) != extension cycles ({len(starts_ext)})")
+    
+    cycle_coms = []
+    for i in range(n_cycles):
+        # Extract flexion and extension values
+        flx_start, flx_end = starts_flex[i], ends_flex[i] + 1  # +1 for inclusive end
+        ext_start, ext_end = starts_ext[i], ends_ext[i] + 1  # +1 for inclusive end
+        
+        # Ensure indices are within bounds
+        flx_end = min(flx_end, len(com_series))
+        ext_end = min(ext_end, len(com_series))
+        
+        flx_vals = com_series.iloc[flx_start:flx_end].values
+        ext_vals = com_series.iloc[ext_start:ext_end].values
+        
+        # Center indices: flexion ends at -1, extension starts at 0
+        flx_idx = np.arange(flx_start, flx_end) - flx_end  # shift endpoint to origin (negative)
+        ext_idx = np.arange(ext_start, ext_end) - ext_start  # shift startpoint to origin (positive)
+        
+        flx_vals_series = pd.Series(flx_vals, index=flx_idx, name=i)
+        ext_vals_series = pd.Series(ext_vals, index=ext_idx, name=i)
+        
+        # Concatenate flexion and extension
+        cycle_coms.append(pd.concat([flx_vals_series, ext_vals_series], axis=0))
+    
+    # Combine all cycles into DataFrame
+    cycle_coms_df = pd.concat(cycle_coms, axis=1)  # shape (nframes_rel, ncycles)
+    
+    return cycle_coms_df
+
+
+def compute_average_cycle(cycle_coms: pd.DataFrame) -> pd.Series:
+    """
+    Computes the average cycle across all cycles in the DataFrame.
+    
+    Inputs:
+        cycle_coms: pd.DataFrame with shape (nframes_rel, ncycles)
+    
+    Outputs:
+        average_cycle: pd.Series with average COM values, indexed by relative frame numbers
+    """
+    average_cycle = cycle_coms.mean(axis=1, skipna=False)
+    return average_cycle
+
+
+def plot_average_cycle(average_cycle: pd.Series, 
+                       video_id: str = None, 
+                       pdf_path: str = None) -> None:
+    """
+    Plots the average center of mass cycle.
+    
+    Adapts plot_cycle_coms from plot_centre_of_mass.py but plots only the average.
+    Saves to PDF and shows interactively.
+    
+    Inputs:
+        average_cycle: pd.Series with average COM values, indexed by relative frame numbers
+        video_id: Optional string identifier for the video (e.g., "308 Normal")
+        pdf_path: Optional path to save PDF. If None, saves to default location.
+    """
+    plt.figure(figsize=(19, 7))
+    
+    # Plot average cycle
+    plt.plot(average_cycle.sort_index(), color='blue', linewidth=2, label="Average of cycles")
+    
+    # Vertical line at midpoint (x=0)
+    plt.axvline(0, linestyle="--", color='k', linewidth=1)
+    
+    # Formatting
+    if video_id is not None:
+        title_suffix = f" [{video_id}]"
+    else:
+        title_suffix = ""
+    plt.title("Average position of fluorescence intensity" + title_suffix)
+    plt.xlabel("Frames from midpoint (Left: flexion; Right: extension)")
+    plt.ylabel("Segment number (JC to SB)")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Save to PDF if path provided
+    if pdf_path is not None:
+        with PdfPages(pdf_path) as pdf:
+            pdf.savefig(plt.gcf())
+        print(f"Exported COM plot to: {pdf_path}")
+    
+    # Show interactively
+    plt.show()
+
+
 def process_video_com_cycles(video_number: int, segment_count: int, opt: str) -> tuple:
     """
     Processes a single video file to compute average COM cycle.
@@ -384,8 +319,6 @@ def process_video_com_cycles(video_number: int, segment_count: int, opt: str) ->
     
     starts_flex, ends_flex = clean_intervals_local(df_flex)
     starts_ext, ends_ext = clean_intervals_local(df_ext)
-
-    target_half_len = compute_target_half_length(starts_flex, ends_flex, starts_ext, ends_ext)
     
     # Normalize intensity per frame
     norm_intensity = df_intensity.copy().astype(float)
@@ -411,14 +344,7 @@ def process_video_com_cycles(video_number: int, segment_count: int, opt: str) ->
     com_series = pd.Series(com_values, name="COM")
     
     # Compute cycle COMs and average
-    cycle_coms = compute_cycle_coms_from_excel(
-        com_series,
-        starts_flex,
-        ends_flex,
-        starts_ext,
-        ends_ext,
-        target_half_len=target_half_len,
-    )
+    cycle_coms = compute_cycle_coms_from_excel(com_series, starts_flex, ends_flex, starts_ext, ends_ext)
     average_cycle = compute_average_cycle(cycle_coms)
     
     # Create video identifier using TYPES
@@ -474,6 +400,8 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str, pdf_
     plt.show()
 
 
+breakpoint()
+
 # --- Step (5): Compute and plot COM cycles ---
 if multiple_videos:
     # Plot multiple videos on same figure
@@ -482,14 +410,7 @@ if multiple_videos:
     plot_multiple_videos_com(video_ids, segment_count, opt, pdf_path=com_pdf_path)
 else:
     # Single video mode - use already loaded data
-    cycle_coms = compute_cycle_coms_from_excel(
-        com_series,
-        starts_flex,
-        ends_flex,
-        starts_ext,
-        ends_ext,
-        target_half_len=target_half_len,
-    )
+    cycle_coms = compute_cycle_coms_from_excel(com_series, starts_flex, ends_flex, starts_ext, ends_ext)
     average_cycle = compute_average_cycle(cycle_coms)
     
     # Create video identifier using TYPES
