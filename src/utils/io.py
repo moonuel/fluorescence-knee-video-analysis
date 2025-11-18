@@ -135,6 +135,34 @@ def load_avi(fn) -> np.ndarray:
     video = np.array(video)
     return video
 
+def load_mp4(filename: str) -> np.ndarray:
+    """
+    Loads an MP4 video as a grayscale numpy array.
+
+    Inputs:
+        filename (str) - path to the .mp4 video file to be loaded.
+
+    Outputs:
+        video (np.ndarray) - 3-dim array (nframes, h, w) containing the grayscale video information.
+    """
+    if VERBOSE: print("load_mp4() called!")
+
+    cap = cv2.VideoCapture(filename)
+    if not cap.isOpened():
+        raise FileNotFoundError(f"Could not open MP4 file: {filename}")
+
+    video = []
+    while cap.isOpened():
+        ret, frame = cap.read()  # Returns (boolean, bgr frame)
+        if not ret: break
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        video.append(frame)
+
+    cap.release()
+    video = np.array(video, dtype=np.uint8)
+    return video
+
 def save_avi(filepath: str, video: np.ndarray, fps: int = 30) -> None:
     """Save a NumPy video array to disk as an .avi (MJPG) file.
 
