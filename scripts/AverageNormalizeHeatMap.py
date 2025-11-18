@@ -17,103 +17,7 @@ OPTIONS = {
 # HELPER FUNCTIONS
 # ============================================================================
 
-def rescale_cycle_coms(cycle_coms: pd.DataFrame) -> pd.DataFrame:
-    """
-    Resamples the flexion and extension parts of a centered cycle_com DataFrame 
-    to ensure equal duration. 
-    
-    Inputs:
-    -------
-        cycle_coms : pd.DataFrame
-            A centered df with rows "Frame Numbers (Relative)" and columns "cycle numbers". 
-            Contains NaN for cycles (columns) that are shorter than the others. 
-            Flexion parts should end at frame index -1, and extension parts should start at frame index 0,
-            so that all cycles are aligned. 
 
-    Outputs:
-    --------
-        cycle_coms_rescaled : pd.DataFrame
-            A centered df with same structure as the input df, but with rescaled columns to resolve all NaN.
-        
-    Example usage:
-    --------------
-        
-        # Compute COM over video and prepare cycles 
-        total_sums, total_counts = dp.compute_sums_nonzeros(masks, video)
-        centre_of_mass = compute_centre_of_mass(total_sums)
-        cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
-        cycles = parse_cycles(cycles) # Validate and convert to List[list]
-
-        ...
-
-        # Select cycle COMS and rescale
-        cycle_coms = compute_cycle_coms(centre_of_mass, cycles)
-        cycle_coms_rescaled = rescale_cycle_coms(cycle_coms)          
-
-    """
-    breakpoint()
-    cycle_coms.sort_index(inplace=True)
-
-    idx_flx = cycle_coms.loc[:-1].index.to_numpy()
-    idx_ext = cycle_coms.loc[0:].index.to_numpy()
-
-    flx = cycle_coms.loc[:-1, :]
-    ext = cycle_coms.loc[0:, :]
-
-    nfs, ncols = cycle_coms.shape
-
-    # Stretch flexion frames
-    flx_stretch = []
-    for col in range(ncols):
-        # No need to stretch the longest cycle
-        if len(flx[col].dropna()) == len(flx[col]): 
-            flx_stretch.append(flx[col])
-            continue 
-
-        # Remap domain to frames to [0,1]
-        x_old = np.linspace(0, 1, len(flx[col].dropna()))
-        y_old = flx[col].dropna()
-
-        # Define interpolation func
-        f = sp.interpolate.interp1d(x_old, y_old, kind="linear")
-
-        # Resample new values in [0,1]
-        x_new = np.linspace(0, 1, len(flx))
-        y_new = pd.Series(f(x_new), idx_flx, name=col)
-
-        # Map back to longest frame range 
-        flx_stretch.append(pd.Series(y_new, idx_flx))
-
-    flx_stretch = pd.DataFrame(flx_stretch).T
-
-    # Stretch extension frames
-    ext_stretch = []
-    for col in range(ncols):
-        # No need to stretch the longest cycle
-        if len(ext[col].dropna()) == len(ext[col]): 
-            ext_stretch.append(ext[col])
-            continue 
-
-        # Normalize ext frames to [0,1]
-        x_old = np.linspace(0, 1, len(ext[col].dropna()))
-        y_old = ext[col].dropna()
-
-        # Define interpolation func
-        f = sp.interpolate.interp1d(x_old, y_old, kind="linear")
-
-        # Resample new values in [0,1]
-        x_new = np.linspace(0, 1, len(ext))
-        y_new = pd.Series(f(x_new), idx_ext, name=col)
-
-        # Map back to longest frame range 
-        ext_stretch.append(pd.Series(y_new, idx_ext))
-
-    ext_stretch = pd.DataFrame(ext_stretch).T
-
-    # Stitch together stretched cycles
-    cycle_coms_stretch = pd.concat([flx_stretch, ext_stretch], axis=0)
-
-    return cycle_coms_stretch
 
 
 def clean_intervals(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -219,67 +123,83 @@ def rescale_phase_data(norm_intensity: pd.DataFrame, starts: np.ndarray, ends: n
     return rescaled_all, avg_rescaled
 
 
-def compute_com_per_frame(norm_intensity: pd.DataFrame) -> pd.Series:
+def rescale_to_equal_duration(avg_flex: np.ndarray, avg_ext: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
-    Compute center of mass (COM) for each frame based on normalized intensities.
+    Rescale flexion and extension phases to equal duration (50:50 split).
+    
+    This function takes the averaged flexion and extension data and rescales both
+    to have the same length, equal to the maximum of the two original lengths.
+    This creates a true 50:50 temporal split between the two phases.
     
     Args:
-        norm_intensity: Normalized intensity DataFrame
+        avg_flex: Average flexion data array with shape (n_flex_frames, n_segments)
+        avg_ext: Average extension data array with shape (n_ext_frames, n_segments)
         
     Returns:
-        Series of COM values indexed by frame
+        Tuple of (avg_flex_50, avg_ext_50) both rescaled to equal duration
     """
-    segments = np.arange(1, norm_intensity.shape[1] + 1)
-    com_values = []
+    n_flex, n_segments = avg_flex.shape
+    n_ext, _ = avg_ext.shape
     
-    for i in range(norm_intensity.shape[0]):
-        intensities = norm_intensity.iloc[i, :].to_numpy()
+    # Find the maximum duration between flexion and extension
+    max_duration = max(n_flex, n_ext)
+    
+    # Rescale flexion to max_duration
+    old_x_flex = np.linspace(0, 1, n_flex)
+    new_x = np.linspace(0, 1, max_duration)
+    avg_flex_50 = np.array([np.interp(new_x, old_x_flex, avg_flex[:, j]) 
+                             for j in range(n_segments)]).T
+    
+    # Rescale extension to max_duration
+    old_x_ext = np.linspace(0, 1, n_ext)
+    avg_ext_50 = np.array([np.interp(new_x, old_x_ext, avg_ext[:, j]) 
+                            for j in range(n_segments)]).T
+    
+    return avg_flex_50, avg_ext_50
+
+
+def compute_com_from_intensity_array(intensity_array: np.ndarray) -> np.ndarray:
+    """
+    Compute center of mass from an intensity array.
+
+    Args:
+        intensity_array: Array with shape (n_frames, n_segments) containing intensity values
+
+    Returns:
+        Array of COM values, one per frame
+    """
+    n_frames, n_segments = intensity_array.shape
+    segments = np.arange(1, n_segments + 1)  # 1-based segment indices
+    com_values = []
+
+    for i in range(n_frames):
+        intensities = intensity_array[i, :]
         total = np.sum(intensities)
         if total > 0:
             com = np.sum(segments * intensities) / total
         else:
             com = np.nan
         com_values.append(com)
-    
-    com_series = pd.Series(com_values, name="COM")
-    com_series.index += 1  # 1-index shift
-    return com_series
+
+    return np.array(com_values)
 
 
-def compute_com_cycles(com_series: pd.Series, starts_flex: np.ndarray, ends_flex: np.ndarray,
-                       starts_ext: np.ndarray, ends_ext: np.ndarray) -> pd.DataFrame:
+def create_combined_com_series(com_flex: np.ndarray, com_ext: np.ndarray) -> pd.Series:
     """
-    Extract and align COM cycles from flexion and extension phases.
-    
+    Create a combined COM series from separate flexion and extension COM curves.
+
     Args:
-        com_series: Series of COM values
-        starts_flex: Flexion start frames
-        ends_flex: Flexion end frames
-        starts_ext: Extension start frames
-        ends_ext: Extension end frames
-        
+        com_flex: COM values for flexion phase
+        com_ext: COM values for extension phase
+
     Returns:
-        DataFrame with aligned COM cycles
+        Combined pandas Series spanning both phases
     """
-    flex_slices = []
-    ext_slices = []
+    combined_com = np.concatenate([com_flex, com_ext])
+    return pd.Series(combined_com, index=np.arange(len(combined_com)), name="COM")
 
-    # Collect all flexion slices, rescale index so last frame of flexion is -1
-    for s, e in zip(starts_flex, ends_flex):
-        sl = com_series.iloc[s:e+1].reset_index(drop=True)
-        sl.index = sl.index - len(sl)
-        flex_slices.append(sl)
 
-    # Collect all extension slices, rescale index so first frame is 0
-    for s, e in zip(starts_ext, ends_ext):
-        sl = com_series.iloc[s:e+1].reset_index(drop=True)
-        ext_slices.append(sl)
 
-    # Concat all cycles: flex and ext
-    com_cycles_df = pd.concat([pd.DataFrame(flex_slices), pd.DataFrame(ext_slices)], axis=1).T
-    com_cycles_df.columns = [i for i in range(com_cycles_df.shape[1])]
-    
-    return com_cycles_df
 
 
 def plot_heatmap(avg_flex: np.ndarray, avg_ext: np.ndarray, avg_com_cycles: pd.Series,
@@ -382,46 +302,43 @@ def main(video_number: int, segment_count: int, opt: str) -> None:
     # Normalize intensity per frame
     norm_intensity = normalize_intensity_per_frame(df_intensity)
     
-    # Rescale flexion and extension phases
+    # Rescale flexion and extension phases (each to their own max length within the phase)
     rescaled_flex_all, avg_flex = rescale_phase_data(norm_intensity, starts_flex, ends_flex)
     rescaled_ext_all, avg_ext = rescale_phase_data(norm_intensity, starts_ext, ends_ext)
     
-    # Rescale with 50:50 duration
-    rescaled_flex_all_50, avg_flex_50 = rescale_phase_data(norm_intensity, starts_flex, ends_flex)
-    rescaled_ext_all_50, avg_ext_50 = rescale_phase_data(norm_intensity, starts_ext, ends_ext)
-    
-    # Compute COM per frame
-    com_series = compute_com_per_frame(norm_intensity)
-    
-    # Compute COM cycles
-    com_cycles_df = compute_com_cycles(com_series, starts_flex, ends_flex, starts_ext, ends_ext)
-    
-    # Rescale COM cycles
-    cycle_coms_rescaled = rescale_cycle_coms(com_cycles_df)
-    avg_com_cycles = cycle_coms_rescaled.mean(axis=1)
-    
-    breakpoint()
-    
+    # Rescale with 50:50 duration (both phases rescaled to equal length = max of the two)
+    avg_flex_50, avg_ext_50 = rescale_to_equal_duration(avg_flex, avg_ext)
+
+    # Compute COM directly from averaged intensity arrays (improved temporal alignment)
+    com_flex = compute_com_from_intensity_array(avg_flex)
+    com_ext = compute_com_from_intensity_array(avg_ext)
+    com_flex_50 = compute_com_from_intensity_array(avg_flex_50)
+    com_ext_50 = compute_com_from_intensity_array(avg_ext_50)
+
+    # Create combined COM series for plotting
+    avg_com_cycles = create_combined_com_series(com_flex, com_ext)
+    avg_com_cycles_50_50 = create_combined_com_series(com_flex_50, com_ext_50)
+
     # TODO: Step (5): Find the peak value for each frame
     # Oliver please finish this step. The peak intensity value will form a contour line to indicate how the peak intensity moves.
     # We will compare it with COM curve, then modify COM definition
-    
+
     # Save results - original heatmap
     excel_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}_{video_number}N{segment_count}.xlsx"
     pdf_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}_{video_number}N{segment_count}.pdf"
-    
+
     save_results_to_excel(excel_path, norm_intensity, avg_flex, avg_ext)
     plot_heatmap(avg_flex, avg_ext, avg_com_cycles, pdf_path)
-    
+
     print("Exported:", excel_path, pdf_path)
-    
+
     # Save results - 50/50 rescaled heatmap
     excel_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}_rescaled_{video_number}N{segment_count}.xlsx"
     pdf_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}_rescaled_{video_number}N{segment_count}.pdf"
-    
+
     save_results_to_excel(excel_path_50, norm_intensity, avg_flex_50, avg_ext_50)
-    plot_heatmap(avg_flex_50, avg_ext_50, avg_com_cycles, pdf_path_50, title_suffix="(Rescaled 50:50)")
-    
+    plot_heatmap(avg_flex_50, avg_ext_50, avg_com_cycles_50_50, pdf_path_50, title_suffix="(Rescaled 50:50)")
+
     print("Exported:", excel_path_50, pdf_path_50)
 
 
