@@ -5,9 +5,116 @@ from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
 from config import TYPES
+import scipy as sp
 
 OPTIONS = {"total": "Normalized total intensities, per segment", 
            "unit": "Normalized average intensity per pixel, per segment"}
+
+
+def rescale_cycle_coms(cycle_coms:pd.DataFrame) -> pd.DataFrame:
+    """
+    Resamples the flexion and extension parts of a centered cycle_com DataFrame 
+    to ensure equal duration. 
+    
+    Inputs:
+    -------
+        cycle_coms : pd.DataFrame
+            A centered df with rows "Frame Numbers (Relative)" and columns "cycle numbers". 
+            Contains NaN for cycles (columns) that are shorter than the others. 
+            Flexion parts should end at frame index -1, and extension parts should start at frame index 0,
+            so that all cycles are aligned. 
+
+    Outputs:
+    --------
+        cycle_coms_rescaled : pd.DataFrame
+            A centered df with same structure as the input df, but with rescaled columns to resolve all NaN.
+        
+    Example usage:
+    --------------
+        
+        # Compute COM over video and prepare cycles 
+        total_sums, total_counts = dp.compute_sums_nonzeros(masks, video)
+        centre_of_mass = compute_centre_of_mass(total_sums)
+        cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
+        cycles = parse_cycles(cycles) # Validate and convert to List[list]
+
+        ...
+
+        # Select cycle COMS and rescale
+        cycle_coms = compute_cycle_coms(centre_of_mass, cycles)
+        cycle_coms_rescaled = rescale_cycle_coms(cycle_coms)          
+
+    """
+    breakpoint()
+    cycle_coms.sort_index(inplace=True)
+
+    idx_flx = cycle_coms.loc[:-1].index.to_numpy()
+    idx_ext = cycle_coms.loc[0:].index.to_numpy()
+
+    flx = cycle_coms.loc[:-1, :]
+    ext = cycle_coms.loc[0:, :]
+
+    nfs, ncols = cycle_coms.shape
+
+    # Stretch flexion frames
+    flx_stretch = []
+    for col in range(ncols):
+
+        # breakpoint()
+
+        # No need to stretch the longest cycle
+        if len(flx[col].dropna()) == len(flx[col]): 
+            flx_stretch.append(flx[col])
+            continue 
+
+        # Remap domain to frames to [0,1]
+        x_old = np.linspace(0, 1, len(flx[col].dropna()))
+        y_old = flx[col].dropna()
+
+        # Define interpolation func
+        f = sp.interpolate.interp1d(x_old, y_old, kind="linear")
+
+        # Resample new values in [0,1]
+        x_new = np.linspace(0, 1, len(flx))
+        y_new = pd.Series(f(x_new), idx_flx, name=col)
+
+        # Map back to longest frame range 
+        flx_stretch.append(pd.Series(y_new, idx_flx))
+
+    flx_stretch = pd.DataFrame(flx_stretch).T
+
+    # Stretch extension frames
+    ext_stretch = []
+    for col in range(ncols):
+
+        # breakpoint()
+
+        # No need to stretch the longest cycle
+        if len(ext[col].dropna()) == len(ext[col]): 
+            ext_stretch.append(ext[col])
+            continue 
+
+        # Normalize ext frames to [0,1]
+        x_old = np.linspace(0, 1, len(ext[col].dropna()))
+        y_old = ext[col].dropna()
+
+        # Define interpolation func
+        f = sp.interpolate.interp1d(x_old, y_old, kind="linear")
+
+        # Resample new values in [0,1]
+        x_new = np.linspace(0, 1, len(ext))
+        y_new = pd.Series(f(x_new), idx_ext, name=col)
+
+        # Map back to longest frame range 
+        ext_stretch.append(pd.Series(y_new, idx_ext))
+
+    ext_stretch = pd.DataFrame(ext_stretch).T
+
+    # Stitch together stretched cycles
+    cycle_coms_stretch = pd.concat([flx_stretch, ext_stretch], axis=0)
+
+    return cycle_coms_stretch
+
 
 # --- Input validation  ---
 if len(sys.argv[1:]) != 3 or sys.argv[3] not in OPTIONS.keys(): 
@@ -27,9 +134,9 @@ opt = sys.argv[3]
 # segment_count = 64
 # num_cycles = 4
 
-INPUT_XLSX = fr"../data/video_intensities/video{video_number}N{segment_count}.xlsx"  
+INPUT_XLSX = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"  
 
-if not os.path.isfile(INPUT_XLSX): raise ValueError(f"File 'video{video_number}N{segment_count}.xlsx' doesn't exist. \n\t    Is {video_number=} and {segment_count=} correct?")
+if not os.path.isfile(INPUT_XLSX): raise ValueError(f"File '{video_number}N{segment_count}intensities.xlsx' doesn't exist. \n\t    Is {video_number=} and {segment_count=} correct?")
 
 # --- Load sheets ---
 xls = pd.ExcelFile(INPUT_XLSX)
@@ -104,13 +211,19 @@ len_flex = ends_flex - starts_flex + 1
 len_ext = ends_ext - starts_ext + 1
 
 # Find the *average* duration across all cycles (flex + ext)
-avg_duration = int(np.round(np.mean(np.concatenate([len_flex, len_ext]))))
+# avg_duration = int(np.round(np.mean(np.concatenate([len_flex, len_ext])))) 
+
+# TODO: verify we rescale the cycles using Dr. Na's code correctly
+# TODO: rescale the average com cycles to 50:50 and plot it on the 50:50 heatmap
+
+max_len_flex = max(ends_flex - starts_flex + 1)
+max_len_ext = max(ends_ext - starts_ext + 1)
 
 rescaled_flex_all_50 = []
 for s, e in zip(starts_flex, ends_flex):
     data = norm_intensity.iloc[s:e+1, :].to_numpy()
     old_x = np.linspace(0, 1, data.shape[0])
-    new_x = np.linspace(0, 1, avg_duration)
+    new_x = np.linspace(0, 1, max_len_flex)
     rescaled = np.array([
         np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])
     ]).T
@@ -120,7 +233,7 @@ rescaled_ext_all_50 = []
 for s, e in zip(starts_ext, ends_ext):
     data = norm_intensity.iloc[s:e+1, :].to_numpy()
     old_x = np.linspace(0, 1, data.shape[0])
-    new_x = np.linspace(0, 1, avg_duration)
+    new_x = np.linspace(0, 1, max_len_ext)
     rescaled = np.array([
         np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])
     ]).T
@@ -143,9 +256,33 @@ for i in range(norm_intensity.shape[0]):
         com = np.nan
     com_values.append(com)
 com_series = pd.Series(com_values, name="COM")
+com_series.index += 1 # 1-index shift
+
+flex_slices = []
+ext_slices = []
+
+# Collect all flexion slices, rescale index so last frame of flexion is -1
+for s, e in zip(starts_flex, ends_flex):
+    sl = com_series.iloc[s:e+1].reset_index(drop=True)
+    sl.index = sl.index - (len(sl))
+    flex_slices.append(sl)
+
+# Collect all extension slices, rescale index so first frame is 0
+for s, e in zip(starts_ext, ends_ext):
+    sl = com_series.iloc[s:e+1].reset_index(drop=True)
+    ext_slices.append(sl)
+
+# Concat all cycles: flex and ext
+com_cycles_df = pd.concat([pd.DataFrame(flex_slices), pd.DataFrame(ext_slices)], axis=1).T
+com_cycles_df.columns = [i for i in range(com_cycles_df.shape[1])] 
 
 
-# breakpoint()
+
+cycle_coms_rescaled = rescale_cycle_coms(com_cycles_df)
+
+avg_com_cycles = cycle_coms_rescaled.mean(axis=1)
+
+breakpoint()
 
 ## --- Step (5): Find the peak value for each frame---
 #Oliver please finish this step. The peak intensity value will form a contuour line to indicates how the peak intensity move.
@@ -169,6 +306,12 @@ with PdfPages(pdf_path) as pdf:
     
     combined = np.concatenate([avg_flex, avg_ext], axis=0)
     im = ax.imshow(combined.T, aspect="auto", cmap="viridis", origin="lower")
+
+    # Plot avg_com_cycles as a solid red line over the heatmap
+    # avg_com_cycles' index should correspond to the x-axis of the combined heatmap (avg_flex + avg_ext)
+    # It must be mapped so that its values (segment indices) align with the heatmap row axis (vertical)
+    ax.plot(np.arange(len(avg_com_cycles)), avg_com_cycles, color='red', linewidth=2, label='Average COM')
+    ax.legend(loc='upper right')
     
     # --- Flexion/Extension split ---
     split_index = avg_flex.shape[0]
