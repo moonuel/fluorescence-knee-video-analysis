@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
+import argparse
 from config import TYPES
 import scipy as sp
 
@@ -203,16 +204,17 @@ def create_combined_com_series(com_flex: np.ndarray, com_ext: np.ndarray) -> pd.
 
 
 def plot_heatmap(avg_flex: np.ndarray, avg_ext: np.ndarray, avg_com_cycles: pd.Series,
-                 pdf_path: str, title_suffix: str = "") -> None:
+                 pdf_path: str, title_suffix: str = "", normalize: bool = True) -> None:
     """
     Plot and save heatmap with COM overlay to PDF.
-    
+
     Args:
         avg_flex: Average flexion data
         avg_ext: Average extension data
         avg_com_cycles: Average COM cycle data
         pdf_path: Path to save PDF
         title_suffix: Optional suffix for plot title
+        normalize: Whether data is normalized (affects title)
     """
     with PdfPages(pdf_path) as pdf:
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -252,30 +254,33 @@ def plot_heatmap(avg_flex: np.ndarray, avg_ext: np.ndarray, avg_com_cycles: pd.S
         ax.set_xlabel("Joint Angle (degrees)")
 
         # Titles and colorbar
-        title = "Averaged Normalized Intensity: Flexion (Left) | Extension (Right)"
+        intensity_label = "Avg Normalized Intensity (%)" if normalize else "Avg Raw Intensity"
+        title = f"Averaged {'Normalized ' if normalize else 'Raw '}Intensity: Flexion (Left) | Extension (Right)"
         if title_suffix:
             title += f" {title_suffix}"
         ax.set_title(title)
         ax.set_ylabel("Segment Index")
-        plt.colorbar(im, ax=ax, label="Avg Normalized Intensity (%)")
+        plt.colorbar(im, ax=ax, label=intensity_label)
         
         pdf.savefig(fig)
         plt.close(fig)
 
 
-def save_results_to_excel(excel_path: str, norm_intensity: pd.DataFrame, 
-                          avg_flex: np.ndarray, avg_ext: np.ndarray) -> None:
+def save_results_to_excel(excel_path: str, intensity_data: pd.DataFrame,
+                          avg_flex: np.ndarray, avg_ext: np.ndarray, normalize: bool = True) -> None:
     """
     Save results to Excel file.
-    
+
     Args:
         excel_path: Path to save Excel file
-        norm_intensity: Normalized intensity DataFrame
+        intensity_data: Intensity DataFrame (normalized or raw)
         avg_flex: Average flexion data
         avg_ext: Average extension data
+        normalize: Whether data is normalized (affects sheet name)
     """
+    sheet_name = "normalized_frames" if normalize else "raw_frames"
     with pd.ExcelWriter(excel_path) as writer:
-        norm_intensity.to_excel(writer, sheet_name="normalized_frames", index=False, header=False)
+        intensity_data.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
         pd.DataFrame(avg_flex).to_excel(writer, sheet_name="avg_flexion", index=False, header=False)
         pd.DataFrame(avg_ext).to_excel(writer, sheet_name="avg_extension", index=False, header=False)
 
@@ -284,28 +289,35 @@ def save_results_to_excel(excel_path: str, norm_intensity: pd.DataFrame,
 # MAIN FUNCTION
 # ============================================================================
 
-def main(video_number: int, segment_count: int, opt: str) -> None:
+def main(video_number: int, segment_count: int, opt: str, normalize: bool = True) -> None:
     """
     Main processing function for generating spatiotemporal heatmaps.
-    
+
     Args:
         video_number: Video identifier number
         segment_count: Number of segments
         opt: Processing option ("total" or "unit")
+        normalize: Whether to normalize intensity values (default: True)
     """
     # Define input/output paths
     input_xlsx = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"
-    
+
+    # Create filename suffix for non-normalized data
+    norm_suffix = "_nonorm" if not normalize else ""
+
     # Load and clean data
     df_intensity, starts_flex, ends_flex, starts_ext, ends_ext = load_and_clean_data(input_xlsx, opt)
-    
-    # Normalize intensity per frame
-    norm_intensity = normalize_intensity_per_frame(df_intensity)
-    
+
+    # Normalize intensity per frame (conditionally)
+    if normalize:
+        norm_intensity = normalize_intensity_per_frame(df_intensity)
+    else:
+        norm_intensity = df_intensity.copy()
+
     # Rescale flexion and extension phases (each to their own max length within the phase)
     rescaled_flex_all, avg_flex = rescale_phase_data(norm_intensity, starts_flex, ends_flex)
     rescaled_ext_all, avg_ext = rescale_phase_data(norm_intensity, starts_ext, ends_ext)
-    
+
     # Rescale with 50:50 duration (both phases rescaled to equal length = max of the two)
     avg_flex_50, avg_ext_50 = rescale_to_equal_duration(avg_flex, avg_ext)
 
@@ -324,20 +336,20 @@ def main(video_number: int, segment_count: int, opt: str) -> None:
     # We will compare it with COM curve, then modify COM definition
 
     # Save results - original heatmap
-    excel_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}_{video_number}N{segment_count}.xlsx"
-    pdf_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}_{video_number}N{segment_count}.pdf"
+    excel_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.xlsx"
+    pdf_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.pdf"
 
-    save_results_to_excel(excel_path, norm_intensity, avg_flex, avg_ext)
-    plot_heatmap(avg_flex, avg_ext, avg_com_cycles, pdf_path)
+    save_results_to_excel(excel_path, norm_intensity, avg_flex, avg_ext, normalize=normalize)
+    plot_heatmap(avg_flex, avg_ext, avg_com_cycles, pdf_path, normalize=normalize)
 
     print("Exported:", excel_path, pdf_path)
 
     # Save results - 50/50 rescaled heatmap
-    excel_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}_rescaled_{video_number}N{segment_count}.xlsx"
-    pdf_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}_rescaled_{video_number}N{segment_count}.pdf"
+    excel_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.xlsx"
+    pdf_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.pdf"
 
-    save_results_to_excel(excel_path_50, norm_intensity, avg_flex_50, avg_ext_50)
-    plot_heatmap(avg_flex_50, avg_ext_50, avg_com_cycles_50_50, pdf_path_50, title_suffix="(Rescaled 50:50)")
+    save_results_to_excel(excel_path_50, norm_intensity, avg_flex_50, avg_ext_50, normalize=normalize)
+    plot_heatmap(avg_flex_50, avg_ext_50, avg_com_cycles_50_50, pdf_path_50, title_suffix="(Rescaled 50:50)", normalize=normalize)
 
     print("Exported:", excel_path_50, pdf_path_50)
 
@@ -347,30 +359,40 @@ def main(video_number: int, segment_count: int, opt: str) -> None:
 # ============================================================================
 
 if __name__ == "__main__":
-    # Input validation
-    if len(sys.argv[1:]) != 3 or sys.argv[3] not in OPTIONS.keys():
-        options_str = "\n\t" + "\n\t".join(f"     '{k}': {v}" for k, v in OPTIONS.items())
-        print(
-            f"\n\tExample usage: python {sys.argv[0]} 1339 64 total"
-            f"\n\tValid types are: {list(TYPES)}"
-            f"\n\tOptions for the third argument are:{options_str}"
-        )
-        sys.exit(1)
-    
-    # Parse command line arguments
-    video_number = int(sys.argv[1])
-    segment_count = int(sys.argv[2])
-    opt = sys.argv[3]
-    
+    parser = argparse.ArgumentParser(
+        description="Generate spatiotemporal heatmaps from knee video intensity data",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=f"""
+Examples:
+  python {sys.argv[0]} 1339 64 total                    # Default: with normalization
+  python {sys.argv[0]} 1339 64 total --no-normalize     # Without normalization
+
+Valid video types are: {list(TYPES)}
+Options for the third argument are:
+""" + "\n".join(f"  '{k}': {v}" for k, v in OPTIONS.items())
+    )
+
+    parser.add_argument("video_number", type=int, help="Video identifier number")
+    parser.add_argument("segment_count", type=int, help="Number of segments")
+    parser.add_argument("opt", choices=OPTIONS.keys(),
+                       help="Processing option")
+    parser.add_argument("--no-normalize", action="store_true",
+                       help="Disable intensity normalization (default: normalization enabled)")
+
+    args = parser.parse_args()
+
+    # Set normalize flag (default True, inverted by --no-normalize)
+    normalize = not args.no_normalize
+
     # Validate input file exists
-    input_xlsx = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"
+    input_xlsx = fr"../data/video_intensities/{args.video_number}N{args.segment_count}intensities.xlsx"
     if not os.path.isfile(input_xlsx):
-        print(f"Error: File '{video_number}N{segment_count}intensities.xlsx' doesn't exist.")
-        print(f"       Is video_number={video_number} and segment_count={segment_count} correct?")
+        print(f"Error: File '{args.video_number}N{args.segment_count}intensities.xlsx' doesn't exist.")
+        print(f"       Is video_number={args.video_number} and segment_count={args.segment_count} correct?")
         sys.exit(1)
-    
+
     # Run main processing
-    main(video_number, segment_count, opt)
+    main(args.video_number, args.segment_count, args.opt, normalize)
 
 
 # ============================================================================
