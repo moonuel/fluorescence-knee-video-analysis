@@ -175,6 +175,41 @@ def resample_com_series_for_alignment(com_series: pd.Series, max_flex_len: int, 
     return pd.Series(combined_values, index=combined_idx, name="COM")
 
 
+def set_angle_xticks(flex_len: int, ext_len: int) -> None:
+    """
+    Set custom x-ticks with joint angles for COM plots.
+
+    Flexion phase (indices -flex_len to -1): mapped to 30° to 135°
+    Extension phase (indices 0 to ext_len-1): mapped to 135° to 30°
+
+    Args:
+        flex_len: Length of flexion phase
+        ext_len: Length of extension phase
+    """
+    flex_tick_angles = [30, 45, 60, 75, 90, 105, 120, 135]
+    ext_tick_angles = [135, 120, 105, 90, 75, 60, 45, 30]
+
+    tick_positions = []
+    tick_labels = []
+
+    # Flexion ticks: 30° to 135°
+    for ang in flex_tick_angles:
+        relative_pos = (ang - 30) / 105.0
+        frame_idx = -flex_len + relative_pos * flex_len
+        tick_positions.append(frame_idx)
+        tick_labels.append(str(ang))
+
+    # Extension ticks: 135° to 30°
+    for ang in ext_tick_angles:
+        relative_pos = (135 - ang) / 105.0
+        frame_idx = relative_pos * (ext_len - 1) if ext_len > 1 else 0
+        tick_positions.append(frame_idx)
+        tick_labels.append(str(ang))
+
+    plt.xticks(tick_positions, tick_labels)
+    plt.xlabel("Joint Angle (degrees)")
+
+
 # =============================================================================
 # MAIN PROCESSING FUNCTION
 # =============================================================================
@@ -232,9 +267,13 @@ def plot_single_video_com(com_series: pd.Series, video_id: str, pdf_path: str = 
     # Vertical line at midpoint (flexion/extension transition)
     plt.axvline(0, linestyle="--", color='k', linewidth=1)
 
+    # Set angle-based x-ticks
+    flex_len = len(com_series[com_series.index < 0])
+    ext_len = len(com_series[com_series.index >= 0])
+    set_angle_xticks(flex_len, ext_len)
+
     # Formatting
     plt.title(f"Average position of fluorescence intensity from Heatmap [{video_id}]")
-    plt.xlabel("Frames from midpoint (Left: flexion; Right: extension)")
     plt.ylabel("Segment number (JC to SB)")
     plt.legend()
     plt.grid(True, alpha=0.3)
@@ -297,22 +336,29 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
 
     # Second pass: resample and plot
     for i, (com_series, video_label, idx) in enumerate(zip(all_com_series, valid_video_labels, valid_indices)):
+        video_number = video_ids[idx]
         # Resample for temporal alignment
         aligned_com_series = resample_com_series_for_alignment(com_series, max_flex_len, max_ext_len)
+
+        # Use dashed line for aging videos
+        linestyle = '--' if TYPES.get(video_number, '') == "aging" else '-'
 
         plt.plot(aligned_com_series.sort_index().index, aligned_com_series.sort_index().values,
                 label=video_label,
                 color=cmap(valid_indices[i]),
-                linewidth=2)
+                linewidth=2,
+                linestyle=linestyle)
 
     # Vertical line at midpoint (flexion/extension transition)
     plt.axvline(0, linestyle="--", color='k', linewidth=1)
+
+    # Set angle-based x-ticks (using aligned lengths)
+    set_angle_xticks(max_flex_len, max_ext_len)
 
     # Formatting
     normalize_str = "Normalized" if normalize else "Raw"
     rescaled_str = " (Rescaled 50:50)" if rescaled else ""
     plt.title(f"Average position of fluorescence intensity from Heatmaps ({normalize_str}{rescaled_str}) - Multiple Videos (Temporally Aligned)")
-    plt.xlabel("Frames from midpoint (Left: flexion; Right: extension)")
     plt.ylabel("Segment number (JC to SB)")
     plt.legend()
     plt.grid(True, alpha=0.3)
