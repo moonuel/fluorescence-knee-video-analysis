@@ -1,3 +1,21 @@
+"""
+Center of Mass (COM) Analysis for Knee Video Data
+
+This module analyzes fluorescence intensity data from knee videos to compute
+and plot center of mass values across segments during flexion-extension cycles.
+
+Usage:
+    python PlotAllCOMs.py <video_ids> <segments> <option>
+    
+    video_ids: Single video number (e.g., 1339) or comma-separated list (e.g., 1339,308,1190)
+    segments: Number of segments (e.g., 16, 64)
+    option: "total" (normalized total intensities) or "unit" (normalized average per pixel)
+
+Example:
+    python PlotAllCOMs.py 1339 64 total
+    python PlotAllCOMs.py 1339,308,1190 64 total
+"""
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -6,80 +24,151 @@ import sys
 import os.path
 from config import TYPES
 
-OPTIONS = {"total": "Normalized total intensities, per segment", 
-           "unit": "Normalized average intensity per pixel, per segment"}
 
-# --- Input validation  ---
-if len(sys.argv[1:]) != 3 or sys.argv[3] not in OPTIONS.keys(): 
-    options_str = "\n\t" + "\n\t".join(f"     '{k}': {v}" for k, v in OPTIONS.items())
-    raise SyntaxError(
-        f"\n\tExample usage: {sys.argv[0]} 1339 64 total"
-        f"\n\t              {sys.argv[0]} 1339,308,1190 64 total  (plots multiple videos)"
-        f"\n\tValid types are: {list(TYPES)}"
-        f"\n\tOptions for the third argument are:{options_str}"
-    )
+# =============================================================================
+# CONSTANTS AND CONFIGURATION
+# =============================================================================
 
-# Parse video IDs - can be single number or comma-separated list
-video_ids_str = sys.argv[1]
-segment_count = int(sys.argv[2])
-opt = sys.argv[3]
+OPTIONS = {
+    "total": "Normalized total intensities, per segment", 
+    "unit": "Normalized average intensity per pixel, per segment"
+}
 
-# Check if multiple videos (comma-separated)
-if ',' in video_ids_str:
-    video_ids = [int(vid.strip()) for vid in video_ids_str.split(',')]
-    multiple_videos = True
-else:
-    video_ids = [int(video_ids_str)]
-    multiple_videos = False
 
-# Validate video IDs are in TYPES
-for vid_id in video_ids:
-    if vid_id not in TYPES:
-        print(f"Warning: Video {vid_id} not found in TYPES config, but will attempt to process anyway.")
+# =============================================================================
+# HELPER FUNCTIONS - DATA LOADING AND PROCESSING
+# =============================================================================
 
-# For single video, use original behavior
-if not multiple_videos:
-    video_number = video_ids[0]
-    INPUT_XLSX = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"  
+def validate_cli_arguments(argv):
+    """
+    Validate and parse command-line arguments for CLI usage.
     
-    if not os.path.isfile(INPUT_XLSX): 
-        raise ValueError(f"File '{video_number}N{segment_count}intensities.xlsx' doesn't exist. \n\t    Is {video_number=} and {segment_count=} correct?")
+    Args:
+        argv: Command line arguments (sys.argv)
 
-    # --- Load sheets ---
-    xls = pd.ExcelFile(INPUT_XLSX)
+    Returns:
+        tuple: (video_ids, segment_count, option, multiple_videos)
+
+    Raises:
+        SyntaxError: If arguments are invalid
+    """
+
+    if len(argv) != 4 or argv[3] not in OPTIONS.keys():
+        options_str = "\n\t" + "\n\t".join(f"'{k}': {v}" for k, v in OPTIONS.items())
+        raise SyntaxError(
+            f"\n\tExample usage: {argv[0]} 1339 64 total"
+            f"\n\t              {argv[0]} 1339,308,1190 64 total  (plots multiple videos)"
+            f"\n\tValid types are: {list(TYPES)}"
+            f"\n\tOptions for the third argument are:{options_str}"
+        )
+    
+    # Parse video IDs - can be single number or comma-separated list
+    video_ids_str = argv[1]
+    segment_count = int(argv[2])
+    opt = argv[3]
+
+    # Check if multiple videos (comma-separated)
+    if ',' in video_ids_str:
+        video_ids = [int(vid.strip()) for vid in video_ids_str.split(',')]
+        multiple_videos = True
+    else:
+        video_ids = [int(video_ids_str)]
+        multiple_videos = False
+    
+    # Validate video IDs are in TYPES (warn but don't fail)
+    for vid_id in video_ids:
+        if vid_id not in TYPES:
+            print(f"Warning: Video {vid_id} not found in TYPES config, but will attempt to process anyway.")
+    
+    return video_ids, segment_count, opt, multiple_videos
+
+
+def load_excel_data(video_number, segment_count):
+    """
+    Load and parse Excel data for a single video.
+    
+    Args:
+        video_number: Video identifier
+        segment_count: Number of segments
+        
+    Returns:
+        tuple: (df_intensity_raw, df_num_pixels_raw, df_flex, df_ext)
+        
+    Raises:
+        ValueError: If expected Excel file doesn't exist
+    """
+    input_xlsx = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"
+    
+    if not os.path.isfile(input_xlsx):
+        raise ValueError(
+            f"File '{video_number}N{segment_count}intensities.xlsx' doesn't exist. "
+            f"Is {video_number=} and {segment_count=} correct?"
+        )
+    
+    # Load sheets
+    xls = pd.ExcelFile(input_xlsx)
     df_intensity_raw = pd.read_excel(xls, sheet_name="Segment Intensities", header=None)
     df_num_pixels_raw = pd.read_excel(xls, sheet_name="Number of Mask Pixels", header=None)
     df_flex = pd.read_excel(xls, sheet_name="Flexion Frames", header=None)
     df_ext = pd.read_excel(xls, sheet_name="Extension Frames", header=None)
+    
+    return df_intensity_raw, df_num_pixels_raw, df_flex, df_ext
 
-    # --- Clean intensity data ---
+
+def clean_intensity_data(df_intensity_raw, df_num_pixels_raw, option):
+    """
+    Clean and optionally normalize intensity data.
+    
+    Args:
+        df_intensity_raw: Raw intensity DataFrame
+        df_num_pixels_raw: Raw pixel count DataFrame
+        option: "total" or "unit" for normalization
+        
+    Returns:
+        tuple: (df_intensity, df_num_pixels)
+    """
     # Skip the first row (header: "Frame", "Segment 1", ..., "Segment 16")
     df_intensity = df_intensity_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
     df_num_pixels = df_num_pixels_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
-
-    # Optional: take average intensity per pixel, per segment?
-    if opt == "total": 
-        pass
-    if opt == "unit":
+    
+    # Optional: take average intensity per pixel, per segment
+    if option == "unit":
         df_intensity = df_intensity / df_num_pixels
         df_intensity.fillna(0, inplace=True)
+    
+    return df_intensity, df_num_pixels
 
-    # --- Function to clean interval sheets ---
-    def clean_intervals(df):
-        df = df.dropna(how="all")
-        first_row = df.iloc[0, :].astype(str).str.lower()
-        if ("start" in first_row.values) and ("end" in first_row.values):
-            df = df.iloc[1:, :]
-        df = df.iloc[:, 0:3]
-        starts = pd.to_numeric(df.iloc[:, 1], errors="coerce").dropna().astype(int).to_numpy()
-        ends = pd.to_numeric(df.iloc[:, 2], errors="coerce").dropna().astype(int).to_numpy()
-        return starts, ends
 
-    # --- Extract intervals ---
-    starts_flex, ends_flex = clean_intervals(df_flex)
-    starts_ext, ends_ext = clean_intervals(df_ext)
+def clean_interval_data(df):
+    """
+    Clean interval data from flexion/extension sheets.
+    
+    Args:
+        df: Raw interval DataFrame
+        
+    Returns:
+        tuple: (starts, ends) - arrays of interval boundaries
+    """
+    df = df.dropna(how="all")
+    first_row = df.iloc[0, :].astype(str).str.lower()
+    if ("start" in first_row.values) and ("end" in first_row.values):
+        df = df.iloc[1:, :]
+    df = df.iloc[:, 0:3]
+    starts = pd.to_numeric(df.iloc[:, 1], errors="coerce").dropna().astype(int).to_numpy()
+    ends = pd.to_numeric(df.iloc[:, 2], errors="coerce").dropna().astype(int).to_numpy()
+    return starts, ends
 
-    # --- Step (1): normalize intensity per frame ---
+
+def normalize_intensity_per_frame(df_intensity):
+    """
+    Normalize intensity per frame across segments.
+    
+    Args:
+        df_intensity: DataFrame with intensity values
+        
+    Returns:
+        DataFrame: Normalized intensity values
+    """
     norm_intensity = df_intensity.copy().astype(float)
     for i in range(norm_intensity.shape[0]):
         row = norm_intensity.iloc[i, :]
@@ -88,64 +177,19 @@ if not multiple_videos:
             norm_intensity.iloc[i, :] = 100 * (row - min_val) / (max_val - min_val)
         else:
             norm_intensity.iloc[i, :] = 0
-
-    # --- Step (2): Flexion average ---
-    max_len_flex = max(ends_flex - starts_flex + 1)
-    rescaled_flex_all = []
-    for s, e in zip(starts_flex, ends_flex):
-        data = norm_intensity.iloc[s:e+1, :].to_numpy()
-        old_x = np.linspace(0, 1, data.shape[0])
-        new_x = np.linspace(0, 1, max_len_flex)
-        rescaled = np.array([np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])]).T
-        rescaled_flex_all.append(rescaled)
-    avg_flex = np.mean(rescaled_flex_all, axis=0)
-
-    # --- Step (3): Extension average ---
-    max_len_ext = max(ends_ext - starts_ext + 1)
-    rescaled_ext_all = []
-    for s, e in zip(starts_ext, ends_ext):
-        data = norm_intensity.iloc[s:e+1, :].to_numpy()
-        old_x = np.linspace(0, 1, data.shape[0])
-        new_x = np.linspace(0, 1, max_len_ext)
-        rescaled = np.array([np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])]).T
-        rescaled_ext_all.append(rescaled)
-    avg_ext = np.mean(rescaled_ext_all, axis=0)
-
-    # --- Step (4): Rescale flextion:extension = 50%:50% and convert the horizontal axis to be angles---
-
-    # Compute individual durations
-    len_flex = ends_flex - starts_flex + 1
-    len_ext = ends_ext - starts_ext + 1
-
-    # Find the *average* duration across all cycles (flex + ext)
-    avg_duration = int(np.round(np.mean(np.concatenate([len_flex, len_ext]))))
-
-    rescaled_flex_all_50 = []
-    for s, e in zip(starts_flex, ends_flex):
-        data = norm_intensity.iloc[s:e+1, :].to_numpy()
-        old_x = np.linspace(0, 1, data.shape[0])
-        new_x = np.linspace(0, 1, avg_duration)
-        rescaled = np.array([
-            np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])
-        ]).T
-        rescaled_flex_all_50.append(rescaled)
-
-    rescaled_ext_all_50 = []
-    for s, e in zip(starts_ext, ends_ext):
-        data = norm_intensity.iloc[s:e+1, :].to_numpy()
-        old_x = np.linspace(0, 1, data.shape[0])
-        new_x = np.linspace(0, 1, avg_duration)
-        rescaled = np.array([
-            np.interp(new_x, old_x, data[:, j]) for j in range(data.shape[1])
-        ]).T
-        rescaled_ext_all_50.append(rescaled)
-
-    # Compute the average cycle for each phase
-    avg_flex_50 = np.mean(rescaled_flex_all_50, axis=0)
-    avg_ext_50  = np.mean(rescaled_ext_all_50, axis=0)
+    return norm_intensity
 
 
-    # --- Step (2): Compute COM per frame ---
+def compute_center_of_mass_per_frame(norm_intensity):
+    """
+    Compute center of mass values for each frame.
+    
+    Args:
+        norm_intensity: Normalized intensity DataFrame
+        
+    Returns:
+        pd.Series: COM values per frame
+    """
     segments = np.arange(1, norm_intensity.shape[1] + 1)
     com_values = []
     for i in range(norm_intensity.shape[0]):
@@ -156,10 +200,12 @@ if not multiple_videos:
         else:
             com = np.nan
         com_values.append(com)
-    com_series = pd.Series(com_values, name="COM")
+    return pd.Series(com_values, name="COM")
 
 
-# --- COM Cycle Functions ---
+# =============================================================================
+# HELPER FUNCTIONS - COM CYCLE COMPUTATIONS
+# =============================================================================
 
 def compute_cycle_coms_from_excel(com_series: pd.Series, 
                                    starts_flex: np.ndarray, 
@@ -169,18 +215,13 @@ def compute_cycle_coms_from_excel(com_series: pd.Series,
     """
     Extracts and centers COM values for each flexion-extension cycle pair.
     
-    Adapts compute_cycle_coms from plot_centre_of_mass.py to work with Excel-based data structure.
-    Cycles are centered: flexion frames get negative indices (ending at -1), 
-    extension frames get positive indices (starting at 0).
-    
-    Inputs:
+    Args:
         com_series: pd.Series with COM values per frame
         starts_flex, ends_flex: arrays of flexion cycle boundaries (0-indexed, inclusive)
         starts_ext, ends_ext: arrays of extension cycle boundaries (0-indexed, inclusive)
-        Cycles are paired by index (i-th flexion pairs with i-th extension)
-    
-    Outputs:
-        cycle_coms: pd.DataFrame with shape (nframes_rel, ncycles), each column is a centered cycle
+        
+    Returns:
+        pd.DataFrame: cycle_coms with shape (nframes_rel, ncycles)
     """
     n_cycles = len(starts_flex)
     if len(starts_ext) != n_cycles:
@@ -219,15 +260,18 @@ def compute_average_cycle(cycle_coms: pd.DataFrame) -> pd.Series:
     """
     Computes the average cycle across all cycles in the DataFrame.
     
-    Inputs:
+    Args:
         cycle_coms: pd.DataFrame with shape (nframes_rel, ncycles)
-    
-    Outputs:
-        average_cycle: pd.Series with average COM values, indexed by relative frame numbers
+        
+    Returns:
+        pd.Series: average COM values, indexed by relative frame numbers
     """
-    average_cycle = cycle_coms.mean(axis=1, skipna=False)
-    return average_cycle
+    return cycle_coms.mean(axis=1, skipna=False)
 
+
+# =============================================================================
+# HELPER FUNCTIONS - PLOTTING
+# =============================================================================
 
 def plot_average_cycle(average_cycle: pd.Series, 
                        video_id: str = None, 
@@ -235,13 +279,10 @@ def plot_average_cycle(average_cycle: pd.Series,
     """
     Plots the average center of mass cycle.
     
-    Adapts plot_cycle_coms from plot_centre_of_mass.py but plots only the average.
-    Saves to PDF and shows interactively.
-    
-    Inputs:
-        average_cycle: pd.Series with average COM values, indexed by relative frame numbers
-        video_id: Optional string identifier for the video (e.g., "308 Normal")
-        pdf_path: Optional path to save PDF. If None, saves to default location.
+    Args:
+        average_cycle: pd.Series with average COM values
+        video_id: Optional string identifier for the video
+        pdf_path: Optional path to save PDF
     """
     plt.figure(figsize=(19, 7))
     
@@ -272,97 +313,15 @@ def plot_average_cycle(average_cycle: pd.Series,
     plt.show()
 
 
-def process_video_com_cycles(video_number: int, segment_count: int, opt: str) -> tuple:
-    """
-    Processes a single video file to compute average COM cycle.
-    
-    Inputs:
-        video_number: Video identifier (e.g., 1339, 308)
-        segment_count: Number of segments (e.g., 16, 64)
-        opt: Option for intensity calculation ("total" or "unit")
-    
-    Outputs:
-        average_cycle: pd.Series with average COM cycle
-        video_id: str identifier for the video
-    """
-    input_xlsx = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"
-    
-    if not os.path.isfile(input_xlsx):
-        raise ValueError(f"File '{video_number}N{segment_count}intensities.xlsx' doesn't exist.")
-    
-    # Load sheets
-    xls = pd.ExcelFile(input_xlsx)
-    df_intensity_raw = pd.read_excel(xls, sheet_name="Segment Intensities", header=None)
-    df_num_pixels_raw = pd.read_excel(xls, sheet_name="Number of Mask Pixels", header=None)
-    df_flex = pd.read_excel(xls, sheet_name="Flexion Frames", header=None)
-    df_ext = pd.read_excel(xls, sheet_name="Extension Frames", header=None)
-    
-    # Clean intensity data
-    df_intensity = df_intensity_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
-    df_num_pixels = df_num_pixels_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
-    
-    # Optional: take average intensity per pixel, per segment?
-    if opt == "unit":
-        df_intensity = df_intensity / df_num_pixels
-        df_intensity.fillna(0, inplace=True)
-    
-    # Extract intervals
-    def clean_intervals_local(df):
-        df = df.dropna(how="all")
-        first_row = df.iloc[0, :].astype(str).str.lower()
-        if ("start" in first_row.values) and ("end" in first_row.values):
-            df = df.iloc[1:, :]
-        df = df.iloc[:, 0:3]
-        starts = pd.to_numeric(df.iloc[:, 1], errors="coerce").dropna().astype(int).to_numpy()
-        ends = pd.to_numeric(df.iloc[:, 2], errors="coerce").dropna().astype(int).to_numpy()
-        return starts, ends
-    
-    starts_flex, ends_flex = clean_intervals_local(df_flex)
-    starts_ext, ends_ext = clean_intervals_local(df_ext)
-    
-    # Normalize intensity per frame
-    norm_intensity = df_intensity.copy().astype(float)
-    for i in range(norm_intensity.shape[0]):
-        row = norm_intensity.iloc[i, :]
-        min_val, max_val = row.min(), row.max()
-        if max_val > min_val:
-            norm_intensity.iloc[i, :] = 100 * (row - min_val) / (max_val - min_val)
-        else:
-            norm_intensity.iloc[i, :] = 0
-    
-    # Compute COM per frame
-    segments = np.arange(1, norm_intensity.shape[1] + 1)
-    com_values = []
-    for i in range(norm_intensity.shape[0]):
-        intensities = norm_intensity.iloc[i, :].to_numpy()
-        total = np.sum(intensities)
-        if total > 0:
-            com = np.sum(segments * intensities) / total
-        else:
-            com = np.nan
-        com_values.append(com)
-    com_series = pd.Series(com_values, name="COM")
-    
-    # Compute cycle COMs and average
-    cycle_coms = compute_cycle_coms_from_excel(com_series, starts_flex, ends_flex, starts_ext, ends_ext)
-    average_cycle = compute_average_cycle(cycle_coms)
-    
-    # Create video identifier using TYPES
-    video_type = TYPES.get(video_number, "unknown")
-    video_id = f"{video_number} {video_type}"
-    
-    return average_cycle, video_id
-
-
 def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str, pdf_path: str = None) -> None:
     """
     Plots average COM cycles for multiple videos on the same graph.
     
-    Inputs:
+    Args:
         video_ids: List of video numbers to plot
-        segment_count: Number of segments (e.g., 16, 64)
+        segment_count: Number of segments
         opt: Option for intensity calculation ("total" or "unit")
-        pdf_path: Optional path to save PDF. If None, uses default naming.
+        pdf_path: Optional path to save PDF
     """
     plt.figure(figsize=(19, 7))
     
@@ -371,7 +330,7 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str, pdf_
     
     for idx, video_number in enumerate(video_ids):
         try:
-            average_cycle, video_label = process_video_com_cycles(video_number, segment_count, opt)
+            average_cycle, video_label = process_single_video(video_number, segment_count, opt)
             plt.plot(average_cycle.sort_index(), 
                     label=video_label, 
                     color=cmap(idx), 
@@ -400,24 +359,96 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str, pdf_
     plt.show()
 
 
-breakpoint()
+# =============================================================================
+# MAIN PROCESSING FUNCTION
+# =============================================================================
 
-# --- Step (5): Compute and plot COM cycles ---
-if multiple_videos:
-    # Plot multiple videos on same figure
-    video_ids_str = '_'.join(map(str, video_ids))
-    com_pdf_path = fr"com_cycle_{opt}_{video_ids_str}_N{segment_count}.pdf"
-    plot_multiple_videos_com(video_ids, segment_count, opt, pdf_path=com_pdf_path)
-else:
-    # Single video mode - use already loaded data
+def process_single_video(video_number: int, segment_count: int, opt: str) -> tuple:
+    """
+    Process a single video file to compute average COM cycle.
+    
+    Args:
+        video_number: Video identifier
+        segment_count: Number of segments
+        opt: Option for intensity calculation ("total" or "unit")
+        
+    Returns:
+        tuple: (average_cycle, video_id)
+    """
+    # Load data
+    df_intensity_raw, df_num_pixels_raw, df_flex, df_ext = load_excel_data(video_number, segment_count)
+    
+    # Clean intensity data
+    df_intensity, df_num_pixels = clean_intensity_data(df_intensity_raw, df_num_pixels_raw, opt)
+    
+    # Extract intervals
+    starts_flex, ends_flex = clean_interval_data(df_flex)
+    starts_ext, ends_ext = clean_interval_data(df_ext)
+    
+    # Normalize intensity per frame
+    norm_intensity = normalize_intensity_per_frame(df_intensity)
+    
+    # Compute COM per frame
+    com_series = compute_center_of_mass_per_frame(norm_intensity)
+    
+    # Compute cycle COMs and average
     cycle_coms = compute_cycle_coms_from_excel(com_series, starts_flex, ends_flex, starts_ext, ends_ext)
     average_cycle = compute_average_cycle(cycle_coms)
     
     # Create video identifier using TYPES
     video_type = TYPES.get(video_number, "unknown")
-    video_id = f"{video_number} {video_type} ({segment_count} segs, {opt})"
+    video_id = f"{video_number} {video_type}"
     
-    # Plot average cycle for current video
-    com_pdf_path = fr"com_cycle_{opt}_{video_number}N{segment_count}.pdf"
-    plot_average_cycle(average_cycle, video_id=video_id, pdf_path=com_pdf_path)
+    return average_cycle, video_id
 
+
+# =============================================================================
+# MAIN ORCHESTRATION FUNCTION
+# =============================================================================
+
+def main(video_ids, segment_count, opt, multiple_videos):
+    """
+    Main orchestration function for COM analysis.
+    
+    Args:
+        video_ids: List of video numbers to process
+        segment_count: Number of segments
+        opt: Option for intensity calculation
+        multiple_videos: Whether processing multiple videos
+    """
+    if multiple_videos:
+        # Plot multiple videos on same figure
+        video_ids_str = '_'.join(map(str, video_ids))
+        pdf_path = fr"com_cycle_{opt}_{video_ids_str}_N{segment_count}.pdf"
+        plot_multiple_videos_com(video_ids, segment_count, opt, pdf_path=pdf_path)
+    else:
+        # Single video mode
+        video_number = video_ids[0]
+        
+        # Process the video
+        average_cycle, video_label = process_single_video(video_number, segment_count, opt)
+        
+        # Create extended video identifier
+        video_type = TYPES.get(video_number, "unknown")
+        video_id = f"{video_number} {video_type} ({segment_count} segs, {opt})"
+        
+        # Plot average cycle for current video
+        pdf_path = fr"com_cycle_{opt}_{video_number}N{segment_count}.pdf"
+        plot_average_cycle(average_cycle, video_id=video_id, pdf_path=pdf_path)
+
+
+# =============================================================================
+# ENTRY POINT
+# =============================================================================
+
+if __name__ == "__main__":
+    try:
+        # Validate and parse CLI arguments
+        video_ids, segment_count, opt, multiple_videos = validate_cli_arguments(sys.argv)
+        
+        # Run main analysis
+        main(video_ids, segment_count, opt, multiple_videos)
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
