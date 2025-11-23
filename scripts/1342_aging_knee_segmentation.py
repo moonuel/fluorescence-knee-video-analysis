@@ -123,11 +123,22 @@ def load_video():
     return video
 
 
+def get_otsu_mask(video):
+
+    video = utils.blur_video(video)
+    video_hist = rdl.match_histograms_video(video, video[76])
+
+    otsu_mask = ks.get_otsu_masks(video_hist, 0.8)
+    otsu_mask = utils.morph_open(otsu_mask, (29,29))
+
+    return otsu_mask
+
+
 
 if __name__ == "__main__":
 
     video = load_video()
-
+    otsu_mask = get_otsu_mask(video)
     # mask = get_femur_mask()
     # io.save_nparray(mask, "../data/processed/1342_aging_mask_0-499.npy")
 
@@ -135,20 +146,21 @@ if __name__ == "__main__":
 
     boundary_points = get_boundary_points(mask, N_lns=128)
     
-    femur_tip = estimate_femur_tip(boundary_points, cutoff=0.6)
+    femur_tip = estimate_femur_midpoint(boundary_points, start=0.1, end=0.5)
+    femur_midpt = estimate_femur_midpoint(boundary_points, start=0.6, end=1)
 
-    femur_midpt = estimate_femur_midpoint(boundary_points, start=0.1, end=0.5)
-
-    radial_masks = rdl.label_radial_masks(mask, femur_tip, femur_midpt, N=64)
+    radial_masks = rdl.label_radial_masks(otsu_mask, femur_tip, femur_midpt, N=64)
 
     v0 = views.draw_points((mask*31).astype(np.uint8), femur_tip)
     v0 = views.draw_points(v0, femur_midpt)
     v0 = views.draw_points(v0, boundary_points)
     v0 = views.draw_line(v0, femur_midpt, femur_tip)
     views.show_frames(v0)
+    
+    # v1 = views.draw_mask_boundaries(video, radial_masks)
+    # views.show_frames(v1)
 
-    v1 = views.draw_mask_boundaries( (mask*63).astype(np.uint8), radial_masks)
-    views.show_frames(v1)
+    views.show_frames([radial_masks * (255 // radial_masks.max()), video])
 
     breakpoint()
 
