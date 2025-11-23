@@ -351,7 +351,9 @@ def show_frames(video:np.ndarray, title:str=None, show_num:bool=True, frame_offs
     """Shows all frames. Use keys {a,s} to navigate, or 'q' to exit. Accepts a list of videos as input for horizontal concatenation"""
     if VERBOSE: print("show_frames() called!")
 
-    if isinstance(video, List): # TODO: Dynamically accept a list of videos and automatically display them side by side 
+    if isinstance(video, list): 
+        if all(item.ndim == 2 for item in video):  # check if items are frames
+            video = [np.reshape(frame, (1, *frame.shape)) for frame in video]
         video = np.concatenate(video, axis=2)
 
     if video.dtype != np.uint8:

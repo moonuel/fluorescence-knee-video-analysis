@@ -322,7 +322,7 @@ def sample_femur_interior_pts(mask: np.ndarray, N_lns: int) -> np.ndarray:
     return femur_pts_per_frame
 
 def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np.ndarray:
-    """Filters for only the points corresponding to the interior boundary of the femur"""
+    """Filters for only the LEFT points corresponding to the interior boundary of the femur"""
 
     # print(sample_pts.shape)
     # print(sample_pts)
@@ -346,7 +346,7 @@ def estimate_femur_tip_boundary(sample_pts:np.ndarray, midpoint:float=0.5) -> np
         # take midpoint to be twice the previous number
         midpt = int(npts/2*midpoint)*2 # TODO: parameterize to use something like right 1/3 of points?
 
-        femur_pt = pts[midpt:, :]
+        femur_pt = pts[:midpt, :]
         femur_pts.append(femur_pt)
 
     return np.array(femur_pts, dtype=object)
@@ -418,8 +418,8 @@ def filter_outlier_points_centroid(points: np.ndarray, eps: float) -> np.ndarray
 
     return np.array(filtered, dtype=object)
 
-def estimate_femur_midpoint_boundary(sample_pts:np.ndarray, start:float = 0.0, end:float=0.5) -> np.ndarray:
-    """Gets the points on the boundary around a point along the length of the femur, for every frame"""
+def estimate_femur_midpoint_boundary(sample_pts:np.ndarray, start:float = 0, end:float=1) -> np.ndarray:
+    """Gets the points on the RIGHT boundary around a point along the length of the femur, for every frame"""
     if VERBOSE: print("estimate_femur_midpoint_boundary() called!")
 
     sample_pts = sample_pts.copy()
@@ -610,7 +610,7 @@ def label_radial_masks(
     labels_video = np.zeros_like(masks, dtype=int)
     sector_size = 2 * np.pi / N
 
-    centers, references = references, centers # for some reason this fixes it. idk lol
+    # centers, references = references, centers # for some reason this fixes it. idk lol
 
     for f in range(nfs):
         mask = masks[f]
