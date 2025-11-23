@@ -9,6 +9,9 @@ from pathlib import Path
 import cv2
 from multiprocessing import Pool 
 from typing import Tuple
+import sys
+import os
+from config import TYPES
 
 def load_masks(filepath:str) -> np.ndarray:
     """Loads the mask at the specified location. 
@@ -149,9 +152,9 @@ def main(masks:np.ndarray, video:np.ndarray):
     # video_out = views.draw_mask_boundaries(video, masks)
     # video_out = draw_region_numbers(video_out, masks)
 
-    video_out = views.show_frames(video_out)
+    # video_out = views.show_frames(video_out)
 
-    breakpoint()
+    # breakpoint()
 
     return video_out
 
@@ -221,10 +224,43 @@ STEP = 4
 
 if __name__ == "__main__":
 
-    masks, video = load_1193_N64()
+    # Input validation
+    if len(sys.argv) != 3: 
+        raise SyntaxError(f"{sys.argv[0]} requires 2 args.\n\t"
+                          f"Example usage: {sys.argv[0]} 1339 64\n\t"
+                          f"Valid types are: {list(TYPES.keys())}")    
+    
+    if not int(sys.argv[1]) in TYPES.keys(): raise SyntaxError(f"Knee type not found. Valid types are: {list(TYPES.keys())}")
+    
+    TYPE = TYPES[int(sys.argv[1])]
+    mask_path = f"../data/processed/{sys.argv[1]}_{TYPE}_radial_masks_N{sys.argv[2]}.npy"
+    video_path = f"../data/processed/{sys.argv[1]}_{TYPE}_radial_video_N{sys.argv[2]}.npy"
 
+    if not os.path.isfile(mask_path): raise FileNotFoundError(f"{mask_path} not found.")
+    if not os.path.isfile(video_path): raise FileNotFoundError(f"{video_path} not found.")
+    
+    # Load data
+    masks = io.load_masks(f"../data/processed/{sys.argv[1]}_{TYPE}_radial_masks_N{sys.argv[2]}.npy")
+    video = io.load_video(f"../data/processed/{sys.argv[1]}_{TYPE}_radial_video_N{sys.argv[2]}.npy")
+
+    # Process video
     video_out = main(masks, video)
-    views.show_frames(video_out)
+    video_out = views.show_frames(video_out) # add frame nums
+    
+    # breakpoint()
+
+    # Save video
+    save = None
+    out_file = f"{sys.argv[1]}N{sys.argv[2]}.mp4"
+    while save not in ['y', 'n']:
+        save = input("\nEnter 'y' to save video, or 'n' to exit.\n\t"
+                    f"Output file: {out_file}\n > ").lower()
+    if save == 'y': 
+        io.save_mp4(f"{out_file}", video_out)
+        print(f"Video saved to: {out_file}")
+    if save == 'n':
+        print("Exiting without saving video.")
+
     # video_out = views.show_frames(video_out, frame_offset=289) # Overwrite frame nums with offset
     
     

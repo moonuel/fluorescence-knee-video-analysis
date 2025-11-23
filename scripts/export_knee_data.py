@@ -281,7 +281,7 @@ def main(video_id:int, N:int):
 
     print(f"---------- {video_id=}, {type=}, {N=} ----------")
     views.show_frames([masks * (255 // np.max(masks)), video])
-    breakpoint()
+    # breakpoint()
 
     # Compute within-segment total intensities, and number of pixels in each segment
     nfs = video.shape[0]
@@ -320,7 +320,7 @@ def main(video_id:int, N:int):
 
     breakpoint()
 
-    with pd.ExcelWriter(f"../data/video_intensities/video{video_id}N{N}.xlsx") as writer:
+    with pd.ExcelWriter(f"../data/video_intensities/{video_id}N{N}intensities.xlsx") as writer:
         total_sums.to_excel(writer, sheet_name="Segment Intensities", index=True)
         total_nonzero.to_excel(writer, sheet_name="Number of Mask Pixels", index=True)
         flex.to_excel(writer, sheet_name="Flexion Frames", index=True)
