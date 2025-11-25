@@ -26,7 +26,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
 import argparse
-from config import TYPES
+from src.config import TYPES
 
 
 # =============================================================================

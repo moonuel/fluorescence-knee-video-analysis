@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
-from core import knee_segmentation as ks
-from core import radial_segmentation as rdl
+from src.core import knee_segmentation as ks
+from src.core import radial_segmentation as rdl
 from utils import utils, io, views
 from functools import partial
 import pandas as pd
@@ -112,7 +112,7 @@ def estimate_femur_midpoint(boundary_points, start, end):
 
 def load_1358_video():
 
-    video = io.load_nparray("../data/processed/aging1358video.npy")
+    video = io.load_nparray("../../data/processed/aging1358video.npy")
     video = utils.crop_video_square(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     video = (video*1.95).astype(np.uint8) # Increase brightness (without overflow)
@@ -142,8 +142,8 @@ def main(video, femur_mask, outer_mask):
 
     breakpoint()
 
-    # io.save_nparray(video, "../data/processed/1358_aging_radial_video_N64.npy")
-    # io.save_nparray(radial_masks, "../data/processed/1358_aging_radial_masks_N64.npy")
+    # io.save_nparray(video, "../../data/processed/1358_aging_radial_video_N64.npy")
+    # io.save_nparray(radial_masks, "../../data/processed/1358_aging_radial_masks_N64.npy")
 
 
 if __name__ == "__main__":
@@ -155,4 +155,3 @@ if __name__ == "__main__":
     otsu_mask = get_otsu_mask(video)
 
     main(video, femur_mask, otsu_mask)
-

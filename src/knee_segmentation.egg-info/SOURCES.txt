@@ -12,3 +12,4 @@ src/utils/__init__.py
 src/utils/io.py
 src/utils/utils.py
 src/utils/views.py
+src/utils/views_test.py

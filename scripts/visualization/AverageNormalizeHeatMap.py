@@ -5,7 +5,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
 import argparse
-from config import TYPES
+from src.config import TYPES
 import scipy as sp
 
 OPTIONS = {
@@ -300,7 +300,7 @@ def main(video_number: int, segment_count: int, opt: str, normalize: bool = True
         normalize: Whether to normalize intensity values (default: True)
     """
     # Define input/output paths
-    input_xlsx = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"
+    input_xlsx = fr"../../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"
 
     # Create filename suffix for non-normalized data
     norm_suffix = "_nonorm" if not normalize else ""
@@ -336,8 +336,8 @@ def main(video_number: int, segment_count: int, opt: str, normalize: bool = True
     # We will compare it with COM curve, then modify COM definition
 
     # Save results - original heatmap
-    excel_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.xlsx"
-    pdf_path = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.pdf"
+    excel_path = fr"../../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.xlsx"
+    pdf_path = fr"../../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.pdf"
 
     save_results_to_excel(excel_path, norm_intensity, avg_flex, avg_ext, normalize=normalize)
     plot_heatmap(avg_flex, avg_ext, avg_com_cycles, pdf_path, normalize=normalize)
@@ -345,8 +345,8 @@ def main(video_number: int, segment_count: int, opt: str, normalize: bool = True
     print("Exported:", excel_path, pdf_path)
 
     # Save results - 50/50 rescaled heatmap
-    excel_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.xlsx"
-    pdf_path_50 = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.pdf"
+    excel_path_50 = fr"../../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.xlsx"
+    pdf_path_50 = fr"../../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.pdf"
 
     save_results_to_excel(excel_path_50, norm_intensity, avg_flex_50, avg_ext_50, normalize=normalize)
     plot_heatmap(avg_flex_50, avg_ext_50, avg_com_cycles_50_50, pdf_path_50, title_suffix="(Rescaled 50:50)", normalize=normalize)
@@ -385,7 +385,7 @@ Options for the third argument are:
     normalize = not args.no_normalize
 
     # Validate input file exists
-    input_xlsx = fr"../data/video_intensities/{args.video_number}N{args.segment_count}intensities.xlsx"
+    input_xlsx = fr"../../data/video_intensities/{args.video_number}N{args.segment_count}intensities.xlsx"
     if not os.path.isfile(input_xlsx):
         print(f"Error: File '{args.video_number}N{args.segment_count}intensities.xlsx' doesn't exist.")
         print(f"       Is video_number={args.video_number} and segment_count={args.segment_count} correct?")

@@ -6,12 +6,12 @@ import cv2
 import sklearn.cluster as sklc 
 # import hdbscan # Outdated on env version 1.1
 import math
-import core.knee_segmentation as ks
+import src.core.knee_segmentation as ks
 from typing import Tuple, List
 from utils import io, views, utils
-from config import VERBOSE
-from core import data_processing as dp
-import core.radial_segmentation as rdl
+from src.config import VERBOSE
+from src.core import data_processing as dp
+import src.core.radial_segmentation as rdl
 from pathlib import Path
 import pdb
 
@@ -618,7 +618,7 @@ def main():
     """
 
     # Import normal knee data
-    video = io.load_nparray("../data/processed/normal_knee_processed.npy")
+    video = io.load_nparray("../../data/processed/normal_knee_processed.npy")
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.crop_video_square(video, int(500*np.sqrt(2)))
 
@@ -656,7 +656,7 @@ def main():
 
     views.draw_points(v1, np.concat([tip, midpt], axis=1), True)
 
-    fn = "../data/processed/308_normal_radial_masks_N64.npy"
+    fn = "../../data/processed/308_normal_radial_masks_N64.npy"
     
     if input(f"Save to file {fn}? Press 'y' to confirm.\n") == 'y': 
         io.save_nparray(radial_mask, fn)
