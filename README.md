@@ -23,14 +23,14 @@ pip install -e .
 ```
 
 ## Usage
-- Run analysis scripts in `scripts/segmentation/` for specific videos
-- Use notebooks in `notebooks/` for exploratory analysis
-- Outputs are saved to `figures/` and exported data to `../data/`
+1. **Process data**: Use segmentation scripts in `scripts/segmentation/` to segment video data and extract region intensities
+2. **Generate figures**: Use analysis and visualization scripts in `scripts/visualization/` to create COM plots, heatmaps, and figures
+
+Outputs are saved to `figures/` and exported data to `../data/`
 
 ## Requirements
 - Python 3.11
 - OpenCV, NumPy, pandas, matplotlib
-- Jupyter Notebooks for analysis
 
 ## Status
 This tool is primarily developed for academic research and comparative studies of joint physiology.
