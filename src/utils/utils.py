@@ -10,6 +10,7 @@ import multiprocessing as mp
 import math
 import logging
 from typing import Callable, Optional
+from core import knee_segmentation as ks
 
 def print_last_modified(filepath):
     """
@@ -676,3 +677,126 @@ def parallel_process_video(
     # Combine results
     return np.concatenate(results, axis=0)
 
+
+def remove_background_noise(video: np.ndarray, thresh_scale: float = 1.0, noise_scale: float = 1.5) -> np.ndarray:
+    """
+    Remove background noise from a video using Otsu thresholding and morphological operations.
+
+    Parameters:
+        video (np.ndarray): Input video of shape (n_frames, height, width)
+        thresh_scale (float): Scale factor for Otsu threshold (default 1.0)
+        noise_scale (float): Scale factor for background intensity subtraction (default 1.5)
+
+    Returns:
+        np.ndarray: Video with background noise removed
+    """
+    from core import knee_segmentation as ks
+    from core import radial_segmentation as rdl
+
+    # Perform Otsu's thresholding on the video data using the following function:
+    otsu_masks = ks.get_otsu_masks(video, thresh_scale=thresh_scale)
+
+    # But invert the thresholding to instead get the non-fluorescent regions
+    bkgnd_mask = 255 - otsu_masks
+
+    # Gaussian blur the background:
+    bkgnd = rdl.intersect_masks(video, bkgnd_mask)
+    bkgnd = blur_video(bkgnd)
+
+    # Take the average intensity of the blurred pixels for every frame and multiply it by noise_scale
+    avg_background_I = np.mean(bkgnd, axis=(1, 2))
+    avg_background_I = avg_background_I * noise_scale
+
+    # and then subtract it from the video, removing background noise
+    video = np.maximum(0, video.astype(np.int16) - avg_background_I[:, np.newaxis, np.newaxis]).astype(np.uint8)
+
+    return video
+
+
+def normalize_video_intensity(video: np.ndarray, thresh_scale: float = 1.0, noise_scale: float = 1.5,
+                                  blur_kernel: Tuple[int, int] = (25, 25)) -> np.ndarray:
+    """
+    Apply full video intensity normalization procedure: blur -> remove background noise -> normalize intensity.
+
+    Parameters:
+        video (np.ndarray): Input video of shape (n_frames, height, width)
+        thresh_scale (float): Scale factor for Otsu threshold in background removal (default 0.8)
+        noise_scale (float): Scale factor for background intensity subtraction (default 1.5)
+        blur_kernel (Tuple[int, int]): Kernel size for Gaussian blur (default (25, 25))
+
+    Returns:
+        np.ndarray: Normalized video with background noise removed and intensity normalized
+    """
+    # Apply Gaussian blur
+    video = blur_video(video, kernel_dims=blur_kernel)
+
+    # Remove background noise
+    video = remove_background_noise(video, thresh_scale=thresh_scale, noise_scale=noise_scale)
+
+    # Normalize intensity
+    video = rescale_max_intensity_video(video)
+
+    return video
+
+
+def rescale_max_intensity_video(video: np.ndarray) -> np.ndarray:
+    """
+    Rescale video intensity with special handling for saturated pixels.
+
+    For each frame:
+    - Checks for zero pixels (ensures background noise subtraction has been done)
+    - If exactly one pixel at 255, replaces with average of 8 surrounding pixels
+    - Scales so brightest pixel maps to 255
+
+    Parameters:
+        video (np.ndarray): Input video of shape (n_frames, height, width)
+
+    Returns:
+        np.ndarray: Normalized video with same shape, uint8 dtype
+    """
+    if VERBOSE:
+        print("normalize_max_intensity_video() called!")
+
+    video = video.astype(np.float32)  # Work in float for calculations
+    n_frames, height, width = video.shape
+    normalized_video = np.zeros_like(video, dtype=np.uint8)
+
+    for f in range(n_frames):
+        frame = video[f].copy()
+
+        # Check for zero pixels (ensure preprocessing done)
+        if not np.any(frame == 0):
+                print(f"Warning: Frame {f} contains no zero pixels - ensure background subtraction completed")
+
+        # Find saturated pixels (value 255)
+        saturated_mask = (frame == 255)
+        saturated_count = np.sum(saturated_mask)
+
+        # If exactly one saturated pixel, replace with 3x3 kernel average (excluding center)
+        if saturated_count == 1:
+            # Create 3x3 averaging kernel (1/8 for neighbors, 0 for center)
+            kernel = np.array([
+                [1/8, 1/8, 1/8],
+                [1/8, 0,   1/8],
+                [1/8, 1/8, 1/8]
+            ], dtype=np.float32)
+
+            # Apply kernel to get neighborhood average at each pixel
+            neighborhood_avg = cv2.filter2D(frame, -1, kernel)
+
+            # Replace the saturated pixel with its neighborhood average
+            y, x = np.where(saturated_mask)
+            frame[y[0], x[0]] = neighborhood_avg[y[0], x[0]]
+
+        # Normalize to 0-255 range
+        max_val = np.max(frame)
+        if max_val > 0:
+            frame = (frame / max_val) * 255
+        else:
+            frame = np.zeros_like(frame)  # All zeros frame
+
+        # Clip and convert to uint8
+        frame = np.clip(frame, 0, 255).astype(np.uint8)
+        normalized_video[f] = frame
+
+    return normalized_video
