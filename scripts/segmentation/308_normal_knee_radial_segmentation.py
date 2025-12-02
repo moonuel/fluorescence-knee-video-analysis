@@ -1,3 +1,8 @@
+"""
+Legacy script for segmenting the normal 308 knee. Superseded by "pipeline_308.py"
+"""
+
+
 import os
 import sys
 import numpy as np
@@ -6,12 +11,12 @@ import cv2
 import sklearn.cluster as sklc 
 # import hdbscan # Outdated on env version 1.1
 import math
-import src.core.knee_segmentation as ks
+import core.knee_segmentation as ks
 from typing import Tuple, List
 from utils import io, views, utils
-from src.config import VERBOSE
-from src.core import data_processing as dp
-import src.core.radial_segmentation as rdl
+from config import VERBOSE
+from core import data_processing as dp
+import core.radial_segmentation as rdl
 from pathlib import Path
 import pdb
 
@@ -618,15 +623,20 @@ def main():
     """
 
     # Import normal knee data
-    video = io.load_nparray("../../data/processed/normal_knee_processed.npy")
+    # Use absolute path to ensure it works regardless of CWD
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+    input_path = os.path.join(project_root, "data", "processed", "normal_knee_processed.npy")
+    
+    video = io.load_nparray(input_path)
     video = np.rot90(video, k=-1, axes=(1,2))
-    video = utils.crop_video_square(video, int(500*np.sqrt(2)))
-
+    video = utils.center_crop(video, int(500*np.sqrt(2)))
+    
     # Slight rotation
     angle = -15
     video = utils.rotate_video(video, angle)
     video[video == 0] = 22 # fill empty pixels
-    video = utils.crop_video_square(video, 500, 450)
+    video = utils.center_crop(video, 500, 450)
     video = np.flip(video, axis=2)
 
     # Get femur mask
@@ -656,7 +666,7 @@ def main():
 
     views.draw_points(v1, np.concat([tip, midpt], axis=1), True)
 
-    fn = "../../data/processed/308_normal_radial_masks_N64.npy"
+    fn = os.path.join(project_root, "data", "processed", "308_normal_radial_masks_N64.npy")
     
     if input(f"Save to file {fn}? Press 'y' to confirm.\n") == 'y': 
         io.save_nparray(radial_mask, fn)
