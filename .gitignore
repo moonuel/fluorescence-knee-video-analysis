@@ -1,26 +1,20 @@
+*.mp4
 *.avi
 *.workspace
 *.xlsx
 *.tif
 *.png
+*.ipynb
 
 data/*
 output/*
-/_progress_meeting_slides_/
-temp/*
-/workspace/
+figures/*
+
 __pycache__/*
 *.pyc
-/figures/
-# notebooks/workshop.ipynb
-# notebooks/old knee three parts analysis.ipynb
-# workshop.ipynb # So I can version diff my work here ;_;
 
-docs/meetings/
-docs/comparison of aging radial segmentation old 16 vs. 64 slices/
-docs/comparison of aging radial segmentation old vs new methods/
-scripts/temp.py
+docs/meetings/*
 scripts/*.mp4
 scripts/reference/*
 notebooks/
-*.ipynb
+temp/*

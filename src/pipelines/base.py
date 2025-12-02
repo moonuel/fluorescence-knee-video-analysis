@@ -12,7 +12,11 @@ from src.core import radial_segmentation as rdl
 # -------------------------------------------------------------------------
 
 class PreprocessConfig:
-    def __init__(self, crop_size=500, rot90_k=0):
+    def __init__(
+        self, 
+        crop_size=500, 
+        rot90_k=0
+    ):
         self.crop_size = crop_size
         self.rot90_k = rot90_k
 
@@ -233,10 +237,11 @@ class KneeSegmentationPipeline:
         resp = input("Save results? (y/n): ").strip().lower()
         return resp == "y"
 
-    def save_results(self, masks, femur_mask, radial_labels, video_id):
-        io.save_nparray(masks, self.output_dir / f"{video_id}_mask.npy")
+    def save_results(self, video, radial_mask, femur_mask, video_id):
+        print(f"Saving to {self.output_dir}...")
+        io.save_nparray(video, self.output_dir / f"{video_id}_video.npy")
+        io.save_nparray(radial_mask, self.output_dir / f"{video_id}_radial.npy")
         io.save_nparray(femur_mask, self.output_dir / f"{video_id}_femur.npy")
-        io.save_nparray(radial_labels, self.output_dir / f"{video_id}_radial.npy")
 
     # ------------------------------------------------------------------
     # Pipeline Entry Point
@@ -244,23 +249,23 @@ class KneeSegmentationPipeline:
 
     def run(self, video_id=None):
         video = self.load_video()
-        video = self.preprocess(video)
+        video = self.preprocess(video) # Default: crop the centered video
 
-        masks = self.generate_otsu_mask(video)
-        masks = self.refine_otsu_mask(masks)
+        otsu_mask = self.generate_otsu_mask(video) 
+        otsu_mask = self.refine_otsu_mask(otsu_mask) # Default: passthrough
 
-        femur = self.generate_femur_mask(masks)
-        femur = self.refine_femur_mask(femur)
+        femur_mask = self.generate_femur_mask(otsu_mask)
+        femur_mask = self.refine_femur_mask(femur_mask) # Default: passthrough
 
-        radial = self.radial_segmentation(masks, femur)
+        radial_mask = self.radial_segmentation(otsu_mask, femur_mask)
 
         if self.preview:
-            views.show_frames([radial * (255 // self.radial_cfg.n_segments), video])
+            views.show_frames([radial_mask * (255 // self.radial_cfg.n_segments), video])
 
         if self.confirm_save():
-            self.save_results(masks, femur, radial, video_id or "result")
+            self.save_results(video, radial_mask, femur_mask, video_id or "result")
         else:
             print("Save cancelled.")
 
-        return masks, femur, radial
+        return video, radial_mask
 
