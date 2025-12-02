@@ -5,6 +5,7 @@ from src.core import radial_segmentation as rdl
 from utils import utils, io, views
 from functools import partial
 import pandas as pd
+import os
 
 def get_mask_femur_outer(video:np.ndarray):
 
@@ -42,7 +43,6 @@ def get_otsu_mask(video:np.ndarray) -> np.ndarray:
     # otsu_mask = utils.morph_dilate(otsu_mask, (9,9))
     otsu_mask = utils.morph_close(otsu_mask, (39, 39))
     # otsu_mask = (utils.blur_video(otsu_mask) > 0)*255
-    breakpoint()
     return otsu_mask
 
 
@@ -111,9 +111,12 @@ def estimate_femur_midpoint(boundary_points, start, end):
 
 
 def load_1358_video():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+    input_path = os.path.join(project_root, "data", "processed", "aging1358video.npy")
 
-    video = io.load_nparray("../../data/processed/aging1358video.npy")
-    video = utils.crop_video_square(video, 500)
+    video = io.load_nparray(input_path)
+    video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     video = (video*1.95).astype(np.uint8) # Increase brightness (without overflow)
     video[video==0] = 32

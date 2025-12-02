@@ -65,7 +65,7 @@ def get_femur_mask(video:np.ndarray) -> np.ndarray:
 
 def save_1193_mask():
     video = io.load_nparray("../data/processed/1193_knee_frames_ctrd.npy")#[600:1000]
-    video = utils.crop_video_square(video, 500)
+    video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     video = np.flip(video, axis=2)
     video[video == 0] = 19 # Fill empty borders for histogram matching stability
@@ -137,7 +137,7 @@ def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: 
 def main():
 
     video = io.load_nparray("../data/processed/1193_knee_frames_ctrd.npy")#[0:100]
-    video = utils.crop_video_square(video, 500)
+    video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     # video = np.flip(video, axis=2)
     video[video == 0] = 19 # Fill empty borders for histogram matching stability

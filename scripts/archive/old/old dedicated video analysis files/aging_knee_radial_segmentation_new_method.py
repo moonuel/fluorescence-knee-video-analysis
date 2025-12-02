@@ -376,12 +376,12 @@ def main():
     video = io.load_nparray("../data/processed/aging_knee_processed.npy") # result of above function call
     video = video[1:] # Crop out empty first frame
     video = np.rot90(video, k=-1, axes=(1,2))
-    video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
+    video = utils.center_crop(video, int(350*np.sqrt(2))) # wiggle room for black borders
 
     # Slight rotation
     angle = -15
     video = utils.rotate_video(video, angle)
-    video = utils.crop_video_square(video, 350) # crop out black borders
+    video = utils.center_crop(video, 350) # crop out black borders
 
     # Get adaptive mean mask
     mask_src = utils.blur_video(video, (31,31), sigma=0)

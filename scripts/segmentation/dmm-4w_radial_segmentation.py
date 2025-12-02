@@ -28,7 +28,7 @@ def centre_dmm_4w(video:np.ndarray):
     views.show_frames(video, "Stabilized DMM 4w")
 
     # Crop
-    video = utils.crop_video_square(video, 450)
+    video = utils.center_crop(video, 450)
     views.show_frames(video, "DMM 4w Cropped")
 
     breakpoint()

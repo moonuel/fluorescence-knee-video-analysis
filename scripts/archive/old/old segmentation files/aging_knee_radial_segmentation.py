@@ -323,11 +323,11 @@ def main():
     video = io.load_nparray("../data/processed/aging_knee_processed.npy") # centroid-stabilized video with default settings
     video = video[1:] # Crop out empty first frame
     video = np.rot90(video, k=-1, axes=(1,2))
-    video = utils.crop_video_square(video, int(350*np.sqrt(2))) # wiggle room for black borders
+    video = utils.center_crop(video, int(350*np.sqrt(2))) # wiggle room for black borders
     # video = utils.log_transform_video(video, 1)
 
     video = utils.rotate_video(video, angle=-29)
-    video = utils.crop_video_square(video, 350) # crop out black borders
+    video = utils.center_crop(video, 350) # crop out black borders
 
     # Get adaptive mean mask to estimate the position of the femur
     mask = utils.blur_video(video, (31,31), 0)

@@ -128,7 +128,7 @@ def estimate_femur_midpoint(boundary_points, start, end):
 def load_1207_normal_video():
 
     video = io.load_nparray("../data/processed/1207_knee_frames_ctrd.npy")
-    video = utils.crop_video_square(video, 500)
+    video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     # video = np.flip(video, axis=2)
     nfs, h, w = video.shape

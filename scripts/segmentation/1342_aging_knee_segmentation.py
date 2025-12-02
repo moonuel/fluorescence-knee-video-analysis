@@ -8,7 +8,7 @@ from functools import partial
 def get_femur_mask():
     
     video = io.load_nparray("../data/processed/1342_knee_frames_ctrd.npy")[:500]
-    video = utils.crop_video_square(video, 500)
+    video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     video = np.flip(video, axis=2)
     nfs, h, w = video.shape
@@ -112,7 +112,7 @@ def estimate_femur_midpoint(boundary_points, start, end):
 def load_video():
 
     video = io.load_nparray("../data/processed/1342_knee_frames_ctrd.npy")[:497]
-    video = utils.crop_video_square(video, 500)
+    video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     # video = np.flip(video, axis=2)
     nfs, h, w = video.shape

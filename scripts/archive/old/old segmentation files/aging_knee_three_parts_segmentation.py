@@ -33,7 +33,7 @@ def main():
 
     # Validate coords
     video_preview = views.plot_coords(video, coords_ctrd, show_video=False) # Plots coords on whole video. Not all frames have coords
-    video_preview = utils.crop_video_square(video_preview, 350)
+    video_preview = utils.center_crop(video_preview, 350)
     views.show_frames(video_preview)
     # views.show_frames(np.max([regions['l'], regions['m'], regions['r']], axis=0)) # Validate mask
 

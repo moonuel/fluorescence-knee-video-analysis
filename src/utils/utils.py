@@ -280,7 +280,7 @@ def crop_frame_square(frame: np.ndarray, h: int, w: int = None) -> np.ndarray:
     return frame[y1:y2, x1:x2]
 
 
-def crop_video_square(video: np.ndarray, h: int, w: int = None) -> np.ndarray:
+def center_crop(video: np.ndarray, h: int, w: int = None) -> np.ndarray:
     """
     Crops the input video into a centered rectangle of dimensions h-by-w pixels
     (default is h-by-h square).

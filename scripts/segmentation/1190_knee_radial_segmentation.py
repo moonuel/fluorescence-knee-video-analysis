@@ -5,6 +5,7 @@ import numpy as np
 from functools import partial
 import cv2
 import pandas as pd
+import os
 
 """
 Steps:
@@ -61,9 +62,12 @@ def get_femur_mask(video:np.ndarray) -> np.ndarray:
     return femur_mask
 
 def main():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+    input_path = os.path.join(project_root, "data", "processed", "1190_knee_frames_ctrd.npy")
 
-    video = io.load_nparray("../data/processed/1190_knee_frames_ctrd.npy")
-    video = utils.crop_video_square(video, 500)
+    video = io.load_nparray(input_path)
+    video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
 
     # Fill empty regions with L=18
@@ -104,8 +108,6 @@ def main():
     video_for_mask = utils.blur_video(video)
     video_for_mask = rdl.match_histograms_video(video_for_mask, video_for_mask[562])
     otsu_mask = ks.get_otsu_masks(video_for_mask, 0.7)
-
-    breakpoint()
 
     radial_masks = rdl.label_radial_masks(otsu_mask, femur_tip, femur_midpt, 64)
     views.draw_mask_boundary

@@ -32,7 +32,7 @@ def save_1339_data():
     video = np.flip(video, axis=2)
 
     video, _ = ks.centre_video(video)
-    video = utils.crop_video_square(video, 500)
+    video = utils.center_crop(video, 500)
 
     io.save_nparray(video, "../data/processed/1339_knee_frames_0-649_ctrd.npy")
     return
