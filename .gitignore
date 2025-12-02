@@ -5,6 +5,7 @@
 *.tif
 *.png
 *.ipynb
+*.pdf
 
 data/*
 output/*
