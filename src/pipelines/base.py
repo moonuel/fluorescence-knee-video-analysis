@@ -1,214 +1,266 @@
 import os
+from pathlib import Path
 import numpy as np
 from functools import partial
 from src.utils import io, utils, views
 from src.core import knee_segmentation as ks
 from src.core import radial_segmentation as rdl
 
+
+# -------------------------------------------------------------------------
+# Configuration Containers
+# -------------------------------------------------------------------------
+
+class PreprocessConfig:
+    def __init__(self, crop_size=500, rot90_k=0):
+        self.crop_size = crop_size
+        self.rot90_k = rot90_k
+
+
+class MaskConfig:
+    def __init__(
+        self,
+        blur_kernel=(25, 25),
+        otsu_scale=0.5,
+        adaptive_block=141,
+        adaptive_c=10,
+        morph_erode_kernel=(7, 7),
+        morph_open_kernel=(9, 9),
+        morph_close_kernel=(13, 13),
+    ):
+        self.blur_kernel = blur_kernel
+        self.otsu_scale = otsu_scale
+        self.adaptive_block = adaptive_block
+        self.adaptive_c = adaptive_c
+        self.morph_erode_kernel = morph_erode_kernel
+        self.morph_open_kernel = morph_open_kernel
+        self.morph_close_kernel = morph_close_kernel
+
+
+class RadialConfig:
+    def __init__(
+        self,
+        n_lines=128,
+        n_segments=64,
+        tip_range=(0.05, 0.5),
+        midpoint_range=(0.6, 0.95),
+        smooth_window=9
+    ):
+        self.n_lines = n_lines
+        self.n_segments = n_segments
+        self.tip_range = tip_range
+        self.midpoint_range = midpoint_range
+        self.smooth_window = smooth_window
+
+
+# -------------------------------------------------------------------------
+# Pipeline
+# -------------------------------------------------------------------------
+
 class KneeSegmentationPipeline:
     """
-    Base class for the Knee Segmentation Pipeline.
-
-    This class encapsulates the standard workflow for segmenting knee fluorescence videos,
-    including preprocessing, mask generation (outer/inner/femur), and radial segmentation.
-
-    How to Use:
-    -----------
-    1. Create a subclass of `KneeSegmentationPipeline` for your specific dataset/video type.
-    2. In `__init__`, call `super().__init__(input_path)` and then override default parameters
-       (e.g., `self.crop_size`, `self.otsu_scale`, etc.) to suit your data.
-    3. Override the `preprocess()` method if you need custom rotation, cropping, or brightness adjustments.
-    4. Override the `apply_manual_cuts(mask)` method to implement specific mask refinements (e.g., zeroing out artifacts).
-    5. Instantiate your subclass and call `.run(video_id)`.
-
-    Key Attributes (can be modified in subclass `__init__`):
-    -------------------------------------------------------
-    Preprocessing:
-        crop_size (int): Size of the square crop (default 500).
-        rot90_k (int): Number of 90-deg rotations (default 0).
-
-    Mask Generation:
-        blur_kernel (tuple): Kernel for initial blur (default (25, 25)).
-        otsu_scale (float): Scaling factor for Otsu threshold (default 0.5).
-        adaptive_block (int): Block size for adaptive thresholding (default 141).
-        adaptive_c (int): Constant C for adaptive thresholding (default 10).
-
-    Refinement:
-        morph_erode_kernel, morph_open_kernel, morph_close_kernel: Kernels for morphological ops.
-
-    Radial Segmentation:
-        radial_n_lines (int): Number of scan lines (default 128).
-        radial_n_segments (int): Number of output segments (default 64).
-        tip_range (tuple): Range for tip estimation (default (0.05, 5))).
-        midpoint_range (tuple): Range for midpoint estimation (default (0.6, 0.95)).
-
-    Example:
-    --------
-    class MyPipeline(KneeSegmentationPipeline):
-        def __init__(self, input_path):
-            super().__init__(input_path)
-            self.crop_size = 600
-            self.otsu_scale = 0.6
-
-        def apply_manual_cuts(self, mask):
-            mask[:, :100, :] = 0  # Remove top strip
-            return mask
-
-    pipeline = MyPipeline("path/to/video.npy")
-    pipeline.run(1234)
+    Base class for the full segmentation workflow:
+        - load → preprocess → masks → radial segmentation → save
+    Subclasses override configuration or specific methods.
     """
+
     def __init__(self, input_path, output_dir=None, preview=True):
-        self.input_path = input_path
+        self.input_path = Path(input_path)
+        self.output_dir = Path(output_dir) if output_dir else self.default_output_dir()
         self.preview = preview
-        if output_dir:
-            self.output_dir = output_dir
-        else:
-            # Default to data/processed relative to project root?
-            # Or ../data/processed relative to script?
-            # Let's assume input_path is relative or absolute, output next to it or specified.
-            # We'll use a default if None.
-            self.output_dir = os.path.join(os.path.dirname(input_path), '..', 'processed') # Assuming input in raw or similar?
-            # Actually, standard is data/processed.
-            
-        self.video = None
-        self.femur_mask = None
-        self.outer_mask = None
-        self.radial_masks = None
-        
-        # Default Parameters
-        # --- Preprocessing ---
-        self.crop_size = 500        # Size of the square crop centered on the frame
-        self.rot90_k = 0            # Number of 90-degree counter-clockwise rotations
-        
-        # --- Mask Generation (Blurring) ---
-        self.blur_kernel = (25, 25) # Kernel size for initial Gaussian blur
-        
-        # --- Mask Generation (Otsu Thresholding - Outer Mask) ---
-        self.otsu_scale = 0.5       # Scaling factor for Otsu threshold
-        
-        # --- Mask Generation (Adaptive Thresholding - Inner Mask) ---
-        self.adaptive_block = 141   # Block size for adaptive thresholding
-        self.adaptive_c = 10        # Constant C for adaptive thresholding
-        
-        # --- Mask Refinement (Morphological Operations) ---
-        self.morph_erode_kernel = None      # Kernel for erosion on outer mask (if needed)
-        self.morph_open_kernel = (11, 11)   # Kernel for opening (remove noise)
-        self.morph_close_kernel = (27, 27)  # Kernel for closing (fill holes)
-        
-        # --- Radial Segmentation ---
-        self.radial_n_lines = 128           # Number of scan lines for boundary sampling
-        self.radial_n_segments = 64         # Number of radial segments
-        self.tip_range = (0.05, 0.5)        # Range for femur tip estimation
-        self.midpoint_range = (0.6, 0.95)   # Range for femur midpoint estimation
-        self.smooth_window = 9              # Window size for smoothing landmarks
 
-    def load_data(self):
-        print(f"Loading video from {self.input_path}...")
-        self.video = io.load_nparray(self.input_path)
+        # Configuration blocks
+        self.pre_cfg = PreprocessConfig()
+        self.mask_cfg = MaskConfig()
+        self.radial_cfg = RadialConfig()
 
-    def preprocess(self):
-        print("Preprocessing video...")
-        if self.rot90_k != 0:
-            self.video = np.rot90(self.video, k=self.rot90_k, axes=(1, 2))
-        
-        self.video = utils.crop_video_square(self.video, self.crop_size)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def match_histograms(self, video_blr):
-        # Default behavior: match to first frame or don't match if not needed?
-        # Most scripts match to a reference frame.
-        # Subclasses can override to set a specific reference frame index.
-        return video_blr
+        # internal holders
+        self.video_hist = None
 
-    def get_outer_mask(self, video_hist):
-        print("Generating outer mask...")
-        otsu_fn = partial(ks.get_otsu_masks, thresh_scale=self.otsu_scale)
-        if hasattr(utils, 'parallel_process_video'):
+    # ------------------------------------------------------------------
+    # Paths
+    # ------------------------------------------------------------------
+
+    def default_output_dir(self):
+        """
+        Default: store alongside the input file in a `processed/` directory.
+        """
+        parent = self.input_path.parent
+        return parent / "processed"
+
+    # ------------------------------------------------------------------
+    # Loading
+    # ------------------------------------------------------------------
+
+    def load_video(self):
+        vid = io.load_nparray(self.input_path)
+        if vid.ndim != 3:
+            raise ValueError(f"Expected (T, H, W) video array; got shape {vid.shape}")
+        return vid
+
+    # ------------------------------------------------------------------
+    # Preprocessing
+    # ------------------------------------------------------------------
+
+    def preprocess(self, video):
+        """
+        Default preprocessing: rotation → center crop.
+        Subclasses can override for brightness, denoising, etc.
+        """
+        if self.pre_cfg.rot90_k:
+            video = np.rot90(video, k=self.pre_cfg.rot90_k, axes=(1, 2))
+
+        return utils.crop_video_square(video, self.pre_cfg.crop_size)
+
+    # ------------------------------------------------------------------
+    # Mask Generation
+    # ------------------------------------------------------------------
+
+    def generate_otsu_mask(self, video):
+        """
+        Compute per-frame binary outer masks using Otsu (parallelized if available).
+        This method stores a blurred / preprocessed video in self.video_hist for later use.
+        """
+        print("Generating Otsu mask... (Default: blur + hist match + Otsu)")
+
+        mk = self.mask_cfg
+
+        # Blur video (kept for later inner-mask computations)
+        video_blr = utils.blur_video(video, mk.blur_kernel)
+        # matching step is optional in subclasses; default: use blurred video as-is
+        video_hist = video_blr
+        self.video_hist = video_hist
+
+        otsu_fn = partial(ks.get_otsu_masks, thresh_scale=mk.otsu_scale)
+        if hasattr(utils, "parallel_process_video"):
             outer_mask = utils.parallel_process_video(video_hist, otsu_fn, batch_size=150)
         else:
             outer_mask = otsu_fn(video_hist)
-            
-        if self.morph_erode_kernel:
-            outer_mask = utils.morph_erode(outer_mask, self.morph_erode_kernel)
-            
+
         return outer_mask
-
-    def get_inner_mask(self, video_hist):
-        print("Generating inner mask...")
-        return ks.mask_adaptive(video_hist, self.adaptive_block, self.adaptive_c)
-
-    def apply_manual_cuts(self, mask):
-        """Override this method in subclasses to apply specific cuts."""
+    
+    def refine_otsu_mask(self, mask):
+        """
+        Override this to perform manual refinements to the Otsu mask. 
+        Default: passthrough
+        """
+        print("Refining Otsu mask... (Default: passthrough)")
         return mask
 
-    def generate_femur_mask(self):
-        print("Generating femur mask...")
-        video_blr = utils.blur_video(self.video, self.blur_kernel)
-        video_hist = self.match_histograms(video_blr)
-        
-        self.outer_mask = self.get_outer_mask(video_hist)
-        inner_mask = self.get_inner_mask(video_hist)
-        
-        femur_mask = rdl.interior_mask(self.outer_mask, inner_mask)
-        
-        if self.morph_open_kernel:
-            femur_mask = utils.morph_open(femur_mask, self.morph_open_kernel)
-            
-        if self.morph_close_kernel:
-            femur_mask = utils.morph_close(femur_mask, self.morph_close_kernel)
-            
-        self.femur_mask = self.apply_manual_cuts(femur_mask)
+    # ------------------------------------------------------------------
+    # Refinement / Manual Cuts
+    # ------------------------------------------------------------------
 
-    def segment_radial(self):
-        print("Performing radial segmentation...")
-        boundary_points = rdl.sample_femur_interior_pts(self.femur_mask, N_lns=self.radial_n_lines)
-        if hasattr(rdl, 'forward_fill_jagged'):
-            boundary_points = rdl.forward_fill_jagged(boundary_points)
-            
+    def refine_femur_mask(self, mask):
+        """
+        Override this to remove artifacts or enforce boundaries, e.g. manual cuts or morph operations
+        Default: passthrough.
+        """
+        print("Applying refinements to the femur mask... (Default: passthrough)")
+        return mask
+
+    # ------------------------------------------------------------------
+    # Femur Mask
+    # ------------------------------------------------------------------
+
+    def generate_femur_mask(self, outer_mask):
+        """
+        Combine outer mask with adaptive inner mask to produce femur_mask,
+        then apply morphological cleanup.
+        """
+        print("Generating femur mask... (Default: get interior of inner_mask using outer_mask)")
+        mk = self.mask_cfg
+        if self.video_hist is None:
+            # defensive: if generate_masks wasn't called, try to compute a simple inner mask fallback
+            inner_mask = ks.mask_adaptive(outer_mask, mk.adaptive_block, mk.adaptive_c)
+        else:
+            inner_mask = ks.mask_adaptive(self.video_hist, mk.adaptive_block, mk.adaptive_c)
+
+        femur_mask = rdl.interior_mask(outer_mask, inner_mask)
+
+        if mk.morph_open_kernel:
+            femur_mask = utils.morph_open(femur_mask, mk.morph_open_kernel)
+
+        if mk.morph_close_kernel:
+            femur_mask = utils.morph_close(femur_mask, mk.morph_close_kernel)
+
+        return femur_mask
+
+    # ------------------------------------------------------------------
+    # Radial Segmentation
+    # ------------------------------------------------------------------
+
+    def radial_segmentation(self, mask, femur_mask):
+        """
+        Extract radial lines from the femur tip through joint space and label radial segments.
+        """
+        rc = self.radial_cfg
+
+        boundary_points = rdl.sample_femur_interior_pts(femur_mask, N_lns=rc.n_lines)
+        boundary_points = rdl.forward_fill_jagged(boundary_points)
+
         # Tip
-        s, e = self.tip_range
+        s, e = rc.tip_range
         tip_bndry = rdl.estimate_femur_midpoint_boundary(boundary_points, s, e)
-        if hasattr(rdl, 'forward_fill_jagged'):
-            tip_bndry = rdl.forward_fill_jagged(tip_bndry)
+        tip_bndry = rdl.forward_fill_jagged(tip_bndry)
         femur_tip = rdl.get_centroid_pts(tip_bndry)
-        femur_tip = rdl.smooth_points(femur_tip, self.smooth_window)
-        
+        femur_tip = rdl.smooth_points(femur_tip, rc.smooth_window)
+
         # Midpoint
-        s, e = self.midpoint_range
+        s, e = rc.midpoint_range
         midpt_bndry = rdl.estimate_femur_midpoint_boundary(boundary_points, s, e)
-        if hasattr(rdl, 'forward_fill_jagged'):
-            midpt_bndry = rdl.forward_fill_jagged(midpt_bndry)
+        midpt_bndry = rdl.forward_fill_jagged(midpt_bndry)
         femur_midpt = rdl.get_centroid_pts(midpt_bndry)
-        femur_midpt = rdl.smooth_points(femur_midpt, self.smooth_window)
-        
-        self.radial_masks = rdl.label_radial_masks(self.outer_mask, femur_tip, femur_midpt, N=self.radial_n_segments)
+        femur_midpt = rdl.smooth_points(femur_midpt, rc.smooth_window)
 
-    def save_results(self, video_id):
+        radial_labels = rdl.label_radial_masks(mask, femur_tip, femur_midpt, N=rc.n_segments)
+        return radial_labels
+
+    # ------------------------------------------------------------------
+    # Saving / Output
+    # ------------------------------------------------------------------
+
+    def confirm_save(self):
+        """
+        Hook for requesting user permission before saving results.
+        Default: always save. Subclasses or callers may override.
+        """
+        if not self.preview:
+            return True  # no interactive prompts when preview disabled
+
+        resp = input("Save results? (y/n): ").strip().lower()
+        return resp == "y"
+
+    def save_results(self, masks, femur_mask, radial_labels, video_id):
+        io.save_nparray(masks, self.output_dir / f"{video_id}_mask.npy")
+        io.save_nparray(femur_mask, self.output_dir / f"{video_id}_femur.npy")
+        io.save_nparray(radial_labels, self.output_dir / f"{video_id}_radial.npy")
+
+    # ------------------------------------------------------------------
+    # Pipeline Entry Point
+    # ------------------------------------------------------------------
+
+    def run(self, video_id=None):
+        video = self.load_video()
+        video = self.preprocess(video)
+
+        masks = self.generate_otsu_mask(video)
+        masks = self.refine_otsu_mask(masks)
+
+        femur = self.generate_femur_mask(masks)
+        femur = self.refine_femur_mask(femur)
+
+        radial = self.radial_segmentation(masks, femur)
+
         if self.preview:
-            response = input("Save results? (y/n): ")
-            if response.lower() != 'y':
-                print("Aborting save.")
-                return
+            views.show_frames([radial * (255 // self.radial_cfg.n_segments), video])
 
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
-            
-        vid_path = os.path.join(self.output_dir, f"{video_id}_radial_video_N{self.radial_n_segments}.npy")
-        mask_path = os.path.join(self.output_dir, f"{video_id}_radial_masks_N{self.radial_n_segments}.npy")
-        
-        print(f"Saving video to {vid_path}")
-        io.save_nparray(self.video, vid_path)
-        print(f"Saving masks to {mask_path}")
-        io.save_nparray(self.radial_masks, mask_path)
+        if self.confirm_save():
+            self.save_results(masks, femur, radial, video_id or "result")
+        else:
+            print("Save cancelled.")
 
-    def run(self, video_id):
-        self.load_data()
-        self.preprocess()
-        self.generate_femur_mask()
-        self.segment_radial()
-        
-        if self.preview:
-            print("Previewing results...")
-            views.show_frames([self.radial_masks * (255 // self.radial_n_segments), self.video])
-            
-        self.save_results(video_id)
-        print("Pipeline finished.")
+        return masks, femur, radial
+
