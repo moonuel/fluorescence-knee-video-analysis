@@ -1,19 +1,21 @@
 # Active Context: Fluorescence Knee Video Analysis
 
 ## Current Work Focus
-The project is currently analyzing center of mass (COM) trajectories of synovial fluid flow in knee joints during flexion-extension cycles. The primary analysis compares fluorescence intensity distribution patterns between normal and aging knee joints using radial segmentation.
+The project has implemented a complete spatiotemporal analysis pipeline for fluorescence knee video analysis. The core functionality includes radial segmentation (N=64), automated COM calculation, spatiotemporal heatmap generation, and multi-video comparative analysis. Current focus is on validating results and preparing for statistical analysis between normal and aging knee groups.
 
 ## Recent Changes
-- **Radial Segmentation**: Transitioned from three-part (L/M/R) to radial segmentation with N=64 sectors for higher resolution analysis
-- **COM Analysis**: Implemented automated COM calculation from segmented intensity data across flexion-extension cycles
-- **Heatmap Generation**: Created spatiotemporal heatmaps showing intensity distribution over joint movement cycles
-- **Multi-Video Processing**: Extended analysis to compare multiple videos within normal and aging groups
+- **Complete Heatmap Pipeline**: Implemented `generate_spatiotemporal_heatmaps.py` with full COM calculation and temporal synchronization
+- **Data Preparation**: Created `prepare_intensity_data.py` for automated Excel export of intensity data with cycle metadata
+- **Visualization Tools**: Developed `plot_com_cycles_from_heatmaps.py` for comparative COM plotting across multiple videos
+- **Temporal Alignment**: Added 50:50 rescaling for equal-duration flexion/extension phase comparison
+- **Multi-Video Analysis**: Enabled batch processing and comparison of all 7 videos (4 normal, 3 aging)
 
 ## Next Steps
-- **Peak Intensity Analysis**: TODO - Implement peak intensity contour tracking to compare with COM curves and refine COM definition
-- **Statistical Comparisons**: Perform quantitative comparisons between normal vs aging knee groups
-- **Validation**: Cross-validate segmentation accuracy and COM calculations
-- **Batch Processing**: Automate analysis pipeline for all available video datasets
+- **Peak Intensity Implementation**: Complete the TODO in `generate_spatiotemporal_heatmaps.py` for peak intensity contour tracking
+- **Statistical Analysis**: Perform quantitative group comparisons between normal vs aging knees
+- **Cross-Validation**: Validate segmentation accuracy and COM reliability across videos
+- **Results Documentation**: Generate comprehensive analysis reports and visualizations
+- **Method Refinement**: Evaluate and potentially refine COM definition based on peak intensity analysis
 
 ## Active Decisions and Considerations
 
