@@ -482,6 +482,26 @@ def _process_batch(batch: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     print(f"Process {pid} finished batch at {time.strftime('%X')} (elapsed {elapsed:.2f} sec)")
     return np.array(video_ctrd_batch), np.array(translation_mxs_batch)
 
+def centre_video(video: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Parameters:
+        video (np.ndarray): Input video, shape (nframes, H, W)
+    Returns:
+        video_ctrd (np.ndarray): Centered video, same shape as input
+        translation_mxs (np.ndarray): Per-frame transformation matrices, shape (nframes, ...)
+    """
+    if VERBOSE: print("centre_video() called!")
+
+    # Process all frames sequentially in a single batch
+    video_ctrd_batch = []
+    translation_mxs_batch = []
+    for frame in video:
+        frame_out, tr_mx = utils.centroid_stabilization(frame)
+        video_ctrd_batch.append(frame_out)
+        translation_mxs_batch.append(tr_mx)
+
+    return np.array(video_ctrd_batch), np.array(translation_mxs_batch)
+
 
 def centre_video_mp(video: np.ndarray, n_workers: int = None) -> Tuple[np.ndarray, np.ndarray]:
     """
