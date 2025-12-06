@@ -161,8 +161,8 @@ def main(masks:np.ndarray, video:np.ndarray):
 
 def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/1339_aging_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/1339_aging_radial_video_N16.npy")
+    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/aging_1339_radial_video_N16.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
 
     return masks, video #, cycles
@@ -170,16 +170,16 @@ def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_1339_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/1339_aging_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/1339_aging_radial_video_N64.npy")
+    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/aging_1339_radial_video_N64.npy")
     
     return masks, video 
 
 
 def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/308_normal_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/308_normal_radial_video_N16.npy")
+    masks = io.load_masks("../data/processed/normal_0308_radial_masks_N16.npy")
+    video = io.load_video("../data/processed/normal_0308_radial_video_N16.npy")
 
     masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
     masks[masks > 0] = (masks[masks > 0] - 2) % 16 + 1 # Shift segment labels by one for 308 N16 video
@@ -189,32 +189,32 @@ def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/308_normal_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/308_normal_radial_video_N64.npy")
+    masks = io.load_masks("../data/processed/normal_0308_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/normal_0308_radial_video_N64.npy")
 
     return masks, video
 
 
 def load_1207_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/1207_normal_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/1207_normal_radial_video_N64.npy")
+    masks = io.load_masks("../data/processed/normal_1207_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/normal_1207_radial_video_N64.npy")
 
     return masks, video
 
 
 def load_1190_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/1190_normal_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/1190_normal_radial_video_N64.npy")
+    masks = io.load_masks("../data/processed/normal_1190_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/normal_1190_radial_video_N64.npy")
 
     return masks, video
 
 
 def load_1193_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/1193_normal_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/1193_normal_radial_video_N64.npy")
+    masks = io.load_masks("../data/processed/normal_1193_radial_masks_N64.npy")
+    video = io.load_video("../data/processed/normal_1193_radial_video_N64.npy")
 
     return masks, video
 

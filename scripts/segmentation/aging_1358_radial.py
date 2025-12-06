@@ -145,8 +145,8 @@ def main(video, femur_mask, outer_mask):
 
     breakpoint()
 
-    # io.save_nparray(video, "../../data/processed/1358_aging_radial_video_N64.npy")
-    # io.save_nparray(radial_masks, "../../data/processed/1358_aging_radial_masks_N64.npy")
+    # io.save_nparray(video, "../../data/processed/aging_1358_radial_video_N64.npy")
+    # io.save_nparray(radial_masks, "../../data/processed/aging_1358_radial_masks_N64.npy")
 
 
 if __name__ == "__main__":

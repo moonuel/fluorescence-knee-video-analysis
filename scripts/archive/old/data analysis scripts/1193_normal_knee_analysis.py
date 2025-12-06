@@ -461,8 +461,8 @@ def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: 
 
 def main():
 
-    video = io.load_nparray("../data/processed/1193_normal_radial_video_N16.npy")#[1700:1750]
-    radial_masks = io.load_nparray("../data/processed/1193_normal_radial_masks_N16.npy")#[1700:1750]
+    video = io.load_nparray("../data/processed/normal_1193_radial_video_N16.npy")#[1700:1750]
+    radial_masks = io.load_nparray("../data/processed/normal_1193_radial_masks_N16.npy")#[1700:1750]
 
     # video_w_bnds = draw_mask_boundaries(video, radial_masks)
     # views.show_frames(video_w_bnds)

@@ -164,5 +164,5 @@ if __name__ == "__main__":
 
     breakpoint()
 
-    # io.save_nparray(video, "../data/processed/1342_aging_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/processed/1342_aging_radial_masks_N16.npy")
+    # io.save_nparray(video, "../data/processed/aging_1342_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/processed/aging_1342_radial_masks_N16.npy")

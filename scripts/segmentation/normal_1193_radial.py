@@ -193,8 +193,8 @@ def main():
     breakpoint()
 
     # Save segmentation data
-    io.save_nparray(video, "../data/processed/1193_normal_radial_video_N16.npy")
-    io.save_nparray(radial_masks, "../data/processed/1193_normal_radial_masks_N16.npy")
+    io.save_nparray(video, "../data/processed/normal_1193_radial_video_N16.npy")
+    io.save_nparray(radial_masks, "../data/processed/normal_1193_radial_masks_N16.npy")
 
 
 if __name__ == "__main__":

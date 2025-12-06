@@ -262,8 +262,8 @@ def main():
     print("save results if happy")
     breakpoint()
     # Save final results
-    # io.save_nparray(video, "../data/processed/1207_normal_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/processed/1207_normal_radial_masks_N16.npy")
+    # io.save_nparray(video, "../data/processed/normal_1207_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/processed/normal_1207_radial_masks_N16.npy")
 
 if __name__ == "__main__":
     main()

@@ -6,7 +6,7 @@ import scipy.ndimage as spi
 
 
 # Select arbitrary frame for testing
-video = io.load_nparray("../../data/processed/308_normal_radial_video_N64.npy")
+video = io.load_nparray("../../data/processed/normal_0308_radial_video_N64.npy")
 video = utils.blur_video(video, (25,25), 5)
 frame = video[100]
 

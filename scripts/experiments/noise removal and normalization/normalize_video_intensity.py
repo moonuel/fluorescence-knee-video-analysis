@@ -6,9 +6,9 @@ import core.knee_segmentation as ks
 import core.radial_segmentation as rdl
 
 
-video1358 = io.load_nparray(r"..\data\processed\1358_aging_radial_video_N64.npy")#; views.show_frames(video1358, "1358")
-video1342 = io.load_nparray(r"..\data\processed\1342_aging_radial_video_N64.npy")#; views.show_frames(video1342*1.5, "1342")
-video1339 = io.load_nparray(r"..\data\processed\1339_aging_radial_video_N64.npy")#; views.show_frames(video1339, "1339")
+video1358 = io.load_nparray(r"..\data\processed\aging_1358_radial_video_N64.npy")#; views.show_frames(video1358, "1358")
+video1342 = io.load_nparray(r"..\data\processed\aging_1342_radial_video_N64.npy")#; views.show_frames(video1342*1.5, "1342")
+video1339 = io.load_nparray(r"..\data\processed\aging_1339_radial_video_N64.npy")#; views.show_frames(video1339, "1339")
 
 
 # Video intensity normalization procedure

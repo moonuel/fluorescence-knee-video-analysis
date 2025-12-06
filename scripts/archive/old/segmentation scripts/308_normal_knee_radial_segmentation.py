@@ -666,7 +666,7 @@ def main():
 
     views.draw_points(v1, np.concat([tip, midpt], axis=1), True)
 
-    fn = os.path.join(project_root, "data", "processed", "308_normal_radial_masks_N64.npy")
+    fn = os.path.join(project_root, "data", "processed", "normal_0308_radial_masks_N64.npy")
     
     if input(f"Save to file {fn}? Press 'y' to confirm.\n") == 'y': 
         io.save_nparray(radial_mask, fn)
