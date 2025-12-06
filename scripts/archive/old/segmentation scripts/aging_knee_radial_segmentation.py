@@ -320,7 +320,7 @@ def main():
     if VERBOSE: print("main() called!")
 
     # Prepare video for lighter processing
-    video = io.load_nparray("../data/processed/aging_knee_processed.npy") # centroid-stabilized video with default settings
+    video = io.load_nparray("../data/segmented/aging_knee_processed.npy") # centroid-stabilized video with default settings
     video = video[1:] # Crop out empty first frame
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.center_crop(video, int(350*np.sqrt(2))) # wiggle room for black borders

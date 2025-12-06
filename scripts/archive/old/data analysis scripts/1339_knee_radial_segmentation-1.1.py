@@ -34,12 +34,12 @@ def save_1339_data():
     video, _ = ks.centre_video(video)
     video = utils.center_crop(video, 500)
 
-    io.save_nparray(video, "../data/processed/1339_knee_frames_0-649_ctrd.npy")
+    io.save_nparray(video, "../data/segmented/1339_knee_frames_0-649_ctrd.npy")
     return
 
 def load_1339_data() -> np.ndarray:
     """Loads the saved data. See save_1339_data()"""
-    return io.load_nparray("../data/processed/1339_knee_frames_0-649_ctrd.npy")
+    return io.load_nparray("../data/segmented/1339_knee_frames_0-649_ctrd.npy")
 
 def match_histograms_video(video, reference_frame=None):
     """
@@ -278,9 +278,9 @@ def main():
     # return
 
     # Save segmentation data
-    io.save_nparray(video, "../data/processed/1339_knee_radial_video_N16.npy")
-    io.save_nparray(radial_masks, "../data/processed/1339_knee_radial_masks_N16.npy")
-    io.save_nparray(radial_regions, "../data/processed/1339_knee_radial_regions_N16.npy")
+    io.save_nparray(video, "../data/segmented/1339_knee_radial_video_N16.npy")
+    io.save_nparray(radial_masks, "../data/segmented/1339_knee_radial_masks_N16.npy")
+    io.save_nparray(radial_regions, "../data/segmented/1339_knee_radial_regions_N16.npy")
 
     return
 

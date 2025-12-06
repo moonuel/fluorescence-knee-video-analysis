@@ -16,8 +16,8 @@ def main():
     # Load and preprocess video
     # video = load_avi("../data/video_1.avi")
     # video, translation_mxs = ks.centre_video(video)
-    video = io.load_nparray("../data/processed/normal_knee_processed.npy")
-    translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
+    video = io.load_nparray("../data/segmented/normal_knee_processed.npy")
+    translation_mxs = io.load_nparray("../data/segmented/normal_translation_mxs.npy")
 
     # Load and transform coords
     coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", sheet_num=1)

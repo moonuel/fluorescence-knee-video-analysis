@@ -7,7 +7,7 @@ from functools import partial
 
 def get_femur_mask():
     
-    video = io.load_nparray("../data/processed/1342_knee_frames_ctrd.npy")[:500]
+    video = io.load_nparray("../data/segmented/1342_knee_frames_ctrd.npy")[:500]
     video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     video = np.flip(video, axis=2)
@@ -111,7 +111,7 @@ def estimate_femur_midpoint(boundary_points, start, end):
 
 def load_video():
 
-    video = io.load_nparray("../data/processed/1342_knee_frames_ctrd.npy")[:497]
+    video = io.load_nparray("../data/segmented/1342_knee_frames_ctrd.npy")[:497]
     video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     # video = np.flip(video, axis=2)
@@ -140,9 +140,9 @@ if __name__ == "__main__":
     video = load_video()
     otsu_mask = get_otsu_mask(video)
     # mask = get_femur_mask()
-    # io.save_nparray(mask, "../data/processed/1342_aging_mask_0-499.npy")
+    # io.save_nparray(mask, "../data/segmented/1342_aging_mask_0-499.npy")
 
-    mask = io.load_nparray("../data/processed/1342_aging_mask_0-499.npy")[:497]
+    mask = io.load_nparray("../data/segmented/1342_aging_mask_0-499.npy")[:497]
 
     boundary_points = get_boundary_points(mask, N_lns=128)
     
@@ -164,5 +164,5 @@ if __name__ == "__main__":
 
     breakpoint()
 
-    # io.save_nparray(video, "../data/processed/aging_1342_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/processed/aging_1342_radial_masks_N16.npy")
+    # io.save_nparray(video, "../data/segmented/aging_1342_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/segmented/aging_1342_radial_masks_N16.npy")

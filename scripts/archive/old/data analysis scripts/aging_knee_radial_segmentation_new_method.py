@@ -373,7 +373,7 @@ def main():
 
     # Load pre-processed video
     # video, _ = knee.centre_video(video) 
-    video = io.load_nparray("../data/processed/aging_knee_processed.npy") # result of above function call
+    video = io.load_nparray("../data/segmented/aging_knee_processed.npy") # result of above function call
     video = video[1:] # Crop out empty first frame
     video = np.rot90(video, k=-1, axes=(1,2))
     video = utils.center_crop(video, int(350*np.sqrt(2))) # wiggle room for black borders

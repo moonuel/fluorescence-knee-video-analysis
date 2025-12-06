@@ -6,8 +6,8 @@ from utils import views, io
 #1342
 "62-81	82-100	102-119	123-151	152-171	178-199"
 
-# video = io.load_video("../data/processed/aging_1358_radial_video_N64.npy"); masks = io.load_masks("../data/processed/aging_1358_radial_masks_N64.npy")
-# video = io.load_video("../data/processed/aging_1342_radial_video_N64.npy"); masks = io.load_masks("../data/processed/aging_1342_radial_masks_N64.npy")
+# video = io.load_video("../data/segmented/aging_1358_radial_video_N64.npy"); masks = io.load_masks("../data/segmented/aging_1358_radial_masks_N64.npy")
+# video = io.load_video("../data/segmented/aging_1342_radial_video_N64.npy"); masks = io.load_masks("../data/segmented/aging_1342_radial_masks_N64.npy")
 
 
 # v1 = views.draw_mask_boundaries(video, masks)

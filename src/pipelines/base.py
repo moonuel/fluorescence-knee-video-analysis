@@ -124,10 +124,9 @@ class KneeSegmentationPipeline:
 
     def default_output_dir(self):
         """
-        Default: store alongside the input file in a `processed/` directory.
+        Default: store in the data/segmented directory.
         """
-        parent = self.input_path.parent
-        return parent / "processed"
+        return Path("data/segmented")
 
     # ------------------------------------------------------------------
     # Loading
@@ -410,13 +409,16 @@ class KneeSegmentationPipeline:
             condition = "unknown"
         
         # Build filenames using new convention
-        video_filename = f"{condition}_{video_id}_video_N_{n_segments}.npy"
+        video_filename = f"{condition}_{video_id}_video_N{n_segments}.npy"
         radial_filename = f"{condition}_{video_id}_radial_N{n_segments}.npy"
-        femur_filename = f"{condition}_{video_id}_femur_N_{n_segments}.npy"
+        femur_filename = f"{condition}_{video_id}_femur_N{n_segments}.npy"
         
         # Save files
+        print("Saving video...")
         io.save_nparray(video, self.output_dir / video_filename)
+        print("Saving radial masks...")
         io.save_nparray(radial_mask, self.output_dir / radial_filename)
+        print("Saving femur masks...")
         io.save_nparray(femur_mask, self.output_dir / femur_filename)
         
         print(f"Saved: {video_filename}, {radial_filename}, {femur_filename}")

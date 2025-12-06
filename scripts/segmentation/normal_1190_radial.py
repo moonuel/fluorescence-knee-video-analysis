@@ -115,8 +115,8 @@ def main():
 
 
     # Save segmentation data
-    # io.save_nparray(video, "../data/processed/normal_1190_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/processed/normal_1190_radial_masks_N16.npy")
+    # io.save_nparray(video, "../data/segmented/normal_1190_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/segmented/normal_1190_radial_masks_N16.npy")
 
 
 

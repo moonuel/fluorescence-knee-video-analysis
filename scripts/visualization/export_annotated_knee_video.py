@@ -161,8 +161,8 @@ def main(masks:np.ndarray, video:np.ndarray):
 
 def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/aging_1339_radial_video_N16.npy")
+    masks = io.load_masks("../data/segmented/aging_1339_radial_masks_N16.npy")
+    video = io.load_video("../data/segmented/aging_1339_radial_video_N16.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
 
     return masks, video #, cycles
@@ -170,16 +170,16 @@ def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_1339_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/aging_1339_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/aging_1339_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/aging_1339_radial_video_N64.npy")
     
     return masks, video 
 
 
 def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_0308_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/normal_0308_radial_video_N16.npy")
+    masks = io.load_masks("../data/segmented/normal_0308_radial_masks_N16.npy")
+    video = io.load_video("../data/segmented/normal_0308_radial_video_N16.npy")
 
     masks, video = np.flip(masks, axis=2), np.flip(video, axis=2) # Flip along horizontal dim
     masks[masks > 0] = (masks[masks > 0] - 2) % 16 + 1 # Shift segment labels by one for 308 N16 video
@@ -189,32 +189,32 @@ def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_0308_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/normal_0308_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/normal_0308_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/normal_0308_radial_video_N64.npy")
 
     return masks, video
 
 
 def load_1207_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_1207_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/normal_1207_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/normal_1207_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/normal_1207_radial_video_N64.npy")
 
     return masks, video
 
 
 def load_1190_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_1190_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/normal_1190_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/normal_1190_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/normal_1190_radial_video_N64.npy")
 
     return masks, video
 
 
 def load_1193_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_1193_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/normal_1193_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/normal_1193_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/normal_1193_radial_video_N64.npy")
 
     return masks, video
 
@@ -233,15 +233,15 @@ if __name__ == "__main__":
     if not int(sys.argv[1]) in TYPES.keys(): raise SyntaxError(f"Knee type not found. Valid types are: {list(TYPES.keys())}")
     
     TYPE = TYPES[int(sys.argv[1])]
-    mask_path = f"../data/processed/{sys.argv[1]}_{TYPE}_radial_masks_N{sys.argv[2]}.npy"
-    video_path = f"../data/processed/{sys.argv[1]}_{TYPE}_radial_video_N{sys.argv[2]}.npy"
+    mask_path = f"../data/segmented/{sys.argv[1]}_{TYPE}_radial_masks_N{sys.argv[2]}.npy"
+    video_path = f"../data/segmented/{sys.argv[1]}_{TYPE}_radial_video_N{sys.argv[2]}.npy"
 
     if not os.path.isfile(mask_path): raise FileNotFoundError(f"{mask_path} not found.")
     if not os.path.isfile(video_path): raise FileNotFoundError(f"{video_path} not found.")
     
     # Load data
-    masks = io.load_masks(f"../data/processed/{sys.argv[1]}_{TYPE}_radial_masks_N{sys.argv[2]}.npy")
-    video = io.load_video(f"../data/processed/{sys.argv[1]}_{TYPE}_radial_video_N{sys.argv[2]}.npy")
+    masks = io.load_masks(f"../data/segmented/{sys.argv[1]}_{TYPE}_radial_masks_N{sys.argv[2]}.npy")
+    video = io.load_video(f"../data/segmented/{sys.argv[1]}_{TYPE}_radial_video_N{sys.argv[2]}.npy")
 
     # Process video
     video_out = main(masks, video)

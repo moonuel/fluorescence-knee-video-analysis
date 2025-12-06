@@ -158,9 +158,9 @@ def plot_specific_frames(total_sums,
 def main():
     if VERBOSE: print("main() called!")
 
-    video = io.load_nparray("../data/processed/normal_knee_radial_video_N16.npy")
-    radial_masks = io.load_nparray("../data/processed/normal_knee_radial_masks_N16.npy")
-    radial_regions = io.load_nparray("../data/processed/normal_knee_radial_regions_N16.npy")
+    video = io.load_nparray("../data/segmented/normal_knee_radial_video_N16.npy")
+    radial_masks = io.load_nparray("../data/segmented/normal_knee_radial_masks_N16.npy")
+    radial_regions = io.load_nparray("../data/segmented/normal_knee_radial_regions_N16.npy")
 
     # Get total pixel intensity per slice
     rgt, mdl, lft = (2,9), (9,14), (14,2)

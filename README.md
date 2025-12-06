@@ -124,7 +124,7 @@ All videos are processed with N=64 radial segmentation by default.
 ### Output Locations
 - **Figures**: Generated plots saved to `figures/` directory
 - **Data Exports**: Intensity data and measurements exported to `../data/` (parent directory)
-- **Processed Videos**: NumPy arrays saved to `../data/processed/`
+- **Processed Videos**: NumPy arrays saved to `../data/segmented/`
 
 ## Requirements
 

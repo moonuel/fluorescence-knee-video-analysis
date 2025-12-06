@@ -331,8 +331,8 @@ def main(masks:np.ndarray, video:np.ndarray, cycles:str, num_type:str):
 
 def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/aging_1339_radial_video_N16.npy")
+    masks = io.load_masks("../data/segmented/aging_1339_radial_masks_N16.npy")
+    video = io.load_video("../data/segmented/aging_1339_radial_video_N16.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
     cycles = parse_cycles(cycles) # Validate and convert to List[list]
 
@@ -341,8 +341,8 @@ def load_1339_N16() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_1339_N64_rem_C7() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/aging_1339_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/aging_1339_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/aging_1339_radial_video_N64.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553" # 1339 aging
     cycles = parse_cycles(cycles) # Validate and convert to List[list]
 
@@ -350,8 +350,8 @@ def load_1339_N64_rem_C7() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_1339_N16_rem_C7() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/aging_1339_radial_video_N16.npy")
+    masks = io.load_masks("../data/segmented/aging_1339_radial_masks_N16.npy")
+    video = io.load_video("../data/segmented/aging_1339_radial_video_N16.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553" # 1339 aging
     cycles = parse_cycles(cycles) # Validate and convert to List[list]
 
@@ -360,8 +360,8 @@ def load_1339_N16_rem_C7() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_1339_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/aging_1339_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/aging_1339_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/aging_1339_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/aging_1339_radial_video_N64.npy")
     cycles =   "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609" # 1339 aging
     cycles = parse_cycles(cycles) # Validate and convert to List[list]
 
@@ -370,8 +370,8 @@ def load_1339_N64() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_0308_radial_masks_N16.npy")
-    video = io.load_video("../data/processed/normal_0308_radial_video_N16.npy")
+    masks = io.load_masks("../data/segmented/normal_0308_radial_masks_N16.npy")
+    video = io.load_video("../data/segmented/normal_0308_radial_video_N16.npy")
     cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" 
     cycles = parse_cycles(cycles) # Validate and convert to List[list]
 
@@ -383,8 +383,8 @@ def load_308_N16() -> Tuple[np.ndarray, np.ndarray]:
 
 def load_308_N64() -> Tuple[np.ndarray, np.ndarray]:
 
-    masks = io.load_masks("../data/processed/normal_0308_radial_masks_N64.npy")
-    video = io.load_video("../data/processed/normal_0308_radial_video_N64.npy")
+    masks = io.load_masks("../data/segmented/normal_0308_radial_masks_N64.npy")
+    video = io.load_video("../data/segmented/normal_0308_radial_video_N64.npy")
     cycles = "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250" 
     cycles = parse_cycles(cycles) # Validate and convert to List[list]
 

@@ -242,8 +242,8 @@ def plot_with_shading(total_sums, lns, f0=None, fN=None):
 
 def main():
 
-    video = io.load_nparray("../data/processed/aging_1342_radial_video_N16.npy")
-    radial_masks = io.load_nparray("../data/processed/aging_1342_radial_masks_N16.npy")
+    video = io.load_nparray("../data/segmented/aging_1342_radial_video_N16.npy")
+    radial_masks = io.load_nparray("../data/segmented/aging_1342_radial_masks_N16.npy")
 
     # video_w_bnds = draw_mask_boundaries(video, radial_masks)
     # views.show_frames(video_w_bnds)

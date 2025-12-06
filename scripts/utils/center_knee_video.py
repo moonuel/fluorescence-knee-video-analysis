@@ -31,7 +31,7 @@ def main(file_path:str, frames:Tuple[int, int], save_path:str):
 
 if __name__ == "__main__":
     # h5_path = "../data/raw/dmm-0 min-fluid movement_00001207.h5"
-    # npy_path = "../data/processed/1207_knee_frames_ctrd.npy"
+    # npy_path = "../data/segmented/1207_knee_frames_ctrd.npy"
 
     if len(sys.argv) != 3: raise SyntaxError(f"{sys.argv[0]} expects two args: [file_in] [file_out]"
                                             f"\n\tExample usage: {sys.argv[0]} aging1339.h5 aging1339.npy")

@@ -392,9 +392,9 @@ def plot_specific_frames(total_sums, flex_frames=None, ext_frames=None, title=""
 
 def main():
 
-    video = io.load_nparray("../data/processed/1190_knee_radial_video_N16.npy")
-    radial_masks = io.load_nparray("../data/processed/1190_knee_radial_masks_N16.npy")
-    # radial_regions = io.load_nparray("../data/processed/1190_knee_radial_regions_N16.npy")
+    video = io.load_nparray("../data/segmented/1190_knee_radial_video_N16.npy")
+    radial_masks = io.load_nparray("../data/segmented/1190_knee_radial_masks_N16.npy")
+    # radial_regions = io.load_nparray("../data/segmented/1190_knee_radial_regions_N16.npy")
 
     print(video.shape, radial_masks.shape)
 

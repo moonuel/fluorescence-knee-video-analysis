@@ -127,7 +127,7 @@ def estimate_femur_midpoint(boundary_points, start, end):
 
 def load_1207_normal_video():
 
-    video = io.load_nparray("../data/processed/1207_knee_frames_ctrd.npy")
+    video = io.load_nparray("../data/segmented/1207_knee_frames_ctrd.npy")
     video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     # video = np.flip(video, axis=2)
@@ -245,7 +245,7 @@ def main():
     views.show_frames(otsu_mask, "otsu_mask")
 
     # Perform radial segmentation
-    mask = io.load_nparray("../data/processed/1207_normal_mask.npy")
+    mask = io.load_nparray("../data/segmented/1207_normal_mask.npy")
 
     femur_tip, femur_midpt = get_femur_points(mask)
 
@@ -262,8 +262,8 @@ def main():
     print("save results if happy")
     breakpoint()
     # Save final results
-    # io.save_nparray(video, "../data/processed/normal_1207_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/processed/normal_1207_radial_masks_N16.npy")
+    # io.save_nparray(video, "../data/segmented/normal_1207_radial_video_N16.npy")
+    # io.save_nparray(radial_masks, "../data/segmented/normal_1207_radial_masks_N16.npy")
 
 if __name__ == "__main__":
     main()
@@ -271,6 +271,6 @@ if __name__ == "__main__":
     # Get and save the binary mask
     # mask = get_1207_binary_mask()
     # views.show_frames(mask)
-    # io.save_nparray(mask, "../data/processed/1207_normal_mask.npy")    
+    # io.save_nparray(mask, "../data/segmented/1207_normal_mask.npy")    
 
 

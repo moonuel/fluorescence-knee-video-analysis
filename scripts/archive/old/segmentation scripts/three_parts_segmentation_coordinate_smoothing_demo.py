@@ -8,8 +8,8 @@ def main():
     if VERBOSE: print("main() called!")
 
     # Load example video and coords
-    video = io.load_nparray("../data/processed/normal_knee_processed.npy")
-    translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy")
+    video = io.load_nparray("../data/segmented/normal_knee_processed.npy")
+    translation_mxs = io.load_nparray("../data/segmented/normal_translation_mxs.npy")
     coords, metadata = io.load_normal_knee_coords("../data/xy coordinates for knee imaging 0913.xlsx", 0) # 8.6 normal knee
     coords = ks.translate_coords(translation_mxs, coords) # Center the coords
 

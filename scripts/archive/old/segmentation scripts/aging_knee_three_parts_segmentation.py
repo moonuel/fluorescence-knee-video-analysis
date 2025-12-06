@@ -12,8 +12,8 @@ def main():
     # Process the video data 
     # video = io.load_tif("../data/1 aging_00000221.tif") 
     # video_ctrd, translation_mxs = ks.centre_video(video) # Centers *all* frames
-    video = io.load_nparray("../data/processed/aging_knee_processed.npy")
-    translation_mxs = io.load_nparray("../data/processed/aging_translation_mxs.npy")
+    video = io.load_nparray("../data/segmented/aging_knee_processed.npy")
+    translation_mxs = io.load_nparray("../data/segmented/aging_translation_mxs.npy")
 
     knee_name = "aging-3" 
     coords, metadata = io.load_aging_knee_coords("../data/198_218 updated xy coordinates for knee-aging 250426.xlsx", knee_name)

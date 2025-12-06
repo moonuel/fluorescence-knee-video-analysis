@@ -64,7 +64,7 @@ def get_femur_mask(video:np.ndarray) -> np.ndarray:
     return femur_mask
 
 def save_1193_mask():
-    video = io.load_nparray("../data/processed/1193_knee_frames_ctrd.npy")#[600:1000]
+    video = io.load_nparray("../data/segmented/1193_knee_frames_ctrd.npy")#[600:1000]
     video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     video = np.flip(video, axis=2)
@@ -72,7 +72,7 @@ def save_1193_mask():
 
     mask = get_femur_mask(video)
 
-    io.save_nparray(mask, "../data/processed/1193_normal_mask.npy")
+    io.save_nparray(mask, "../data/segmented/1193_normal_mask.npy")
 
     return
 
@@ -136,13 +136,13 @@ def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: 
 
 def main():
 
-    video = io.load_nparray("../data/processed/1193_knee_frames_ctrd.npy")#[0:100]
+    video = io.load_nparray("../data/segmented/1193_knee_frames_ctrd.npy")#[0:100]
     video = utils.center_crop(video, 500)
     video = np.rot90(video, k=1, axes=(1,2))
     # video = np.flip(video, axis=2)
     video[video == 0] = 19 # Fill empty borders for histogram matching stability
 
-    mask = io.load_nparray("../data/processed/1193_normal_mask.npy")#[0:100]
+    mask = io.load_nparray("../data/segmented/1193_normal_mask.npy")#[0:100]
     mask = np.flip(mask, axis=2)
 
     print(video.shape, mask.shape)
@@ -193,8 +193,8 @@ def main():
     breakpoint()
 
     # Save segmentation data
-    io.save_nparray(video, "../data/processed/normal_1193_radial_video_N16.npy")
-    io.save_nparray(radial_masks, "../data/processed/normal_1193_radial_masks_N16.npy")
+    io.save_nparray(video, "../data/segmented/normal_1193_radial_video_N16.npy")
+    io.save_nparray(radial_masks, "../data/segmented/normal_1193_radial_masks_N16.npy")
 
 
 if __name__ == "__main__":

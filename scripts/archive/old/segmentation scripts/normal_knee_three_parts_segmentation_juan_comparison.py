@@ -14,9 +14,9 @@ def main():
     if VERBOSE: print("main() called!")
 
     # Load and preprocess video
-    video = io.load_nparray("../data/processed/normal_knee_processed.npy") # Centered video
+    video = io.load_nparray("../data/segmented/normal_knee_processed.npy") # Centered video
     video = utils.blur_video(video, (25,25), 3) # equivalent to ndimage.gaussian_filter(video, sigma=3)?
-    translation_mxs = io.load_nparray("../data/processed/normal_translation_mxs.npy") # Corresponding translations
+    translation_mxs = io.load_nparray("../data/segmented/normal_translation_mxs.npy") # Corresponding translations
 
     # Load and transform coords
     # TODO: the coordinate data corresponding to sheet_num=2 is not contiguous. there is a discontinuity between frames 618 and 630.
