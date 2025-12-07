@@ -1,7 +1,7 @@
 """
-Integrated script for converting AVI files to centered grayscale HDF5 files.
+Integrated script for converting AVI files to centered grayscale NPY files.
 Processes AVI input to temporary grayscale NPY chunks, applies centering in parallel,
-and aggregates to final HDF5 output with chunked dataset access.
+and aggregates to final NPY output.
 """
 
 import cv2
@@ -10,7 +10,6 @@ import tempfile
 import os
 from multiprocessing import Process, Queue, cpu_count
 import sys
-import h5py
 import core.radial_segmentation as rdl
 import utils.utils as utils
 
@@ -83,23 +82,19 @@ def aggregate_centered_chunks(centered_dir, output_path):
     if not centered_files:
         raise ValueError("No centered chunks found")
 
-    # Load first to get shape
-    first_chunk = np.load(os.path.join(centered_dir, centered_files[0]))
-    frame_shape = first_chunk.shape[1:]
-    total_frames = sum(np.load(os.path.join(centered_dir, f)).shape[0] for f in centered_files)
+    # Load all chunks and concatenate
+    chunks = []
+    for f in centered_files:
+        chunk_path = os.path.join(centered_dir, f)
+        chunk = np.load(chunk_path)
+        chunks.append(chunk)
+        print(f"[Aggregator] Loaded chunk {f}")
 
-    print(f"[Aggregator] Aggregating {len(centered_files)} chunks into {output_path}, total frames {total_frames}")
+    full_video = np.concatenate(chunks, axis=0)
+    print(f"[Aggregator] Concatenated into array of shape {full_video.shape}")
 
-    with h5py.File(output_path, "w") as h5f:
-        dset = h5f.create_dataset("video", shape=(total_frames, *frame_shape), dtype=np.uint8)
-        idx = 0
-        for chunk_idx, f in enumerate(centered_files):
-            chunk_path = os.path.join(centered_dir, f)
-            chunk = np.load(chunk_path)
-            print(f"[Aggregator] Writing chunk {chunk_idx} from {f}")
-            dset[idx:idx+chunk.shape[0]] = chunk
-            idx += chunk.shape[0]
-    print(f"[Aggregator] Done writing to {output_path}")
+    np.save(output_path, full_video)
+    print(f"[Aggregator] Saved to {output_path}")
 
 
 def main(video_path, output_path, chunk_size=100, num_workers=cpu_count()):
@@ -173,16 +168,16 @@ def main(video_path, output_path, chunk_size=100, num_workers=cpu_count()):
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         raise SyntaxError(f"{sys.argv[0]} expects two args: [file_in] [file_out]"
-                          f"\n\tExample usage: {sys.argv[0]} video1339.avi video1339_centered.h5")
+                          f"\n\tExample usage: {sys.argv[0]} video1339.avi video1339_centered.npy")
 
     file_in = sys.argv[1]
     file_out = sys.argv[2]
 
     if not os.path.isfile(file_in):
         raise FileNotFoundError("Input video not found.")
-    if not file_out.endswith(".h5"):
-        raise SyntaxError("Output file must be a .h5 file."
-                          f"\n\tExample usage: {sys.argv[0]} video1339.avi video1339_centered.h5")
+    if not file_out.endswith(".npy"):
+        raise SyntaxError("Output file must be a .npy file."
+                          f"\n\tExample usage: {sys.argv[0]} video1339.avi video1339_centered.npy")
 
     # Hard-coded chunk_size, can be parameterized if needed
     main(file_in, file_out, chunk_size=100, num_workers=8)

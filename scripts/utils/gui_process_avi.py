@@ -14,7 +14,7 @@ import threading
 class AVIProcessorGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("AVI to Centered HDF5 Converter")
+        self.root.title("AVI to Centered NPY Converter")
         self.root.geometry("600x200")
         self.root.resizable(True, False)
 
@@ -39,7 +39,7 @@ class AVIProcessorGUI:
         output_frame = tk.Frame(self.root)
         output_frame.pack(pady=10, padx=20, fill=tk.X)
 
-        tk.Label(output_frame, text="Output HDF5 File:").grid(row=0, column=0, sticky=tk.W)
+        tk.Label(output_frame, text="Output NPY File:").grid(row=0, column=0, sticky=tk.W)
         self.output_entry = tk.Entry(output_frame, textvariable=self.output_file, width=50)
         self.output_entry.grid(row=1, column=0, padx=(0, 10))
         tk.Button(output_frame, text="Browse...", command=self.browse_output_file).grid(row=1, column=1)
@@ -68,22 +68,22 @@ class AVIProcessorGUI:
         initial_file = os.path.basename(current_output) if current_output else None
 
         filename = filedialog.asksaveasfilename(
-            title="Save HDF5 file as",
+            title="Save NPY file as",
             initialdir=initial_dir,
             initialfile=initial_file,
-            filetypes=[("HDF5 files", "*.h5"), ("All files", "*.*")]
+            filetypes=[("NPY files", "*.npy"), ("All files", "*.*")]
         )
         if filename:
-            # Ensure .h5 extension
-            if not filename.lower().endswith('.h5'):
-                filename += '.h5'
+            # Ensure .npy extension
+            if not filename.lower().endswith('.npy'):
+                filename += '.npy'
             self.output_file.set(filename)
 
     def auto_fill_output(self, input_path):
         if input_path:
             input_dir = os.path.dirname(input_path)
             input_basename = os.path.splitext(os.path.basename(input_path))[0]
-            output_path = os.path.join(input_dir, f"{input_basename}.h5")
+            output_path = os.path.join(input_dir, f"{input_basename}.npy")
             self.output_file.set(output_path)
 
     def process_video(self):
@@ -94,7 +94,7 @@ class AVIProcessorGUI:
             messagebox.showerror("Error", "Please select an input AVI file.")
             return
         if not output_path:
-            messagebox.showerror("Error", "Please specify an output HDF5 file.")
+            messagebox.showerror("Error", "Please specify an output NPY file.")
             return
 
         if not os.path.exists(input_path):
