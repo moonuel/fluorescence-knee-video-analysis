@@ -245,11 +245,26 @@ def save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N):
     intensities_dir = PROJECT_ROOT / "data" / "intensities_total"
     intensities_dir.mkdir(exist_ok=True)  # Ensure directory exists
     output_file = intensities_dir / f"{video_id}N{N}intensities.xlsx"
+
+    # Get region ranges for this video
+    ranges = REGION_RANGES.get((video_id, N))
+    if ranges is not None:
+        # Create region ranges DataFrame
+        region_data = []
+        for region, (start, end) in ranges.items():
+            region_data.append({"Region": region, "Start": start, "End": end})
+        df_regions = pd.DataFrame(region_data)
+    else:
+        # If no ranges defined, create empty DataFrame with correct columns
+        df_regions = pd.DataFrame(columns=["Region", "Start", "End"])
+
     with pd.ExcelWriter(output_file) as writer:
         total_sums.to_excel(writer, sheet_name="Segment Intensities", index=True)
         total_nonzero.to_excel(writer, sheet_name="Number of Mask Pixels", index=True)
         flex.to_excel(writer, sheet_name="Flexion Frames", index=True)
         ext.to_excel(writer, sheet_name="Extension Frames", index=True)
+        df_regions.to_excel(writer, sheet_name="Anatomical Regions", index=False)
+
     print(f"✅ Analysis results saved to {output_file}")
 
 
@@ -360,6 +375,9 @@ def main(video_id:int, N:int, condition:str):
     views.show_frames([masks * (255 // np.max(masks)), video], "Validate data")
     # breakpoint()
 
+    # Verify segment ranges
+    draw_segment_boundaries(video, masks, video_id, N)
+
     # Compute within-segment total intensities and number of pixels in each segment
     total_sums, total_nonzero = compute_sums_nonzeros(masks, video)
 
@@ -379,9 +397,6 @@ def main(video_id:int, N:int, condition:str):
     print(total_sums)
     print(flex)
     print(ext)
-
-    # Verify segment ranges
-    draw_segment_boundaries(video, masks, video_id, N)
 
     if input("Save to file? (y/n)\n".lower()) == 'y':
         save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N)
