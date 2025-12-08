@@ -1,5 +1,5 @@
 """
-GUI wrapper for the AVI to centered NPY processing script.
+GUI wrapper for the TIF stack to centered NPY processing script.
 Provides file selection interface with automatic filename generation.
 """
 
@@ -11,10 +11,10 @@ import subprocess
 import threading
 
 
-class AVIProcessorGUI:
+class TIFProcessorGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("AVI to Centered NPY Converter")
+        self.root.title("TIF Stack to Centered NPY Converter")
         self.root.geometry("600x200")
         self.root.resizable(True, False)
 
@@ -30,7 +30,7 @@ class AVIProcessorGUI:
         input_frame = tk.Frame(self.root)
         input_frame.pack(pady=10, padx=20, fill=tk.X)
 
-        tk.Label(input_frame, text="Input AVI File:").grid(row=0, column=0, sticky=tk.W)
+        tk.Label(input_frame, text="Input TIF Stack File:").grid(row=0, column=0, sticky=tk.W)
         self.input_entry = tk.Entry(input_frame, textvariable=self.input_file, width=50)
         self.input_entry.grid(row=1, column=0, padx=(0, 10))
         tk.Button(input_frame, text="Browse...", command=self.browse_input).grid(row=1, column=1)
@@ -45,7 +45,7 @@ class AVIProcessorGUI:
         tk.Button(output_frame, text="Browse...", command=self.browse_output_file).grid(row=1, column=1)
 
         # Process button
-        self.process_button = tk.Button(self.root, text="Process Video", command=self.process_video,
+        self.process_button = tk.Button(self.root, text="Process Stack", command=self.process_stack,
                                        bg="#4CAF50", fg="white", font=("Arial", 12, "bold"))
         self.process_button.pack(pady=20)
 
@@ -55,8 +55,8 @@ class AVIProcessorGUI:
 
     def browse_input(self):
         filename = filedialog.askopenfilename(
-            title="Select AVI file",
-            filetypes=[("AVI files", "*.avi"), ("All files", "*.*")]
+            title="Select TIF stack file",
+            filetypes=[("TIF files", "*.tif"), ("TIFF files", "*.tiff"), ("All files", "*.*")]
         )
         if filename:
             self.input_file.set(filename)
@@ -86,12 +86,12 @@ class AVIProcessorGUI:
             output_path = os.path.join(input_dir, f"{input_basename}.npy")
             self.output_file.set(output_path)
 
-    def process_video(self):
+    def process_stack(self):
         input_path = self.input_file.get()
         output_path = self.output_file.get()
 
         if not input_path:
-            messagebox.showerror("Error", "Please select an input AVI file.")
+            messagebox.showerror("Error", "Please select an input TIF stack file.")
             return
         if not output_path:
             messagebox.showerror("Error", "Please specify an output NPY file.")
@@ -103,7 +103,7 @@ class AVIProcessorGUI:
 
         # Disable button and show processing
         self.process_button.config(state=tk.DISABLED, text="Processing...")
-        self.status_label.config(text="Processing video... Please wait.", fg="orange")
+        self.status_label.config(text="Processing TIF stack... Please wait.", fg="orange")
 
         # Run processing in separate thread to avoid freezing GUI
         thread = threading.Thread(target=self.run_processing, args=(input_path, output_path))
@@ -113,14 +113,14 @@ class AVIProcessorGUI:
     def run_processing(self, input_path, output_path):
         try:
             # Import the processing script from the same directory
-            from process_avi_to_npy import main
+            from process_tif_to_npy import main
 
             # Run the processing
             main(input_path, output_path)
 
             # Success
             self.root.after(0, lambda: self.status_label.config(text="Processing completed successfully!", fg="green"))
-            self.root.after(0, lambda: messagebox.showinfo("Success", "Video processing completed successfully!"))
+            self.root.after(0, lambda: messagebox.showinfo("Success", "TIF stack processing completed successfully!"))
 
         except Exception as e:
             error_msg = f"Processing failed: {str(e)}"
@@ -129,12 +129,12 @@ class AVIProcessorGUI:
 
         finally:
             # Re-enable button
-            self.root.after(0, lambda: self.process_button.config(state=tk.NORMAL, text="Process Video"))
+            self.root.after(0, lambda: self.process_button.config(state=tk.NORMAL, text="Process Stack"))
 
 
 def main():
     root = tk.Tk()
-    app = AVIProcessorGUI(root)
+    app = TIFProcessorGUI(root)
     root.mainloop()
 
 
