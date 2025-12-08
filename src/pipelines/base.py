@@ -376,6 +376,62 @@ class KneeSegmentationPipeline:
     # Saving / Output
     # ------------------------------------------------------------------
 
+    def display_saved_results(self):
+        """
+        Load and display previously saved segmentation results.
+
+        Looks for saved files in the output directory using the standardized naming convention:
+        {condition}_{video_id}_{datatype}_N{n_segments}.npy
+
+        Displays:
+        - Processed video
+        - Femur mask
+        - Radial segmentation mask (color-coded)
+
+        Raises:
+        -------
+        FileNotFoundError
+            If any of the required saved files are not found
+        """
+        # Build expected filenames
+        video_filename = f"{self.condition}_{self.video_id}_video_N{self.n_segments}.npy"
+        radial_filename = f"{self.condition}_{self.video_id}_radial_N{self.n_segments}.npy"
+        femur_filename = f"{self.condition}_{self.video_id}_femur_N{self.n_segments}.npy"
+
+        video_path = self.output_dir / video_filename
+        radial_path = self.output_dir / radial_filename
+        femur_path = self.output_dir / femur_filename
+
+        # Check if files exist
+        missing_files = []
+        if not video_path.exists():
+            missing_files.append(video_filename)
+        if not radial_path.exists():
+            missing_files.append(radial_filename)
+        if not femur_path.exists():
+            missing_files.append(femur_filename)
+
+        if missing_files:
+            raise FileNotFoundError(f"Missing saved result files: {', '.join(missing_files)} in {self.output_dir}")
+
+        # Load the saved results
+        print(f"Loading saved results for {self.condition}_{self.video_id}...")
+        saved_video = io.load_nparray(video_path)
+        saved_radial = io.load_nparray(radial_path)
+        saved_femur = io.load_nparray(femur_path)
+
+        # TEMP:
+        # saved_radial = (saved_radial // 4)*4
+
+        # Display the results
+        print("Displaying saved segmentation results...")
+        views.show_frames([
+            saved_video,
+            # saved_femur,
+            saved_radial * (255 // self.n_segments),  # Color-code radial segments
+            views.draw_mask_boundary(saved_video, saved_radial)  # Overlay boundaries
+        ])
+
     def confirm_save(self):
         """
         Hook for requesting user permission before saving results.
@@ -433,6 +489,14 @@ class KneeSegmentationPipeline:
     def run(self, debug=False, debug_pause=False):
         """
         Run the full segmentation pipeline.
+        
+        1. Preprocess
+        2. Generate Otsu mask
+        3. Refine Otsu mask
+        4. Generate interior mask
+        5. Generate femur mask
+        6. Refine femur mask
+        7. Radial segmentation
 
         Parameters:
         -----------
@@ -509,7 +573,7 @@ class KneeSegmentationPipeline:
         print("Step 7: Performing radial segmentation...")
         self.radial_segmentation(inplace=True)
         if debug:
-            views.show_frames(self.radial_mask * (255 // 64), "7. Radial Segmentation")
+            views.show_frames([self.radial_mask * (255 // 64), views.draw_mask_boundary(self.processed_video, self.radial_mask)], "7. Radial Segmentation")
             if debug_pause: input("Press Enter to continue...")
 
         print("\n=== Pipeline Complete ===\n")
