@@ -18,6 +18,10 @@ import argparse
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
+#==============================================================================
+#                                HELPER FUNCTIONS
+#==============================================================================
+
 def load_masks(filepath:str) -> np.ndarray:
     """Loads the mask at the specified location. 
     Handles both old uint8 radial masks with shape (nmasks, nframes, h, w) and new uint8 radial masks with shape (nframes, h, w).
@@ -248,7 +252,96 @@ def save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N):
         ext.to_excel(writer, sheet_name="Extension Frames", index=True)
     print(f"✅ Analysis results saved to {output_file}")
 
-def main(video_id:int, N:int, knee_type:str):
+
+def draw_segment_boundaries(video, radial_regions, video_id, nsegs):
+    """
+    Draws the segment boundaries on the video, for verification before showing final results.
+
+    Shows only JC-OT and OT-SB boundaries as white overlay lines on grayscale video.
+    """
+    # Input validation
+    assert video.shape == radial_regions.shape, f"Shape mismatch: video {video.shape} vs radial_regions {radial_regions.shape}"
+    assert video.dtype == np.uint8, f"Video must be uint8, got {video.dtype}"
+    assert radial_regions.dtype in [np.uint8, np.int32, np.int64], f"Radial regions must be integer type, got {radial_regions.dtype}"
+
+    # Retrieve segment ranges from REGION_RANGES
+    ranges = REGION_RANGES.get((video_id, nsegs))
+    if ranges is None:
+        raise KeyError(f"No REGION_RANGES entry for (video_id={video_id}, N={nsegs})")
+
+    jc_start, jc_end = ranges["JC"]
+    ot_start, ot_end = ranges["OT"]
+    sb_start, sb_end = ranges["SB"]
+
+    # For efficiency, only consider boundaries between these specific segment pairs
+    # JC-OT: between jc_end and ot_start
+    # OT-SB: between ot_end and sb_start
+    boundary_pairs = {
+        (jc_end, ot_start),  # JC-OT
+        (ot_start, jc_end),
+        (ot_end, sb_start),  # OT-SB
+        (sb_start, ot_end),
+    }
+
+    # Create boundary mask
+    boundaries = np.zeros_like(video, dtype=bool)
+    nfs, h, w = video.shape
+
+    for f in range(nfs):
+        seg = radial_regions[f]
+
+        # Horizontal neighbors (left-right)
+        if w > 1:
+            left  = seg[:, :-1]
+            right = seg[:, 1:]
+
+            # Both pixels must be valid segments (not background)
+            valid = (left > 0) & (right > 0)
+
+            # Check if this neighbor pair is a boundary we care about
+            is_boundary = np.zeros_like(valid, dtype=bool)
+            for pair in boundary_pairs:
+                is_boundary |= ((left == pair[0]) & (right == pair[1]))
+
+            h_mask = valid & is_boundary
+
+            # Mark boundary pixels (both sides of the edge)
+            boundaries[f, :, :-1] |= h_mask
+            boundaries[f, :, 1:]  |= h_mask
+
+        # Vertical neighbors (up-down)
+        if h > 1:
+            up    = seg[:-1, :]
+            down  = seg[1:, :]
+
+            # Both pixels must be valid segments (not background)
+            valid = (up > 0) & (down > 0)
+
+            # Check if this neighbor pair is a boundary we care about
+            is_boundary = np.zeros_like(valid, dtype=bool)
+            for pair in boundary_pairs:
+                is_boundary |= ((up == pair[0]) & (down == pair[1]))
+
+            v_mask = valid & is_boundary
+
+            # Mark boundary pixels (both sides of the edge)
+            boundaries[f, :-1, :] |= v_mask
+            boundaries[f, 1:, :]  |= v_mask
+
+    # Create grayscale overlay: white lines on original video
+    overlay = video.copy()
+    overlay[boundaries] = 255
+
+    # Display the result
+    views.show_frames(overlay, f"Region boundaries {video_id}N{nsegs}")
+
+    return overlay
+
+#==============================================================================
+#                                MAIN FUNCTION
+#==============================================================================
+
+def main(video_id:int, N:int, condition:str):
     """
     Main function to process knee video intensity data.
 
@@ -259,18 +352,18 @@ def main(video_id:int, N:int, knee_type:str):
     """
     # Select data
     segmented_dir = PROJECT_ROOT / "data" / "segmented"
-    masks = load_masks(segmented_dir / f"{knee_type}_{video_id:04d}_radial_N{N}.npy")
-    video = load_video(segmented_dir / f"{knee_type}_{video_id:04d}_video_N{N}.npy")
+    masks = load_masks(segmented_dir / f"{condition}_{video_id:04d}_radial_N{N}.npy")
+    video = load_video(segmented_dir / f"{condition}_{video_id:04d}_video_N{N}.npy")
     cycles = [c.split("-") for c in CYCLES[video_id].split()]
 
-    print(f"---------- {video_id=}, {knee_type=}, {N=} ----------")
+    print(f"---------- {video_id=}, {condition=}, {N=} ----------")
     views.show_frames([masks * (255 // np.max(masks)), video], "Validate data")
     # breakpoint()
 
     # Compute within-segment total intensities and number of pixels in each segment
     total_sums, total_nonzero = compute_sums_nonzeros(masks, video)
 
-    # Write intensity data and cycle data into Excel spreadsheet
+    # Cast to dataframe for better storage
     total_sums = pd.DataFrame(total_sums.T)
     total_nonzero = pd.DataFrame(total_nonzero.T)
     flex = pd.DataFrame(cycles[::2])
@@ -287,12 +380,19 @@ def main(video_id:int, N:int, knee_type:str):
     print(flex)
     print(ext)
 
-    if input("Save to file? (y/n)".lower()) == 'y':
+    # Verify segment ranges
+    draw_segment_boundaries(video, masks, video_id, N)
+
+    if input("Save to file? (y/n)\n".lower()) == 'y':
         save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N)
     else:
         print("File not saved.")
 
+    return
 
+#==============================================================================
+#                                DATA STORAGE
+#==============================================================================
 
 # Store cycle ranges here
 CYCLES = {
@@ -323,9 +423,22 @@ TYPES = {
 assert CYCLES.keys() == TYPES.keys()
 
 REGION_RANGES = {
-
+    (1207, 64): {
+        "JC": (1, 29),
+        "OT": (30, 42),
+        "SB": (43, 64),
+    },
+    # (308, 64): {
+    #     "JC": (1, 29),
+    #     "OT": (30, 42),
+    #     "SB": (43, 64),
+    # },
 }
 
+#==============================================================================
+#                                ENTRY POINT
+#==============================================================================
+
 if __name__ == "__main__":
-    video_id, N, knee_type = parse_arguments()
-    main(video_id, N, knee_type)
+    video_id, N, condition = parse_arguments()
+    main(video_id, N, condition)
