@@ -8,9 +8,9 @@ from core import radial_segmentation as rdl
 
 class Aging1358Segmentation(KneeSegmentationPipeline):
 
-    def preprocess(self, video=None, rot90_k=1, crop_size=500, empty_fill_value=None, inplace=False):
-        video = (self.video * 1.95).astype(np.uint8) # brightness adjustment 
-        return super().preprocess(video, rot90_k, crop_size, empty_fill_value, inplace)
+    def preprocess(self, video=None, rot90_k=1, rot_angle=None, crop_size=500, empty_fill_value=None, inplace=False):
+        video = (self.video * 1.95).astype(np.uint8) # brightness adjustment
+        return super().preprocess(video, rot90_k, rot_angle, crop_size, empty_fill_value, inplace)
 
     def generate_otsu_mask(self, video=None, blur_kernel=(25, 25), thresh_scale=0.7, hist_frame=1425, inplace=False):
         return super().generate_otsu_mask(video, blur_kernel, thresh_scale, hist_frame, inplace)

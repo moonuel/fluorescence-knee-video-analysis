@@ -5,8 +5,8 @@ import os
 class Segmentation1357(KneeSegmentationPipeline):
 
     # Override parent methods using optimized parameters
-    def preprocess(self, video=None, rot90_k=1, crop_size=500, empty_fill_value=16, inplace=False):
-        return super().preprocess(video, rot90_k, crop_size, empty_fill_value, inplace)
+    def preprocess(self, video=None, rot90_k=1, rot_angle=None, crop_size=500, empty_fill_value=16, inplace=False):
+        return super().preprocess(video, rot90_k, rot_angle, crop_size, empty_fill_value, inplace)
 
     def generate_otsu_mask(self, video=None, blur_kernel=(25, 25), thresh_scale=0.7, hist_frame=67, inplace=False):
         return super().generate_otsu_mask(video=video, blur_kernel=blur_kernel, thresh_scale=thresh_scale, hist_frame=hist_frame, inplace=inplace)
@@ -35,7 +35,7 @@ class Segmentation1357(KneeSegmentationPipeline):
 
 def main():
     """
-    Demonstrates the new debug workflow:
+    New workflow:
     1. Metadata (video_id, condition, n_segments) specified at initialization
     2. Override methods with custom parameters in subclass
     3. Use run(debug=True) to visualize all intermediate steps
@@ -43,7 +43,6 @@ def main():
     """
     input_path = os.path.join("data", "raw", "right_00001357.npy")
 
-    # Initialize with required metadata - no longer passed to run()
     aging1357 = Segmentation1357(
         input_path=input_path,
         video_id="1357",
@@ -51,15 +50,8 @@ def main():
         n_segments=64
     )
 
-    # Debug mode: visualize all intermediate steps using overridden methods
-    print("Running pipeline in debug mode with optimized parameters...\n")
-    aging1357.run(debug=True, debug_pause=False)
-
-    # For step-by-step debugging with pauses:
-    # aging1357.run(debug=True, debug_pause=True)
-
-    # For production (clean execution, no intermediate visualization):
-    # aging1357.run()
+    # aging1357.run(debug=True, debug_pause=False)
+    aging1357.display_saved_results()
 
     return
 

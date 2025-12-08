@@ -29,27 +29,33 @@ class Pipeline308(KneeSegmentationPipeline):
         self.radial_cfg.tip_range = (0.05, 0.5) 
         self.radial_cfg.midpoint_range = (0.5, 0.95)
 
-    def preprocess(self, video):
+    def preprocess(self, video=None, rot90_k=1, rot_angle=None, crop_size=500, empty_fill_value=None, inplace=False):
         print("Preprocessing video (308 specific)...")
+        if video is None:
+            video = self.video
+
         # 1. Rot90
         if self.pre_cfg.rot90_k:
             video = np.rot90(video, k=self.pre_cfg.rot90_k, axes=(1, 2))
-            
+
         # 2. First crop
         video = utils.center_crop(video, int(500 * np.sqrt(2)))
-        
+
         # 3. Rotate
         video = utils.rotate_video(video, -15)
-        
+
         # 4. Fill empty
         video[video == 0] = 22
-        
+
         # 5. Second crop (rectangular)
         video = utils.center_crop(video, 500, 450)
-        
+
         # 6. Flip
         video = np.flip(video, axis=2)
-        
+
+        if inplace:
+            self.processed_video = video
+
         return video
 
     def refine_femur_mask(self, mask):

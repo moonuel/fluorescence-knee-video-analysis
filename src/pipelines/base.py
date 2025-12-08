@@ -142,7 +142,7 @@ class KneeSegmentationPipeline:
     # Preprocessing
     # ------------------------------------------------------------------
 
-    def preprocess(self, video=None, rot90_k=1, crop_size=500, empty_fill_value=None, inplace=False):
+    def preprocess(self, video=None, rot90_k=1, rot_angle = None, crop_size=500, empty_fill_value=None, inplace=False):
         """
         Default preprocessing: rotation → center crop → empty fill.
         Subclasses can override for brightness, denoising, etc.
@@ -152,6 +152,9 @@ class KneeSegmentationPipeline:
 
         if rot90_k:
             video = np.rot90(video, k=rot90_k, axes=(1, 2))
+
+        if rot_angle:
+            video = utils.rotate_video(video, rot_angle)
 
         video = utils.center_crop(video, crop_size)
 
