@@ -11,8 +11,9 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from dataclasses import dataclass, field, asdict, is_dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import sys
+import argparse
 
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -203,9 +204,9 @@ def save_analysis_to_excel(total_sums: np.ndarray,
 def compute_sums_nonzeros(mask_path, video_path):
 
     # Load data
-    processed_dir = PROJECT_ROOT / "data" / "processed"
-    mask_path = processed_dir / mask_path
-    video_path = processed_dir / video_path
+    segmented_dir = PROJECT_ROOT / "data" / "segmented"
+    mask_path = segmented_dir / mask_path
+    video_path = segmented_dir / video_path
 
     masks = load_masks(mask_path)
     video = load_video(video_path)
@@ -245,6 +246,102 @@ def compute_sums_nonzeros(mask_path, video_path):
 
     return total_sums, total_nonzero
 
+
+def discover_available_videos(segmented_dir: Path) -> Dict[int, Dict]:
+    """
+    Scan directory for segmented video files and extract metadata.
+    Returns: {video_id: {'type': str, 'N_values': set}}
+    """
+    videos = {}
+    pattern = "*_video_N*.npy"
+
+    for file in segmented_dir.glob(pattern):
+        # Parse: "aging_1339_video_N64.npy" or "normal_0308_video_N16.npy"
+        parts = file.stem.split("_")
+        knee_type = parts[0]  # "aging" or "normal"
+        video_id_str = parts[1]  # "1339" or "0308"
+        N_part = parts[3]  # "N64" or "N16"
+
+        video_id = int(video_id_str)
+        N = int(N_part[1:])  # Extract number after 'N'
+
+        if video_id not in videos:
+            videos[video_id] = {'type': knee_type, 'N_values': set()}
+        videos[video_id]['N_values'].add(N)
+
+    return videos
+
+
+def parse_arguments():
+    """
+    Parse command line arguments with dynamic validation based on available files.
+    """
+    parser = argparse.ArgumentParser(
+        description="Prepare intensity data for knee video analysis",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Examples:\n"
+               "  python prepare_intensity_data.py --list\n"
+               "  python prepare_intensity_data.py 1339 64"
+    )
+
+    parser.add_argument(
+        '--list',
+        action='store_true',
+        help="List all available video IDs and segment counts"
+    )
+
+    parser.add_argument(
+        'video_id',
+        type=int,
+        nargs='?',
+        help="Video ID number"
+    )
+
+    parser.add_argument(
+        'N',
+        type=int,
+        nargs='?',
+        help="Number of radial segments"
+    )
+
+    args = parser.parse_args()
+
+    # Discover available videos
+    segmented_dir = PROJECT_ROOT / "data" / "segmented"
+    available = discover_available_videos(segmented_dir)
+
+    # Handle --list mode
+    if args.list:
+        print("\n📋 Available videos in data/segmented:\n")
+        for vid, info in sorted(available.items()):
+            n_vals = ', '.join(f"N={n}" for n in sorted(info['N_values']))
+            print(f"  {vid:4d} ({info['type']:6s}) - {n_vals}")
+        sys.exit(0)
+
+    # Validate required arguments
+    if args.video_id is None or args.N is None:
+        parser.error("video_id and N are required (or use --list)")
+
+    # Validate video_id exists
+    if args.video_id not in available:
+        valid_ids = ', '.join(str(v) for v in sorted(available.keys()))
+        parser.error(
+            f"Video ID {args.video_id} not found.\n"
+            f"Available IDs: {valid_ids}\n"
+            f"Use --list to see details."
+        )
+
+    # Validate N value exists for this video
+    if args.N not in available[args.video_id]['N_values']:
+        valid_n = ', '.join(f"N={n}" for n in sorted(available[args.video_id]['N_values']))
+        parser.error(
+            f"N={args.N} not available for video {args.video_id}.\n"
+            f"Available: {valid_n}"
+        )
+
+    return args.video_id, args.N, available[args.video_id]['type']
+
+
 # Store cycle ranges here
 CYCLES = {
     1207: "242-254	264-280	281-293	299-312	318-335	337-352	353-372	373-389	391-411	412-431	434-451	453-467	472-486	488-505	614-632	633-651	652-671	672-690	693-708	709-727	731-748	751-767	768-786	787-804	807-822	824-841	844-862	863-877",
@@ -254,7 +351,8 @@ CYCLES = {
 
     1339: "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609",
     1342: "62-81	82-100	102-119	123-151	152-171	178-199",
-    1358: "1360-1384	1385-1406	1407-1433	1434-1454	1461-1483	1484-1508	1509-1540	1541-1559	1618-1648	1649-1669	1672-1696	1697-1720	1721-1748"
+    1357: "218-240	241-272	278-305	306-330 420-447	449-467	469-492	493-517 639-660	662-682	683-709	710-732	744-775	777-779	801-828	837-858	859-890	893-917	1067-1091	1092-1118	1136-1171	1173-1198	1199-1230	1232-1260	1261-1285	1286-1311	1313-1340	1342-1365	1368-1394	1395-1419",
+    1358: "1360-1384	1385-1406	1407-1433	1434-1454	1461-1483	1484-1508	1509-1540	1541-1559	1618-1648	1649-1669	1672-1696	1697-1720	"#1721-1748"
 }
 
 # Store knee types here
@@ -266,24 +364,28 @@ TYPES = {
 
     1339: "aging",
     1342: "aging",
+    1357: "aging",
     1358: "aging"
 }
 
 assert CYCLES.keys() == TYPES.keys()
 
-def main(video_id:int, N:int):
-    
+def main(video_id:int, N:int, knee_type:str):
+    """
+    Main function to process knee video intensity data.
+
+    Args:
+        video_id: Video ID number (e.g., 1339)
+        N: Number of radial segments (e.g., 64)
+        knee_type: Type of knee ("normal" or "aging")
+    """
     # Select data
-    # video_id = 1342
-    # N = 64
-    # -------------------------------------------------------------------------------
-    type = TYPES[video_id]
-    processed_dir = PROJECT_ROOT / "data" / "processed"
-    masks = load_masks(processed_dir / f"{video_id}_{type}_radial_masks_N{N}.npy")
-    video = load_video(processed_dir / f"{video_id}_{type}_radial_video_N{N}.npy")
+    segmented_dir = PROJECT_ROOT / "data" / "segmented"
+    masks = load_masks(segmented_dir / f"{knee_type}_{video_id:04d}_radial_N{N}.npy")
+    video = load_video(segmented_dir / f"{knee_type}_{video_id:04d}_video_N{N}.npy")
     cycles = [c.split("-") for c in CYCLES[video_id].split()]
 
-    print(f"---------- {video_id=}, {type=}, {N=} ----------")
+    print(f"---------- {video_id=}, {knee_type=}, {N=} ----------")
     views.show_frames([masks * (255 // np.max(masks)), video])
     # breakpoint()
 
@@ -335,14 +437,8 @@ def main(video_id:int, N:int):
 
 
 if __name__ == "__main__":
-
-    if len(sys.argv[1:]) != 2 or not sys.argv[1] in str(TYPES.keys()): 
-        raise SyntaxError(f"\n\t{sys.argv[0]} expects args: video_id N \n\tExample usage: {sys.argv[0]} 1339 64 \n\tvideo ids: {list(TYPES.keys())}")
-
-    video_id = int(sys.argv[1])
-    N = int(sys.argv[2])
-
-    main(video_id, N)
+    video_id, N, knee_type = parse_arguments()
+    main(video_id, N, knee_type)
 
 # Example usage:
 
