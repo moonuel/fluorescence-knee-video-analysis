@@ -32,6 +32,6 @@ class DMM_4W(KneeSegmentationPipeline):
         return super().radial_segmentation(mask, femur_mask, n_lines, n_segments, tip_range, midpoint_range, smooth_window, inplace)
 
 if __name__ == "__main__":
-    pipeline = DMM_4W("data/raw/dmm 4w 550 frames 17 cycles 1_00000091.npy", "4w", "dmm", 64)
+    pipeline = DMM_4W("data/raw/dmm 4w 550 frames 17 cycles 1_00000091.npy", "0091", "dmm4w", 64)
     # pipeline.run(debug=True)
     pipeline.display_saved_results()
