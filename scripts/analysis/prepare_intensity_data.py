@@ -426,7 +426,7 @@ def main(video_id:int, N:int, knee_type:str):
 
     breakpoint()
 
-    intensities_dir = PROJECT_ROOT / "data" / "video_intensities"
+    intensities_dir = PROJECT_ROOT / "data" / "intensities_total"
     intensities_dir.mkdir(exist_ok=True)  # Ensure directory exists
     output_file = intensities_dir / f"{video_id}N{N}intensities.xlsx"
     with pd.ExcelWriter(output_file) as writer:

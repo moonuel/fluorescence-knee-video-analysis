@@ -97,7 +97,7 @@ def load_excel_data(video_number, segment_count):
     Raises:
         ValueError: If expected Excel file doesn't exist
     """
-    input_xlsx = fr"../data/video_intensities/{video_number}N{segment_count}intensities.xlsx"
+    input_xlsx = fr"../data/intensities_total/{video_number}N{segment_count}intensities.xlsx"
     
     if not os.path.isfile(input_xlsx):
         raise ValueError(

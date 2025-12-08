@@ -76,7 +76,7 @@ def validate_input_file(video_number: int, segment_count: int) -> str:
 
     Exits the program if the file doesn't exist.
     """
-    input_xlsx = PROJECT_ROOT / "data" / "video_intensities" / f"{video_number}N{segment_count}intensities.xlsx"
+    input_xlsx = PROJECT_ROOT / "data" / "intensities_total" / f"{video_number}N{segment_count}intensities.xlsx"
     if not input_xlsx.exists():
         print(f"Error: File '{video_number}N{segment_count}intensities.xlsx' doesn't exist.")
         print(f"       Is video_number={video_number} and segment_count={segment_count} correct?")

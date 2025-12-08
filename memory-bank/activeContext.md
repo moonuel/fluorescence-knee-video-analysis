@@ -38,7 +38,7 @@ The project has implemented a complete spatiotemporal analysis pipeline for fluo
 
 ### Data Organization
 - Video data stored as `.npy` arrays in `../data/processed/`
-- Intensity data exported to Excel files in `../data/video_intensities/`
+- Intensity data exported to Excel files in `../data/intensities_total/`
 - Analysis outputs saved to `../figures/` directory
 
 ### Processing Workflow
