@@ -87,21 +87,27 @@ def split_three_parts_indexwise(total_sums: np.ndarray,
     return region_arrays
 
 
-def compute_centre_of_mass_region(region_sums: np.ndarray) -> np.ndarray:
-    """Compute intra-region COM per frame in local 1..N_region coordinates.
+def compute_centre_of_mass_region(region_sums: np.ndarray,
+                                  positions: np.ndarray | None = None) -> np.ndarray:
+    """Compute intra-region COM per frame using specified position coordinates.
 
     Parameters
     ----------
     region_sums : np.ndarray
         Shape (N_region, n_frames).
+    positions : np.ndarray, optional
+        Shape (N_region,), position coordinates for each segment.
+        If None, uses 1..N_region (local coordinates).
 
     Returns
     -------
     com : np.ndarray
-        Shape (n_frames,), COM values in range [1, N_region].
+        Shape (n_frames,), COM values in the coordinate system specified by positions.
     """
     N_region, nfs = region_sums.shape
-    positions = np.arange(1, N_region + 1).reshape(-1, 1)
+    if positions is None:
+        positions = np.arange(1, N_region + 1)
+    positions = positions.reshape(-1, 1)
 
     weighted = (positions * region_sums).sum(axis=0)
     totals = region_sums.sum(axis=0)
@@ -322,7 +328,10 @@ def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.n
 
     axes[-1].set_xlabel("Frame index")
     fig.suptitle(f"Intra-region COM for selected cycles")
-    plt.legend()
+
+    # Place legend on the top subplot (SB)
+    axes[0].legend(loc="best")
+
     plt.tight_layout()
     plt.show()
 
@@ -450,7 +459,10 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
 
     axes[-1].set_xlabel("Knee Angle (°)")
     fig.suptitle(f"Intra-region COM for selected cycles (angle-based)")
-    plt.legend()
+
+    # Place legend on the top subplot (SB)
+    axes[0].legend(loc="best")
+
     plt.tight_layout()
     plt.show()
 
@@ -481,9 +493,12 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
         # Split into three anatomical parts
         region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
 
-        # Compute intra-region COM over full time series
+        # Compute intra-region COM over full time series using true segment indices
         region_coms_full = {
-            region.name: compute_centre_of_mass_region(region_arrays[region.name])
+            region.name: compute_centre_of_mass_region(
+                region_arrays[region.name],
+                positions=np.arange(region.start_idx, region.end_idx + 1)
+            )
             for region in region_ranges
         }
 
@@ -501,11 +516,11 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                 frame_ranges = [cycle.flex, cycle.ext]
                 phase_labels = ["flexion", "extension"]
 
-            # Create legend label showing frame ranges
+            # Create legend label showing frame ranges (convert from 0-based to 1-based for transparency)
             if phase == "both":
-                legend_label = f"Cycle {cycle_idx}, frames {cycle.flex.start}-{cycle.flex.end} and {cycle.ext.start}-{cycle.ext.end}"
+                legend_label = f"Cycle {cycle_idx+1}, frames {cycle.flex.start+1}-{cycle.flex.end+1} and {cycle.ext.start+1}-{cycle.ext.end+1}"
             else:
-                legend_label = f"Cycle {cycle_idx}, {phase}"
+                legend_label = f"Cycle {cycle_idx+1}, {phase}"
 
             for fr, phase_label in zip(frame_ranges, phase_labels):
                 region_coms_window = {
@@ -538,9 +553,12 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
         # Split into three anatomical parts
         region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
 
-        # Compute intra-region COM over full time series
+        # Compute intra-region COM over full time series using true segment indices
         region_coms_full = {
-            region.name: compute_centre_of_mass_region(region_arrays[region.name])
+            region.name: compute_centre_of_mass_region(
+                region_arrays[region.name],
+                positions=np.arange(region.start_idx, region.end_idx + 1)
+            )
             for region in region_ranges
         }
 
@@ -584,9 +602,9 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
 
             # Create legend label
             if phase == "both":
-                legend_label = f"Cycle {cycle_idx}, frames {cycle.flex.start}-{cycle.flex.end} and {cycle.ext.start}-{cycle.ext.end}"
+                legend_label = f"Cycle {cycle_idx+1}, frames {cycle.flex.start+1}-{cycle.flex.end+1} and {cycle.ext.start+1}-{cycle.ext.end+1}"
             else:
-                legend_label = f"Cycle {cycle_idx}, {phase}"
+                legend_label = f"Cycle {cycle_idx+1}, {phase}"
 
             all_cycle_data.append((
                 cycle_com_data,           # interpolated COM data per region
