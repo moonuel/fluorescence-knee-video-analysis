@@ -38,6 +38,92 @@ def load_video_data(condition, id, nsegs) -> Tuple[np.ndarray, np.ndarray]:
     return video, radial_masks
 
 
+def draw_segment_boundaries(video: np.ndarray, radial_regions: np.ndarray, meta) -> np.ndarray:
+    """
+    Draws the segment boundaries on the video, for verification before showing final results.
+
+    Shows only JC-OT and OT-SB boundaries as white overlay lines on grayscale video.
+
+    Args:
+        video: Video array of shape (nframes, h, w)
+        radial_regions: Mask array of shape (nframes, h, w) with segment labels
+        meta: KneeVideoMeta object with region information
+
+    Returns:
+        Video with boundary overlay
+    """
+    # Input validation
+    assert video.shape == radial_regions.shape, f"Shape mismatch: video {video.shape} vs radial_regions {radial_regions.shape}"
+    assert video.dtype == np.uint8, f"Video must be uint8, got {video.dtype}"
+    assert radial_regions.dtype in [np.uint8, np.int32, np.int64], f"Radial regions must be integer type, got {radial_regions.dtype}"
+
+    # Get segment ranges from metadata
+    jc_start, jc_end = meta.regions["JC"].start, meta.regions["JC"].end
+    ot_start, ot_end = meta.regions["OT"].start, meta.regions["OT"].end
+    sb_start, sb_end = meta.regions["SB"].start, meta.regions["SB"].end
+
+    # For efficiency, only consider boundaries between these specific segment pairs
+    # JC-OT: between jc_end and ot_start
+    # OT-SB: between ot_end and sb_start
+    boundary_pairs = {
+        (jc_end, ot_start),  # JC-OT
+        (ot_start, jc_end),
+        (ot_end, sb_start),  # OT-SB
+        (sb_start, ot_end),
+    }
+
+    # Create boundary mask
+    boundaries = np.zeros_like(video, dtype=bool)
+    nfs, h, w = video.shape
+
+    for f in range(nfs):
+        seg = radial_regions[f]
+
+        # Horizontal neighbors (left-right)
+        if w > 1:
+            left  = seg[:, :-1]
+            right = seg[:, 1:]
+
+            # Both pixels must be valid segments (not background)
+            valid = (left > 0) & (right > 0)
+
+            # Check if this neighbor pair is a boundary we care about
+            is_boundary = np.zeros_like(valid, dtype=bool)
+            for pair in boundary_pairs:
+                is_boundary |= ((left == pair[0]) & (right == pair[1]))
+
+            h_mask = valid & is_boundary
+
+            # Mark boundary pixels (both sides of the edge)
+            boundaries[f, :, :-1] |= h_mask
+            boundaries[f, :, 1:]  |= h_mask
+
+        # Vertical neighbors (up-down)
+        if h > 1:
+            up    = seg[:-1, :]
+            down  = seg[1:, :]
+
+            # Both pixels must be valid segments (not background)
+            valid = (up > 0) & (down > 0)
+
+            # Check if this neighbor pair is a boundary we care about
+            is_boundary = np.zeros_like(valid, dtype=bool)
+            for pair in boundary_pairs:
+                is_boundary |= ((up == pair[0]) & (down == pair[1]))
+
+            v_mask = valid & is_boundary
+
+            # Mark boundary pixels (both sides of the edge)
+            boundaries[f, :-1, :] |= v_mask
+            boundaries[f, 1:, :]  |= v_mask
+
+    # Create grayscale overlay: white lines on original video
+    overlay = video.copy()
+    overlay[boundaries] = 255
+
+    return overlay
+
+
 def load_intensity_data(video: np.ndarray,
                         masks: np.ndarray
                         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -259,7 +345,8 @@ def build_angle_axis_for_cycles(cycle_indices: List[int],
     return cycle_x_offsets, cycle_angles, cycle_lengths
 
 
-def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange', Cycle]]
+def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange', Cycle]],
+                                      video_title: str
                                       ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs frame index for multiple cycles.
 
@@ -327,7 +414,7 @@ def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.n
         ax.set_title(f"{name} Intra-region COM")
 
     axes[-1].set_xlabel("Frame index")
-    fig.suptitle(f"Intra-region COM for selected cycles")
+    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -338,7 +425,8 @@ def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.n
 
 def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
                                       phase: str,
-                                      n_interp_samples: int
+                                      n_interp_samples: int,
+                                      video_title: str
                                       ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs angle for multiple cycles.
 
@@ -458,7 +546,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
             ax.set_xticklabels(all_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"Intra-region COM for selected cycles (angle-based)")
+    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based)")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -472,6 +560,9 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
     if cycle_indices is None:
         cycle_indices = [0]
 
+    print(f"Loading video: {condition} {id} (N{nsegs})")
+    print(f"Processing cycles: {cycle_indices} in {mode} mode")
+
     # Get metadata
     meta = get_knee_meta(condition, int(id), int(nsegs))
 
@@ -479,7 +570,14 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
         # Original frame-based mode
         # Load video and masks
         video, masks = load_video_data(condition, id, nsegs)
-        views.show_frames([video, (masks*(255//64))], "Validate data")
+
+        # Draw segment boundaries on video
+        video_with_boundaries = draw_segment_boundaries(video, masks, meta)
+        # Add outer knee boundary
+        video_with_boundaries = views.draw_outer_radial_mask_boundary(
+            video_with_boundaries, masks, intensity=255, thickness=1
+        )
+        views.show_frames([video_with_boundaries, (masks*(255//64))], "Validate data with segment boundaries")
 
         # Compute intensity data
         total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
@@ -533,13 +631,21 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                 all_region_coms.append((region_coms_window, cycle_info, fr, cycle))
 
         # Plot the results
-        plot_intra_region_coms_frame_mode(all_region_coms)
+        video_title = f"{condition} {id} (N{nsegs})"
+        plot_intra_region_coms_frame_mode(all_region_coms, video_title)
 
     else:  # mode == "angle"
         # New angle-based mode with interpolation and contiguous plotting
         # Load video and masks
         video, masks = load_video_data(condition, id, nsegs)
-        views.show_frames([video, (masks*(255//64))], "Validate data")
+
+        # Draw segment boundaries on video
+        video_with_boundaries = draw_segment_boundaries(video, masks, meta)
+        # Add outer knee boundary
+        video_with_boundaries = views.draw_outer_radial_mask_boundary(
+            video_with_boundaries, masks, intensity=255, thickness=1
+        )
+        views.show_frames([video_with_boundaries, (masks*(255//64))], "Validate data with segment boundaries")
 
         # Compute intensity data
         total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
@@ -615,7 +721,8 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
             ))
 
         # Plot the results
-        plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples)
+        video_title = f"{condition} {id} (N{nsegs})"
+        plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples, video_title)
 
 
 if __name__ == "__main__":

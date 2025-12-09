@@ -650,7 +650,7 @@ def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: 
 
     Args:
         video (np.ndarray): Grayscale video of shape (nframes, h, w), dtype uint8.
-        mask_labels (np.ndarray): Labeled mask array of shape (nframes, h, w), 
+        mask_labels (np.ndarray): Labeled mask array of shape (nframes, h, w),
                                   where 0 = background, 1..N = partitions.
         intensity (int): Pixel intensity for boundary (0–255).
         thickness (int): Thickness of boundary lines.
@@ -673,6 +673,50 @@ def draw_mask_boundaries(video: np.ndarray, mask_labels: np.ndarray, intensity: 
 
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             cv2.drawContours(output[i], contours, -1, color=intensity, thickness=thickness)
+
+    return output
+
+
+def draw_outer_radial_mask_boundary(video: np.ndarray, mask_labels: np.ndarray,
+                                   intensity: int = 255, thickness: int = 1,
+                                   show_video: bool = False) -> np.ndarray:
+    """
+    Draws the outer boundary of the union of all non-zero radial-mask labels.
+
+    This draws a single outer contour around the entire knee region, derived from
+    the union of all radial segments.
+
+    Args:
+        video: Grayscale video, shape (nframes, h, w), dtype uint8.
+        mask_labels: Radial mask labels, shape (nframes, h, w), values 0..N.
+        intensity: Pixel intensity for boundary (0–255).
+        thickness: Line thickness in pixels.
+        show_video: If True, preview with show_frames.
+
+    Returns:
+        Video with outer boundary overlaid, same shape/dtype as input.
+    """
+    assert video.shape == mask_labels.shape, (
+        f"Shape mismatch: video {video.shape} vs mask_labels {mask_labels.shape}"
+    )
+    if video.dtype != np.uint8:
+        video = video.astype(np.uint8)
+
+    nframes, h, w = video.shape
+    output = video.copy()
+
+    for i in range(nframes):
+        frame = output[i]
+        labels = mask_labels[i]
+
+        # Collapse labels 1..N into a single binary mask for outer boundary
+        binary = (labels > 0).astype(np.uint8) * 255
+
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(frame, contours, -1, color=intensity, thickness=thickness)
+
+    if show_video:
+        show_frames(output, title="Outer radial mask boundary")
 
     return output
 
