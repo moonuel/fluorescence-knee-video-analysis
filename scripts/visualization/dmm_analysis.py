@@ -390,7 +390,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
 
             # Extension part: 135° → 30°
             ext_labels = np.linspace(135, 30, n_interp_samples)
-            ext_target_angles = np.arange(120, 29, -15)  # 120, 105, 90, 75, 60, 45, 30 (skip 135)
+            ext_target_angles = np.arange(120, 44, -15)  # 120, 105, 90, 75, 60, 45 (skip 135 and 30)
             for target_angle in ext_target_angles:
                 idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
                 all_tick_positions.append(x_positions[idx])
@@ -413,26 +413,34 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
             ax.plot(x_positions, com, label=label, color=color)
 
         # Add cycle demarcation lines
-        for cycle_com_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-            if phase == "flexion":
-                # Black lines at start and end of flexion
-                ax.axvline(x_positions[0], color='black', linestyle='-', linewidth=1)
-                ax.axvline(x_positions[-1], color='black', linestyle='-', linewidth=1)
-            elif phase == "extension":
-                # Black lines at start and end of extension
-                ax.axvline(x_positions[0], color='black', linestyle='-', linewidth=1)
-                ax.axvline(x_positions[-1], color='black', linestyle='-', linewidth=1)
-            else:  # "both"
-                # Black lines at start of flexion and end of extension
-                ax.axvline(x_positions[0], color='black', linestyle='-', linewidth=1)
-                ax.axvline(x_positions[-1], color='black', linestyle='-', linewidth=1)
-                # Gray dashed lines at flex/ext transition
-                ax.axvline(x_positions[n_interp_samples - 1], color='gray', linestyle='--', linewidth=1)
-                ax.axvline(x_positions[n_interp_samples], color='gray', linestyle='--', linewidth=1)
+        # Black lines: boundaries between cycles
+        # Gray lines: flex/ext transitions within each cycle
+        for i, (cycle_com_data, x_positions, angles, legend_label, cycle) in enumerate(all_cycle_data):
+            # Black line at start of each cycle (except if it's the first cycle's start)
+            if i > 0:  # Not the first cycle
+                cycle_start = x_positions[0]
+                ax.axvline(cycle_start, color='black', linestyle='-', linewidth=1)
+
+        # Black line at end of last cycle
+        last_cycle_end = all_cycle_data[-1][1][-1]
+        ax.axvline(last_cycle_end, color='black', linestyle='-', linewidth=1)
+
+        # Gray lines at flex/ext transitions (only for "both" phase)
+        if phase == "both":
+            for cycle_com_data, x_positions, angles, legend_label, cycle in all_cycle_data:
+                transition_line = x_positions[n_interp_samples-1]
+                ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
 
         ax.set_ylabel(f"{name} COM")
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region COM")
+
+    # Set x-axis limits to eliminate empty space
+    if all_cycle_data:
+        min_x = min(x_positions[0] for _, x_positions, _, _, _ in all_cycle_data)
+        max_x = max(x_positions[-1] for _, x_positions, _, _, _ in all_cycle_data)
+        for ax in axes:
+            ax.set_xlim(min_x, max_x)
 
     # Set x-axis ticks and labels for all subplots
     if all_tick_positions:
