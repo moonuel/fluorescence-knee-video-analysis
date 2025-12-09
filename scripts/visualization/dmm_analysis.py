@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from utils import io, views, utils
 from core import data_processing as dp
-from config.knee_metadata import get_knee_meta
+from config.knee_metadata import get_knee_meta, Cycle
 import sys
 
 @dataclass
@@ -138,23 +138,33 @@ def extract_frame_window(com_series: np.ndarray,
     return com_series[frame_start:frame_end + 1]
 
 
-def plot_intra_region_coms(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange']]
+def plot_intra_region_coms(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange', Cycle]]
                            ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs frame index for multiple cycles.
 
     Parameters
     ----------
-    all_region_coms : List[Tuple[Dict[str, np.ndarray], str, FrameRange]]
-        List of (region_coms, cycle_info, frame_range) for each cycle to plot.
+    all_region_coms : List[Tuple[Dict[str, np.ndarray], str, FrameRange, Cycle]]
+        List of (region_coms, cycle_info, frame_range, cycle) for each cycle to plot.
     """
     fig, axes = plt.subplots(3, 1, sharex=False, figsize=(12, 10))
     region_order = ["SB", "OT", "JC"]  # top to bottom
 
     for ax, name in zip(axes, region_order):
-        for region_coms, cycle_info, fr in all_region_coms:
+        for region_coms, cycle_info, fr, cycle in all_region_coms:
             com = region_coms[name]
             t = np.arange(fr.start, fr.end + 1)
             ax.plot(t, com, label=cycle_info)
+
+        # Add vertical reference lines for all cycles
+        for _, _, fr, cycle in all_region_coms:
+            # Black lines at cycle start and end
+            ax.axvline(fr.start, color='black', linestyle='-', linewidth=1)
+            ax.axvline(fr.end, color='black', linestyle='-', linewidth=1)
+            # Dashed gray lines at midpoint of cycle
+            ax.axvline(cycle.flex.end, color='gray', linestyle='--', linewidth=1)
+            ax.axvline(cycle.ext.start, color='gray', linestyle='--', linewidth=1)
+
         ax.set_ylabel(f"{name} COM")
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region COM")
@@ -217,7 +227,7 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both"):
         }
 
         cycle_info = f"cycle {cycle_idx}, {phase}"
-        all_region_coms.append((region_coms_window, cycle_info, fr))
+        all_region_coms.append((region_coms_window, cycle_info, fr, cycle))
 
     # Plot the results
     plot_intra_region_coms(all_region_coms)
