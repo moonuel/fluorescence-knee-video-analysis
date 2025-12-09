@@ -10,19 +10,19 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import io, views
+from utils import io, views, utils
 from core import data_processing as dp
-
+import sys
 
 @dataclass
 class RegionRange:
     """Defines a contiguous anatomical region by segment indices."""
     name: str
-    start_idx: int  # 0-based inclusive start index in total_sums
-    end_idx: int    # 0-based exclusive end index in total_sums
+    start_idx: int  # 1-based inclusive start segment in total_sums
+    end_idx: int    # 1-based inclusive end segment in total_sums
 
 
-def load_video_data() -> Tuple[np.ndarray, np.ndarray]:
+def load_video_data(condition, id, nsegs) -> Tuple[np.ndarray, np.ndarray]:
     """Load centered DMM video and its radial masks.
 
     Returns
@@ -32,9 +32,8 @@ def load_video_data() -> Tuple[np.ndarray, np.ndarray]:
     masks : np.ndarray
         Shape (n_frames, H, W), dtype uint8, labels 1..64.
     """
-    # TODO: Update paths to actual DMM data files
-    video = io.load_nparray("data/segmented/normal_1207_video_N64.npy")
-    radial_masks = io.load_nparray("data/segmented/normal_1207_radial_N64.npy")
+    video = io.load_nparray(f"data/segmented/{condition}_{id}_video_N{nsegs}.npy")
+    radial_masks = io.load_nparray(f"data/segmented/{condition}_{id}_radial_N{nsegs}.npy")
     return video, radial_masks
 
 
@@ -83,7 +82,7 @@ def split_three_parts_indexwise(total_sums: np.ndarray,
     """
     region_arrays = {}
     for region in region_ranges:
-        region_arrays[region.name] = total_sums[region.start_idx:region.end_idx, :]
+        region_arrays[region.name] = total_sums[region.start_idx - 1:region.end_idx, :]
     return region_arrays
 
 
@@ -171,23 +170,32 @@ def plot_intra_region_coms(region_coms: Dict[str, np.ndarray],
     plt.show()
 
 
-def main():
+def main(condition, id, nsegs):
     """Main analysis pipeline."""
     # Load video and masks
-    video, masks = load_video_data()
+    video, masks = load_video_data(condition, id, nsegs)
+    views.show_frames([video, (masks*(255//64))], "Validate data")
+
+    # Normalize video intensity
+    # video = utils.normalize_video_intensity(video)
+    # views.show_frames(video, "Validate intensity normalization")
 
     # Compute intensity data
     total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
 
-    # Define anatomical regions (0-based indices in total_sums)
-    # JC: segments 1-29 -> indices 0-28 (29 elements)
-    # OT: segments 30-42 -> indices 29-41 (13 elements)
-    # SB: segments 43-64 -> indices 42-63 (22 elements)
+    # Define anatomical regions (1-based inclusive segments)
+    # JC: segments 1-29 (29 elements)
+    # OT: segments 30-47 (18 elements)
+    # SB: segments 48-64 (17 elements)
     region_ranges = [
-        RegionRange("JC", 0, 29),
-        RegionRange("OT", 29, 42),
-        RegionRange("SB", 42, 64),
+        RegionRange("JC", 1, 29),
+        RegionRange("OT", 30, 47),
+        RegionRange("SB", 48, 64),
     ]
+
+  # Extract frame window: 242-352 (1-based) -> 241-352 (0-based inclusive)
+    frame_start = int(input("Frame start: "))
+    frame_end = int(input("Frame end: "))
 
     # Split into three anatomical parts
     region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
@@ -197,10 +205,6 @@ def main():
         region.name: compute_centre_of_mass_region(region_arrays[region.name])
         for region in region_ranges
     }
-
-    # Extract frame window: 242-352 (1-based) -> 241-352 (0-based inclusive)
-    frame_start = 241
-    frame_end = 352
 
     region_coms_window = {
         name: extract_frame_window(com, frame_start, frame_end)
@@ -212,4 +216,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    condition, id, nsegs = sys.argv[1:4]
+    main(condition, id, nsegs)
