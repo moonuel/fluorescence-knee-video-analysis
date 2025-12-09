@@ -138,8 +138,123 @@ def extract_frame_window(com_series: np.ndarray,
     return com_series[frame_start:frame_end + 1]
 
 
-def plot_intra_region_coms(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange', Cycle]]
-                           ) -> None:
+def interpolate_com_to_angle(com_series: np.ndarray,
+                             n_samples: int,
+                             angle_start: float,
+                             angle_end: float
+                             ) -> Tuple[np.ndarray, np.ndarray]:
+    """Interpolate COM series to fixed number of samples over an angle range.
+
+    Parameters
+    ----------
+    com_series : np.ndarray
+        Shape (n_frames,), COM values for this phase.
+    n_samples : int
+        Number of samples to interpolate to.
+    angle_start : float
+        Starting angle in degrees.
+    angle_end : float
+        Ending angle in degrees.
+
+    Returns
+    -------
+    interpolated_com : np.ndarray
+        Shape (n_samples,), interpolated COM values.
+    angles : np.ndarray
+        Shape (n_samples,), corresponding angle values.
+    """
+    # Create angle array
+    angles = np.linspace(angle_start, angle_end, n_samples)
+
+    # Create frame indices for interpolation
+    n_frames = len(com_series)
+    frame_indices = np.linspace(0, n_frames - 1, n_samples)
+
+    # Interpolate COM values
+    interpolated_com = np.interp(frame_indices, np.arange(n_frames), com_series)
+
+    return interpolated_com, angles
+
+
+def build_angle_axis_for_cycles(cycle_indices: List[int],
+                               meta: 'KneeVideoMeta',
+                               phase: str,
+                               n_interp_samples: int
+                               ) -> Tuple[List[np.ndarray], List[np.ndarray], List[int]]:
+    """Build contiguous angle axis for multiple cycles.
+
+    Parameters
+    ----------
+    cycle_indices : List[int]
+        Cycle indices to include.
+    meta : KneeVideoMeta
+        Metadata for this knee.
+    phase : str
+        "flexion", "extension", or "both".
+    n_interp_samples : int
+        Samples per phase.
+
+    Returns
+    -------
+    cycle_x_offsets : List[np.ndarray]
+        X-axis positions for each cycle (global coordinates).
+    cycle_angles : List[np.ndarray]
+        Angle arrays for each cycle.
+    cycle_lengths : List[int]
+        Length of each cycle in samples.
+    """
+    cycle_x_offsets = []
+    cycle_angles = []
+    cycle_lengths = []
+    current_offset = 0
+
+    for cycle_idx in cycle_indices:
+        cycle = meta.get_cycle(cycle_idx) # Does this have a purpose?
+
+        if phase == "flexion":
+            # Only flexion phase: 30° → 135°
+            _, angles = interpolate_com_to_angle(
+                np.array([0]), n_interp_samples, 30, 135  # dummy data, we'll replace later
+            )
+            cycle_angles.append(angles)
+            cycle_lengths.append(n_interp_samples)
+            cycle_x_offsets.append(np.arange(current_offset, current_offset + n_interp_samples))
+            current_offset += n_interp_samples
+
+        elif phase == "extension":
+            # Only extension phase: 135° → 30°
+            _, angles = interpolate_com_to_angle(
+                np.array([0]), n_interp_samples, 135, 30  # dummy data, we'll replace later
+            )
+            cycle_angles.append(angles)
+            cycle_lengths.append(n_interp_samples)
+            cycle_x_offsets.append(np.arange(current_offset, current_offset + n_interp_samples))
+            current_offset += n_interp_samples
+
+        else:  # "both" - flexion + extension concatenated
+            # Flexion: 30° → 135°
+            _, flex_angles = interpolate_com_to_angle(
+                np.array([0]), n_interp_samples, 30, 135  # dummy data, we'll replace later
+            )
+            # Extension: 135° → 30°
+            _, ext_angles = interpolate_com_to_angle(
+                np.array([0]), n_interp_samples, 135, 30  # dummy data, we'll replace later
+            )
+
+            # Concatenate angles for this cycle
+            cycle_angle_block = np.concatenate([flex_angles, ext_angles])
+            cycle_angles.append(cycle_angle_block)
+            cycle_lengths.append(2 * n_interp_samples)
+
+            # X positions for this cycle block
+            cycle_x_offsets.append(np.arange(current_offset, current_offset + 2 * n_interp_samples))
+            current_offset += 2 * n_interp_samples
+
+    return cycle_x_offsets, cycle_angles, cycle_lengths
+
+
+def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange', Cycle]]
+                                      ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs frame index for multiple cycles.
 
     Parameters
@@ -212,7 +327,127 @@ def plot_intra_region_coms(all_region_coms: List[Tuple[Dict[str, np.ndarray], st
     plt.show()
 
 
-def main(condition, id, nsegs, cycle_indices=None, phase="both"):
+def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
+                                      phase: str,
+                                      n_interp_samples: int
+                                      ) -> None:
+    """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs angle for multiple cycles.
+
+    Parameters
+    ----------
+    all_cycle_data : List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]]
+        List of (cycle_com_data, x_positions, angles, legend_label, cycle) for each cycle.
+    phase : str
+        "flexion", "extension", or "both".
+    n_interp_samples : int
+        Number of samples per phase used for interpolation.
+    """
+    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(15, 10))
+    region_order = ["SB", "OT", "JC"]  # top to bottom
+
+    # Create color map for consistent cycle coloring
+    unique_cycles = set()
+    for _, _, _, legend_label, _ in all_cycle_data:
+        cycle_num = legend_label.split()[1]  # Extract "N" from "Cycle N, ..."
+        unique_cycles.add(f"Cycle {cycle_num}")
+    cycle_colors = plt.cm.tab10(range(len(unique_cycles)))
+    color_map = dict(zip(sorted(unique_cycles), cycle_colors))
+
+    # Build x-axis ticks for each cycle based on angle positions
+    all_tick_positions = []
+    all_tick_labels = []
+
+    for cycle_com_data, x_positions, angles, legend_label, cycle in all_cycle_data:
+        # Define angle mappings for this cycle's block
+        if phase == "flexion":
+            # Only flexion phase: 30° → 135°
+            flex_labels = np.linspace(30, 135, n_interp_samples)
+            target_angles = np.arange(30, 136, 15)  # 30, 45, 60, 75, 90, 105, 120, 135
+            # Find indices in flex_labels closest to target_angles
+            for target_angle in target_angles:
+                idx = np.argmin(np.abs(flex_labels - target_angle))
+                all_tick_positions.append(x_positions[idx])
+                all_tick_labels.append(f'{int(target_angle)}°')
+
+        elif phase == "extension":
+            # Only extension phase: 135° → 30°
+            ext_labels = np.linspace(135, 30, n_interp_samples)
+            target_angles = np.arange(135, 29, -15)  # 135, 120, 105, 90, 75, 60, 45, 30
+            # Find indices in ext_labels closest to target_angles
+            for target_angle in target_angles:
+                idx = np.argmin(np.abs(ext_labels - target_angle))
+                all_tick_positions.append(x_positions[idx])
+                all_tick_labels.append(f'{int(target_angle)}°')
+
+        else:  # "both" - flexion + extension concatenated
+            # Flexion part: 30° → 135°
+            flex_labels = np.linspace(30, 135, n_interp_samples)
+            flex_target_angles = np.arange(30, 136, 15)  # 30, 45, 60, 75, 90, 105, 120, 135
+            for target_angle in flex_target_angles:
+                idx = np.argmin(np.abs(flex_labels - target_angle))
+                all_tick_positions.append(x_positions[idx])
+                all_tick_labels.append(f'{int(target_angle)}°')
+
+            # Extension part: 135° → 30°
+            ext_labels = np.linspace(135, 30, n_interp_samples)
+            ext_target_angles = np.arange(120, 29, -15)  # 120, 105, 90, 75, 60, 45, 30 (skip 135)
+            for target_angle in ext_target_angles:
+                idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
+                all_tick_positions.append(x_positions[idx])
+                all_tick_labels.append(f'{int(target_angle)}°')
+
+    for ax, name in zip(axes, region_order):
+        # Track which cycles have been labeled to avoid duplicate legend entries
+        labeled_cycles = set()
+
+        for cycle_com_data, x_positions, angles, legend_label, cycle in all_cycle_data:
+            com = cycle_com_data[name]
+            cycle_num = legend_label.split()[1]
+            cycle_key = f"Cycle {cycle_num}"
+            color = color_map[cycle_key]
+
+            # Only add legend label once per cycle
+            label = legend_label if cycle_key not in labeled_cycles else ""
+            labeled_cycles.add(cycle_key)
+
+            ax.plot(x_positions, com, label=label, color=color)
+
+        # Add cycle demarcation lines
+        for cycle_com_data, x_positions, angles, legend_label, cycle in all_cycle_data:
+            if phase == "flexion":
+                # Black lines at start and end of flexion
+                ax.axvline(x_positions[0], color='black', linestyle='-', linewidth=1)
+                ax.axvline(x_positions[-1], color='black', linestyle='-', linewidth=1)
+            elif phase == "extension":
+                # Black lines at start and end of extension
+                ax.axvline(x_positions[0], color='black', linestyle='-', linewidth=1)
+                ax.axvline(x_positions[-1], color='black', linestyle='-', linewidth=1)
+            else:  # "both"
+                # Black lines at start of flexion and end of extension
+                ax.axvline(x_positions[0], color='black', linestyle='-', linewidth=1)
+                ax.axvline(x_positions[-1], color='black', linestyle='-', linewidth=1)
+                # Gray dashed lines at flex/ext transition
+                ax.axvline(x_positions[n_interp_samples - 1], color='gray', linestyle='--', linewidth=1)
+                ax.axvline(x_positions[n_interp_samples], color='gray', linestyle='--', linewidth=1)
+
+        ax.set_ylabel(f"{name} COM")
+        ax.grid(True, alpha=0.3)
+        ax.set_title(f"{name} Intra-region COM")
+
+    # Set x-axis ticks and labels for all subplots
+    if all_tick_positions:
+        for ax in axes:
+            ax.set_xticks(all_tick_positions)
+            ax.set_xticklabels(all_tick_labels)
+
+    axes[-1].set_xlabel("Knee Angle (°)")
+    fig.suptitle(f"Intra-region COM for selected cycles (angle-based)")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n_interp_samples=105):
     """Main analysis pipeline."""
     if cycle_indices is None:
         cycle_indices = [0]
@@ -220,72 +455,161 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both"):
     # Get metadata
     meta = get_knee_meta(condition, int(id), int(nsegs))
 
-    # Load video and masks
-    video, masks = load_video_data(condition, id, nsegs)
-    views.show_frames([video, (masks*(255//64))], "Validate data")
+    if mode == "frame":
+        # Original frame-based mode
+        # Load video and masks
+        video, masks = load_video_data(condition, id, nsegs)
+        views.show_frames([video, (masks*(255//64))], "Validate data")
 
-    # Normalize video intensity
-    # video = utils.normalize_video_intensity(video)
-    # views.show_frames(video, "Validate intensity normalization")
+        # Compute intensity data
+        total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
 
-    # Compute intensity data
-    total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
+        # Get anatomical regions from metadata
+        region_ranges = [
+            RegionRange(name, reg.start, reg.end)
+            for name, reg in meta.regions.items()
+        ]
 
-    # Get anatomical regions from metadata
-    region_ranges = [
-        RegionRange(name, reg.start, reg.end)
-        for name, reg in meta.regions.items()
-    ]
+        # Split into three anatomical parts
+        region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
 
-    # Split into three anatomical parts
-    region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
+        # Compute intra-region COM over full time series
+        region_coms_full = {
+            region.name: compute_centre_of_mass_region(region_arrays[region.name])
+            for region in region_ranges
+        }
 
-    # Compute intra-region COM over full time series
-    region_coms_full = {
-        region.name: compute_centre_of_mass_region(region_arrays[region.name])
-        for region in region_ranges
-    }
+        # Collect data for all selected cycles
+        all_region_coms = []
+        for cycle_idx in cycle_indices:
+            cycle = meta.get_cycle(cycle_idx)
+            if phase == "flexion":
+                frame_ranges = [cycle.flex]
+                phase_labels = ["flexion"]
+            elif phase == "extension":
+                frame_ranges = [cycle.ext]
+                phase_labels = ["extension"]
+            else:  # "both" - plot flexion and extension phases separately, omitting gap
+                frame_ranges = [cycle.flex, cycle.ext]
+                phase_labels = ["flexion", "extension"]
 
-    # Collect data for all selected cycles
-    all_region_coms = []
-    for cycle_idx in cycle_indices:
-        cycle = meta.get_cycle(cycle_idx)
-        if phase == "flexion":
-            frame_ranges = [cycle.flex]
-            phase_labels = ["flexion"]
-        elif phase == "extension":
-            frame_ranges = [cycle.ext]
-            phase_labels = ["extension"]
-        else:  # "both" - plot flexion and extension phases separately, omitting gap
-            frame_ranges = [cycle.flex, cycle.ext]
-            phase_labels = ["flexion", "extension"]
+            # Create legend label showing frame ranges
+            if phase == "both":
+                legend_label = f"Cycle {cycle_idx}, frames {cycle.flex.start}-{cycle.flex.end} and {cycle.ext.start}-{cycle.ext.end}"
+            else:
+                legend_label = f"Cycle {cycle_idx}, {phase}"
 
-        # Create legend label showing frame ranges
-        if phase == "both":
-            legend_label = f"Cycle {cycle_idx}, frames {cycle.flex.start}-{cycle.flex.end} and {cycle.ext.start}-{cycle.ext.end}"
-        else:
-            legend_label = f"Cycle {cycle_idx}, {phase}"
+            for fr, phase_label in zip(frame_ranges, phase_labels):
+                region_coms_window = {
+                    name: extract_frame_window(com, fr.start, fr.end)
+                    for name, com in region_coms_full.items()
+                }
 
-        for fr, phase_label in zip(frame_ranges, phase_labels):
-            region_coms_window = {
-                name: extract_frame_window(com, fr.start, fr.end)
-                for name, com in region_coms_full.items()
-            }
+                # Use the same legend label for both phases of the same cycle
+                cycle_info = legend_label
+                all_region_coms.append((region_coms_window, cycle_info, fr, cycle))
 
-            # Use the same legend label for both phases of the same cycle
-            cycle_info = legend_label
-            all_region_coms.append((region_coms_window, cycle_info, fr, cycle))
+        # Plot the results
+        plot_intra_region_coms_frame_mode(all_region_coms)
 
-    # Plot the results
-    plot_intra_region_coms(all_region_coms)
+    else:  # mode == "angle"
+        # New angle-based mode with interpolation and contiguous plotting
+        # Load video and masks
+        video, masks = load_video_data(condition, id, nsegs)
+        views.show_frames([video, (masks*(255//64))], "Validate data")
+
+        # Compute intensity data
+        total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
+
+        # Get anatomical regions from metadata
+        region_ranges = [
+            RegionRange(name, reg.start, reg.end)
+            for name, reg in meta.regions.items()
+        ]
+
+        # Split into three anatomical parts
+        region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
+
+        # Compute intra-region COM over full time series
+        region_coms_full = {
+            region.name: compute_centre_of_mass_region(region_arrays[region.name])
+            for region in region_ranges
+        }
+
+        # Build angle axis for all cycles
+        cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
+            cycle_indices, meta, phase, n_interp_samples
+        )
+
+        # Collect interpolated data for all cycles
+        all_cycle_data = []
+        for i, cycle_idx in enumerate(cycle_indices):
+            cycle = meta.get_cycle(cycle_idx)
+
+            # Interpolate COM data for each region
+            cycle_com_data = {}
+            for region_name in region_coms_full.keys():
+                if phase == "flexion":
+                    # Only flexion phase
+                    flex_com = extract_frame_window(region_coms_full[region_name],
+                                                   cycle.flex.start, cycle.flex.end)
+                    interp_com, _ = interpolate_com_to_angle(flex_com, n_interp_samples, 30, 135)
+                    cycle_com_data[region_name] = interp_com
+
+                elif phase == "extension":
+                    # Only extension phase
+                    ext_com = extract_frame_window(region_coms_full[region_name],
+                                                  cycle.ext.start, cycle.ext.end)
+                    interp_com, _ = interpolate_com_to_angle(ext_com, n_interp_samples, 135, 30)
+                    cycle_com_data[region_name] = interp_com
+
+                else:  # "both" - concatenate flexion + extension
+                    flex_com = extract_frame_window(region_coms_full[region_name],
+                                                   cycle.flex.start, cycle.flex.end)
+                    ext_com = extract_frame_window(region_coms_full[region_name],
+                                                  cycle.ext.start, cycle.ext.end)
+
+                    flex_interp, _ = interpolate_com_to_angle(flex_com, n_interp_samples, 30, 135)
+                    ext_interp, _ = interpolate_com_to_angle(ext_com, n_interp_samples, 135, 30)
+                    
+                    cycle_com_data[region_name] = np.concatenate([flex_interp, ext_interp])
+
+            # Create legend label
+            if phase == "both":
+                legend_label = f"Cycle {cycle_idx}, frames {cycle.flex.start}-{cycle.flex.end} and {cycle.ext.start}-{cycle.ext.end}"
+            else:
+                legend_label = f"Cycle {cycle_idx}, {phase}"
+
+            all_cycle_data.append((
+                cycle_com_data,           # interpolated COM data per region
+                cycle_x_offsets[i],       # x positions for this cycle
+                cycle_angles[i],          # angle values for this cycle
+                legend_label,             # legend label
+                cycle                     # cycle metadata (for reference lines if needed)
+            ))
+
+        # Plot the results
+        plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples)
 
 
 if __name__ == "__main__":
-    args = sys.argv[1:]
-    condition = args[0]
-    id = args[1]
-    nsegs = args[2]
-    cycle_indices_str = args[3] if len(args) > 3 else "0"
-    cycle_indices = [int(x.strip()) for x in cycle_indices_str.split(',')]
-    phase = args[4] if len(args) > 4 else "both"
-    main(condition, id, nsegs, cycle_indices, phase)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="DMM knee video analysis")
+    parser.add_argument("condition", help="Condition (e.g., normal, aging, dmm-0w)")
+    parser.add_argument("id", help="Video ID")
+    parser.add_argument("nsegs", help="Number of segments")
+    parser.add_argument("cycle_indices", nargs='?', default="0",
+                       help="Comma-separated cycle indices (default: 0)")
+    parser.add_argument("phase", nargs='?', default="both",
+                       choices=["flexion", "extension", "both"],
+                       help="Phase to plot (default: both)")
+    parser.add_argument("--mode", choices=["angle", "frame"], default="angle",
+                       help="Plotting mode: angle (rescaled, contiguous) or frame (default: angle)")
+    parser.add_argument("--n-interp-samples", type=int, default=105,
+                       help="Number of interpolation samples per phase in angle mode (default: 105)")
+
+    args = parser.parse_args()
+
+    cycle_indices = [int(x.strip()) for x in args.cycle_indices.split(',')]
+    main(args.condition, args.id, args.nsegs, cycle_indices, args.phase, args.mode, args.n_interp_samples)
