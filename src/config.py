@@ -9,5 +9,6 @@ TYPES = {
 
     1339: "aging",
     1342: "aging",
+    1357: "aging",
     1358: "aging"
 }
