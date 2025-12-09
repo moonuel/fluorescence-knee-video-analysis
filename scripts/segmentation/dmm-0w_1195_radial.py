@@ -39,6 +39,6 @@ class DMM1195(KneeSegmentationPipeline):
         return super().radial_segmentation(mask, femur_mask, n_lines, n_segments, tip_range, midpoint_range, smooth_window, inplace)
 
 if __name__ == "__main__":
-    pipeline = DMM1195("data/raw/1 con-20 min-fluid movement recovery slow and qucik joint motion_00001195.npy", "1195", "dmm0w", 64)
+    pipeline = DMM1195("data/raw/1 con-20 min-fluid movement recovery slow and qucik joint motion_00001195.npy", "1195", "dmm-0w", 64)
     pipeline.run(debug=True)
     # pipeline.display_saved_results()
