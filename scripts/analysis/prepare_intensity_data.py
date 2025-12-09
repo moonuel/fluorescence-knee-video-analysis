@@ -137,13 +137,20 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Examples:\n"
                "  python prepare_intensity_data.py --list\n"
-               "  python prepare_intensity_data.py 1339 64"
+               "  python prepare_intensity_data.py 1339 64\n"
+               "  python prepare_intensity_data.py --all"
     )
 
     parser.add_argument(
         '--list',
         action='store_true',
         help="List all available video IDs and segment counts"
+    )
+
+    parser.add_argument(
+        '--all',
+        action='store_true',
+        help="Process all available video IDs and segment combinations"
     )
 
     parser.add_argument(
@@ -174,9 +181,17 @@ def parse_arguments():
             print(f"  {vid:4d} ({info['type']:6s}) - {n_vals}")
         sys.exit(0)
 
-    # Validate required arguments
+    # Handle --all mode
+    if args.all:
+        tasks = []
+        for vid, info in available.items():
+            for n in info['N_values']:
+                tasks.append((vid, n, info['type']))
+        return tasks
+
+    # Handle single video mode
     if args.video_id is None or args.N is None:
-        parser.error("video_id and N are required (or use --list)")
+        parser.error("video_id and N are required (or use --list or --all)")
 
     # Validate video_id exists
     if args.video_id not in available:
@@ -195,7 +210,7 @@ def parse_arguments():
             f"Available: {valid_n}"
         )
 
-    return args.video_id, args.N, available[args.video_id]['type']
+    return [(args.video_id, args.N, available[args.video_id]['type'])]
 
 
 def save_to_excel(total_sums, total_nonzero, flex, ext, meta):
@@ -301,58 +316,64 @@ def draw_segment_boundaries(video, radial_regions, meta):
 #                                MAIN FUNCTION
 #==============================================================================
 
-def main(video_id:int, N:int, condition:str):
+def main(tasks: List[Tuple[int, int, str]]):
     """
     Main function to process knee video intensity data.
 
     Args:
-        video_id: Video ID number (e.g., 1339)
-        N: Number of radial segments (e.g., 64)
-        condition: Type of knee ("normal", "aging", "dmm-0w", etc.)
+        tasks: List of (video_id, N, condition) tuples to process
     """
-    # Get metadata
-    meta = get_knee_meta(condition, video_id, N)
+    batch_mode = len(tasks) > 1
 
-    # Select data
-    segmented_dir = PROJECT_ROOT / "data" / "segmented"
-    masks = load_masks(segmented_dir / f"{condition}_{video_id:04d}_radial_N{N}.npy")
-    video = load_video(segmented_dir / f"{condition}_{video_id:04d}_video_N{N}.npy")
+    for video_id, N, condition in tasks:
+        print(f"---------- Processing {video_id=}, {condition=}, {N=} ----------")
 
-    print(f"---------- {video_id=}, {condition=}, {N=} ----------")
-    views.show_frames([masks * (255 // np.max(masks)), video], "Validate data")
-    # breakpoint()
+        # Get metadata
+        meta = get_knee_meta(condition, video_id, N)
 
-    # Verify segment ranges
-    draw_segment_boundaries(video, masks, meta)
+        # Select data
+        segmented_dir = PROJECT_ROOT / "data" / "segmented"
+        masks = load_masks(segmented_dir / f"{condition}_{video_id:04d}_radial_N{N}.npy")
+        video = load_video(segmented_dir / f"{condition}_{video_id:04d}_video_N{N}.npy")
 
-    # Compute within-segment total intensities and number of pixels in each segment
-    total_sums, total_nonzero = compute_sums_nonzeros(masks, video)
+        print(f"Loaded data: masks {masks.shape}, video {video.shape}")
+        views.show_frames([masks * (255 // np.max(masks)), video], f"Validate data {video_id}N{N}")
+        # breakpoint()
 
-    # Cast to dataframe for better storage
-    total_sums = pd.DataFrame(total_sums.T)
-    total_nonzero = pd.DataFrame(total_nonzero.T)
+        # Verify segment ranges
+        draw_segment_boundaries(video, masks, meta)
 
-    # Build flexion/extension DataFrames from metadata (1-based for Excel)
-    flex_rows = [(c.flex.start + 1, c.flex.end + 1) for c in meta.cycles]
-    ext_rows = [(c.ext.start + 1, c.ext.end + 1) for c in meta.cycles]
-    flex = pd.DataFrame(flex_rows, columns=["Start", "End"])
-    ext = pd.DataFrame(ext_rows, columns=["Start", "End"])
+        # Compute within-segment total intensities and number of pixels in each segment
+        total_sums, total_nonzero = compute_sums_nonzeros(masks, video)
 
-    total_sums.index = total_sums.index + 1; total_nonzero.index = total_nonzero.index + 1  # 1-indexing
-    flex.index = flex.index + 1; ext.index = ext.index + 1
+        # Cast to dataframe for better storage
+        total_sums = pd.DataFrame(total_sums.T)
+        total_nonzero = pd.DataFrame(total_nonzero.T)
 
-    total_sums.columns = total_sums.columns + 1; total_nonzero.columns = total_nonzero.columns + 1  # Formatting
-    # flex.columns and ext.columns already set
+        # Build flexion/extension DataFrames from metadata (1-based for Excel)
+        flex_rows = [(c.flex.start + 1, c.flex.end + 1) for c in meta.cycles]
+        ext_rows = [(c.ext.start + 1, c.ext.end + 1) for c in meta.cycles]
+        flex = pd.DataFrame(flex_rows, columns=["Start", "End"])
+        ext = pd.DataFrame(ext_rows, columns=["Start", "End"])
 
-    print("-----------------------------------------------------------")
-    print(total_sums)
-    print(flex)
-    print(ext)
+        total_sums.index = total_sums.index + 1; total_nonzero.index = total_nonzero.index + 1  # 1-indexing
+        flex.index = flex.index + 1; ext.index = ext.index + 1
 
-    if input("Save to file? (y/n)\n".lower()) == 'y':
-        save_to_excel(total_sums, total_nonzero, flex, ext, meta)
-    else:
-        print("File not saved.")
+        total_sums.columns = total_sums.columns + 1; total_nonzero.columns = total_nonzero.columns + 1  # Formatting
+        # flex.columns and ext.columns already set
+
+        print("-----------------------------------------------------------")
+        print(total_sums.head())
+        print(flex)
+        print(ext)
+
+        if not batch_mode:
+            if input("Save to file? (y/n)\n".lower()) == 'y':
+                save_to_excel(total_sums, total_nonzero, flex, ext, meta)
+            else:
+                print("File not saved.")
+        else:
+            save_to_excel(total_sums, total_nonzero, flex, ext, meta)
 
     return
 
@@ -361,5 +382,5 @@ def main(video_id:int, N:int, condition:str):
 #==============================================================================
 
 if __name__ == "__main__":
-    video_id, N, condition = parse_arguments()
-    main(video_id, N, condition)
+    tasks = parse_arguments()
+    main(tasks)
