@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, asdict, is_dataclass
 from typing import List, Tuple, Dict
 import sys
 import argparse
+from config.knee_metadata import get_knee_meta
 
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -197,22 +198,14 @@ def parse_arguments():
     return args.video_id, args.N, available[args.video_id]['type']
 
 
-def save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N):
+def save_to_excel(total_sums, total_nonzero, flex, ext, meta):
     intensities_dir = PROJECT_ROOT / "data" / "intensities_total"
     intensities_dir.mkdir(exist_ok=True)  # Ensure directory exists
-    output_file = intensities_dir / f"{video_id}N{N}intensities.xlsx"
+    output_file = intensities_dir / f"{meta.video_id}N{meta.n_segments}intensities.xlsx"
 
-    # Get region ranges for this video
-    ranges = REGION_RANGES.get((video_id, N))
-    if ranges is not None:
-        # Create region ranges DataFrame
-        region_data = []
-        for region, (start, end) in ranges.items():
-            region_data.append({"Region": region, "Start": start, "End": end})
-        df_regions = pd.DataFrame(region_data)
-    else:
-        # If no ranges defined, create empty DataFrame with correct columns
-        df_regions = pd.DataFrame(columns=["Region", "Start", "End"])
+    # Create region ranges DataFrame from metadata
+    region_data = [{"Region": name, "Start": reg.start, "End": reg.end} for name, reg in meta.regions.items()]
+    df_regions = pd.DataFrame(region_data)
 
     with pd.ExcelWriter(output_file) as writer:
         total_sums.to_excel(writer, sheet_name="Segment Intensities", index=True)
@@ -224,7 +217,7 @@ def save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N):
     print(f"✅ Analysis results saved to {output_file}")
 
 
-def draw_segment_boundaries(video, radial_regions, video_id, nsegs):
+def draw_segment_boundaries(video, radial_regions, meta):
     """
     Draws the segment boundaries on the video, for verification before showing final results.
 
@@ -235,14 +228,10 @@ def draw_segment_boundaries(video, radial_regions, video_id, nsegs):
     assert video.dtype == np.uint8, f"Video must be uint8, got {video.dtype}"
     assert radial_regions.dtype in [np.uint8, np.int32, np.int64], f"Radial regions must be integer type, got {radial_regions.dtype}"
 
-    # Retrieve segment ranges from REGION_RANGES
-    ranges = REGION_RANGES.get((video_id, nsegs))
-    if ranges is None:
-        raise KeyError(f"No REGION_RANGES entry for (video_id={video_id}, N={nsegs})")
-
-    jc_start, jc_end = ranges["JC"]
-    ot_start, ot_end = ranges["OT"]
-    sb_start, sb_end = ranges["SB"]
+    # Get segment ranges from metadata
+    jc_start, jc_end = meta.regions["JC"].start, meta.regions["JC"].end
+    ot_start, ot_end = meta.regions["OT"].start, meta.regions["OT"].end
+    sb_start, sb_end = meta.regions["SB"].start, meta.regions["SB"].end
 
     # For efficiency, only consider boundaries between these specific segment pairs
     # JC-OT: between jc_end and ot_start
@@ -304,7 +293,7 @@ def draw_segment_boundaries(video, radial_regions, video_id, nsegs):
     overlay[boundaries] = 255
 
     # Display the result
-    views.show_frames(overlay, f"Region boundaries {video_id}N{nsegs}")
+    views.show_frames(overlay, f"Region boundaries {meta.video_id}N{meta.n_segments}")
 
     return overlay
 
@@ -319,20 +308,22 @@ def main(video_id:int, N:int, condition:str):
     Args:
         video_id: Video ID number (e.g., 1339)
         N: Number of radial segments (e.g., 64)
-        knee_type: Type of knee ("normal" or "aging")
+        condition: Type of knee ("normal", "aging", "dmm-0w", etc.)
     """
+    # Get metadata
+    meta = get_knee_meta(condition, video_id, N)
+
     # Select data
     segmented_dir = PROJECT_ROOT / "data" / "segmented"
     masks = load_masks(segmented_dir / f"{condition}_{video_id:04d}_radial_N{N}.npy")
     video = load_video(segmented_dir / f"{condition}_{video_id:04d}_video_N{N}.npy")
-    cycles = [c.split("-") for c in CYCLES[video_id].split()]
 
     print(f"---------- {video_id=}, {condition=}, {N=} ----------")
     views.show_frames([masks * (255 // np.max(masks)), video], "Validate data")
     # breakpoint()
 
     # Verify segment ranges
-    draw_segment_boundaries(video, masks, video_id, N)
+    draw_segment_boundaries(video, masks, meta)
 
     # Compute within-segment total intensities and number of pixels in each segment
     total_sums, total_nonzero = compute_sums_nonzeros(masks, video)
@@ -340,14 +331,18 @@ def main(video_id:int, N:int, condition:str):
     # Cast to dataframe for better storage
     total_sums = pd.DataFrame(total_sums.T)
     total_nonzero = pd.DataFrame(total_nonzero.T)
-    flex = pd.DataFrame(cycles[::2])
-    ext = pd.DataFrame(cycles[1::2])
 
-    total_sums.index = total_sums.index + 1; total_nonzero.index = total_nonzero.index + 1 # 1-indexing
+    # Build flexion/extension DataFrames from metadata (1-based for Excel)
+    flex_rows = [(c.flex.start + 1, c.flex.end + 1) for c in meta.cycles]
+    ext_rows = [(c.ext.start + 1, c.ext.end + 1) for c in meta.cycles]
+    flex = pd.DataFrame(flex_rows, columns=["Start", "End"])
+    ext = pd.DataFrame(ext_rows, columns=["Start", "End"])
+
+    total_sums.index = total_sums.index + 1; total_nonzero.index = total_nonzero.index + 1  # 1-indexing
     flex.index = flex.index + 1; ext.index = ext.index + 1
 
-    total_sums.columns = total_sums.columns + 1; total_nonzero.columns = total_nonzero.columns + 1 # Formatting
-    flex.columns = ["Start", "End"]; ext.columns = ["Start", "End"]
+    total_sums.columns = total_sums.columns + 1; total_nonzero.columns = total_nonzero.columns + 1  # Formatting
+    # flex.columns and ext.columns already set
 
     print("-----------------------------------------------------------")
     print(total_sums)
@@ -355,81 +350,11 @@ def main(video_id:int, N:int, condition:str):
     print(ext)
 
     if input("Save to file? (y/n)\n".lower()) == 'y':
-        save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N)
+        save_to_excel(total_sums, total_nonzero, flex, ext, meta)
     else:
         print("File not saved.")
 
     return
-
-#==============================================================================
-#                                DATA STORAGE
-#==============================================================================
-
-# Store cycle ranges here
-CYCLES = {
-    1207: "242-254	264-280	281-293	299-312	318-335	337-352	353-372	373-389	391-411	412-431	434-451	453-467	472-486	488-505	614-632	633-651	652-671	672-690	693-708	709-727	731-748	751-767	768-786	787-804	807-822	824-841	844-862	863-877",
-    1190: "66-89	92-109 421-452	470-492	503-532	533-569 737-767	770-793	794-822	823-860",
-    1193: "1792-1801 1802-1812 1813-1822 1823-1833 1834-1843 1844-1852 1853-1863 1864-1872 1873-1881 1881-1889",
-    308: "71-116 117-155 253-298 299-335 585-618 630-669 156-199 210-250",
-
-    1339: "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609",
-    1342: "62-81	82-100	102-119	123-151	152-171	178-199",
-    1357: "218-240	241-272	278-305	306-330 420-447	449-467	469-492	493-517 639-660	662-682	683-709	710-732	744-775	777-779	801-828	837-858	859-890	893-917	1067-1091	1092-1118	1136-1171	1173-1198	1199-1230	1232-1260	1261-1285	1286-1311	1313-1340	1342-1365	1368-1394	1395-1419",
-    1358: "1360-1384	1385-1406	1407-1433	1434-1454	1461-1483	1484-1508	1509-1540	1541-1559	1618-1648	1649-1669	1672-1696	1697-1720	",#1721-1748"
-
-    1195: "771-849	855-922	929-988	989-1047",
-}
-
-# Store knee types here
-TYPES = {
-    1207: "normal",
-    1193: "normal",
-    1190: "normal",
-    308: "normal",
-
-    1339: "aging",
-    1342: "aging",
-    1357: "aging",
-    1358: "aging",
-
-    1195: "dmm-0w"
-}
-
-assert CYCLES.keys() == TYPES.keys()
-
-REGION_RANGES = {
-    (1207, 64): {
-        "JC": (1, 26),
-        "OT": (27, 39),
-        "SB": (40, 64),
-    },
-    (308, 64): {
-        "JC": (1, 29),
-        "OT": (30, 47),
-        "SB": (48, 64),
-    },
-    (1339, 64): {
-        "JC": (1, 27),
-        "OT": (28, 44),
-        "SB": (45, 64),
-    },
-    (1195, 64): {
-        "JC": (1, 27),
-        "OT": (28, 40),
-        "SB": (41, 64),
-    },
-}
-
-# Validate that regions are contiguous
-for (video_id, N), regions in REGION_RANGES.items():
-    jc_start, jc_end = regions["JC"]
-    ot_start, ot_end = regions["OT"]
-    sb_start, sb_end = regions["SB"]
-
-    assert jc_start == 1, f"JC must start at 1 for video {video_id}"
-    assert jc_end + 1 == ot_start, f"JC-OT discontinuity for video {video_id}"
-    assert ot_end + 1 == sb_start, f"OT-SB discontinuity for video {video_id}"
-    assert sb_end == N, f"SB must end at {N} for video {video_id}"
 
 #==============================================================================
 #                                ENTRY POINT

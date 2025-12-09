@@ -1,3 +1,5 @@
+# Knee segmentation config package
+
 VERBOSE = True
 OUTPUT = False
 

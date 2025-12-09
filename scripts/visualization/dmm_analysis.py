@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from utils import io, views, utils
 from core import data_processing as dp
+from config.knee_metadata import get_knee_meta
 import sys
 
 @dataclass
@@ -137,41 +138,42 @@ def extract_frame_window(com_series: np.ndarray,
     return com_series[frame_start:frame_end + 1]
 
 
-def plot_intra_region_coms(region_coms: Dict[str, np.ndarray],
-                           frame_start: int,
-                           frame_end: int
+def plot_intra_region_coms(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange']]
                            ) -> None:
-    """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs frame index.
+    """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs frame index for multiple cycles.
 
     Parameters
     ----------
-    region_coms : Dict[str, np.ndarray]
-        {region_name: com_values}, each with shape (n_window_frames,).
-    frame_start : int
-        0-based inclusive start frame (for plot labeling).
-    frame_end : int
-        0-based inclusive end frame (for plot labeling).
+    all_region_coms : List[Tuple[Dict[str, np.ndarray], str, FrameRange]]
+        List of (region_coms, cycle_info, frame_range) for each cycle to plot.
     """
-    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(12, 10))
+    fig, axes = plt.subplots(3, 1, sharex=False, figsize=(12, 10))
     region_order = ["SB", "OT", "JC"]  # top to bottom
 
-    t = np.arange(frame_start, frame_end + 1)
-
     for ax, name in zip(axes, region_order):
-        com = region_coms[name]
-        ax.plot(t, com)
+        for region_coms, cycle_info, fr in all_region_coms:
+            com = region_coms[name]
+            t = np.arange(fr.start, fr.end + 1)
+            ax.plot(t, com, label=cycle_info)
         ax.set_ylabel(f"{name} COM")
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region COM")
 
     axes[-1].set_xlabel("Frame index")
-    fig.suptitle(f"Intra-region COM, frames {frame_start + 1}-{frame_end + 1}")
+    fig.suptitle(f"Intra-region COM for selected cycles")
+    plt.legend()
     plt.tight_layout()
     plt.show()
 
 
-def main(condition, id, nsegs):
+def main(condition, id, nsegs, cycle_indices=None, phase="both"):
     """Main analysis pipeline."""
+    if cycle_indices is None:
+        cycle_indices = [0]
+
+    # Get metadata
+    meta = get_knee_meta(condition, int(id), int(nsegs))
+
     # Load video and masks
     video, masks = load_video_data(condition, id, nsegs)
     views.show_frames([video, (masks*(255//64))], "Validate data")
@@ -183,19 +185,11 @@ def main(condition, id, nsegs):
     # Compute intensity data
     total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
 
-    # Define anatomical regions (1-based inclusive segments)
-    # JC: segments 1-29 (29 elements)
-    # OT: segments 30-47 (18 elements)
-    # SB: segments 48-64 (17 elements)
+    # Get anatomical regions from metadata
     region_ranges = [
-        RegionRange("JC", 1, 29),
-        RegionRange("OT", 30, 47),
-        RegionRange("SB", 48, 64),
+        RegionRange(name, reg.start, reg.end)
+        for name, reg in meta.regions.items()
     ]
-
-  # Extract frame window: 242-352 (1-based) -> 241-352 (0-based inclusive)
-    frame_start = int(input("Frame start: "))
-    frame_end = int(input("Frame end: "))
 
     # Split into three anatomical parts
     region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
@@ -206,15 +200,35 @@ def main(condition, id, nsegs):
         for region in region_ranges
     }
 
-    region_coms_window = {
-        name: extract_frame_window(com, frame_start, frame_end)
-        for name, com in region_coms_full.items()
-    }
+    # Collect data for all selected cycles
+    all_region_coms = []
+    for cycle_idx in cycle_indices:
+        cycle = meta.get_cycle(cycle_idx)
+        if phase == "flexion":
+            fr = cycle.flex
+        elif phase == "extension":
+            fr = cycle.ext
+        else:  # "both"
+            fr = cycle.full_cycle()
+
+        region_coms_window = {
+            name: extract_frame_window(com, fr.start, fr.end)
+            for name, com in region_coms_full.items()
+        }
+
+        cycle_info = f"cycle {cycle_idx}, {phase}"
+        all_region_coms.append((region_coms_window, cycle_info, fr))
 
     # Plot the results
-    plot_intra_region_coms(region_coms_window, frame_start, frame_end)
+    plot_intra_region_coms(all_region_coms)
 
 
 if __name__ == "__main__":
-    condition, id, nsegs = sys.argv[1:4]
-    main(condition, id, nsegs)
+    args = sys.argv[1:]
+    condition = args[0]
+    id = args[1]
+    nsegs = args[2]
+    cycle_indices_str = args[3] if len(args) > 3 else "0"
+    cycle_indices = [int(x.strip()) for x in cycle_indices_str.split(',')]
+    phase = args[4] if len(args) > 4 else "both"
+    main(condition, id, nsegs, cycle_indices, phase)
