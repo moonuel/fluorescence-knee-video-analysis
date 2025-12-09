@@ -59,52 +59,6 @@ def load_video(filepath:str) -> np.ndarray:
     return video
 
 
-def save_analysis_to_excel(total_sums: np.ndarray,
-                           total_nonzero: np.ndarray,
-                           metadata: "Metadata",
-                           output_file: str | Path):
-    """
-    Save knee analysis results to an Excel file with three sheets:
-      - Total sums (N x nframes)
-      - Total nonzero (N x nframes)
-      - Metadata (one row)
-    """
-    output_file = Path(output_file)
-
-    # --- Convert Metadata dataclass into a dict row ---
-    meta_dict = asdict(metadata)
-
-    df_meta = pd.DataFrame([meta_dict])
-
-    # --- Convert arrays to DataFrames ---
-    N, nframes = total_sums.shape[0], total_sums.shape[1]
-
-    # Use the true frame numbers from metadata
-    frame_index = range(metadata.frame_start, metadata.frame_end + 1)
-
-    df_sums = pd.DataFrame(
-        total_sums.T,
-        index=frame_index,
-        columns=[f"Segment {i}" for i in range(1, N + 1)]
-    )
-    df_sums.index.name = "Frame"
-
-    df_nonzero = pd.DataFrame(
-        total_nonzero.T,
-        index=frame_index,
-        columns=[f"Segment {i}" for i in range(1, N + 1)]
-    )
-    df_nonzero.index.name = "Frame"
-
-    # --- Write all three sheets ---
-    with pd.ExcelWriter(output_file) as writer:
-        df_sums.to_excel(writer, sheet_name="Sum of Pixel Intensities (0-255)")
-        df_nonzero.to_excel(writer, sheet_name="Number of Non-zero Pixels (Size of Mask)")
-        df_meta.to_excel(writer, sheet_name="Analysis Metadata", index=False)
-
-    print(f"✅ Analysis results saved to {output_file.resolve()}")
-
-
 def compute_sums_nonzeros(masks: np.ndarray, video: np.ndarray):
     """
     Compute total pixel intensities and non-zero pixel counts per segment for each frame.
@@ -171,6 +125,7 @@ def discover_available_videos(segmented_dir: Path) -> Dict[int, Dict]:
         videos[video_id]['N_values'].add(N)
 
     return videos
+
 
 def parse_arguments():
     """
@@ -240,6 +195,7 @@ def parse_arguments():
         )
 
     return args.video_id, args.N, available[args.video_id]['type']
+
 
 def save_to_excel(total_sums, total_nonzero, flex, ext, video_id, N):
     intensities_dir = PROJECT_ROOT / "data" / "intensities_total"
@@ -419,7 +375,9 @@ CYCLES = {
     1339: "290-309	312-329	331-352	355-374	375-394	398-421	422-439	441-463	464-488	490-512	513-530	532-553	554-576	579-609",
     1342: "62-81	82-100	102-119	123-151	152-171	178-199",
     1357: "218-240	241-272	278-305	306-330 420-447	449-467	469-492	493-517 639-660	662-682	683-709	710-732	744-775	777-779	801-828	837-858	859-890	893-917	1067-1091	1092-1118	1136-1171	1173-1198	1199-1230	1232-1260	1261-1285	1286-1311	1313-1340	1342-1365	1368-1394	1395-1419",
-    1358: "1360-1384	1385-1406	1407-1433	1434-1454	1461-1483	1484-1508	1509-1540	1541-1559	1618-1648	1649-1669	1672-1696	1697-1720	"#1721-1748"
+    1358: "1360-1384	1385-1406	1407-1433	1434-1454	1461-1483	1484-1508	1509-1540	1541-1559	1618-1648	1649-1669	1672-1696	1697-1720	",#1721-1748"
+
+    1195: "771-849	855-922	929-988	989-1047",
 }
 
 # Store knee types here
@@ -433,22 +391,45 @@ TYPES = {
     1342: "aging",
     1357: "aging",
     1358: "aging",
+
+    1195: "dmm-0w"
 }
 
 assert CYCLES.keys() == TYPES.keys()
 
 REGION_RANGES = {
     (1207, 64): {
-        "JC": (1, 29),
-        "OT": (30, 42),
-        "SB": (43, 64),
+        "JC": (1, 26),
+        "OT": (27, 39),
+        "SB": (40, 64),
     },
-    # (308, 64): {
-    #     "JC": (1, 29),
-    #     "OT": (30, 42),
-    #     "SB": (43, 64),
-    # },
+    (308, 64): {
+        "JC": (1, 29),
+        "OT": (30, 47),
+        "SB": (48, 64),
+    },
+    (1339, 64): {
+        "JC": (1, 27),
+        "OT": (28, 44),
+        "SB": (45, 64),
+    },
+    (1195, 64): {
+        "JC": (1, 27),
+        "OT": (28, 40),
+        "SB": (41, 64),
+    },
 }
+
+# Validate that regions are contiguous
+for (video_id, N), regions in REGION_RANGES.items():
+    jc_start, jc_end = regions["JC"]
+    ot_start, ot_end = regions["OT"]
+    sb_start, sb_end = regions["SB"]
+
+    assert jc_start == 1, f"JC must start at 1 for video {video_id}"
+    assert jc_end + 1 == ot_start, f"JC-OT discontinuity for video {video_id}"
+    assert ot_end + 1 == sb_start, f"OT-SB discontinuity for video {video_id}"
+    assert sb_end == N, f"SB must end at {N} for video {video_id}"
 
 #==============================================================================
 #                                ENTRY POINT
