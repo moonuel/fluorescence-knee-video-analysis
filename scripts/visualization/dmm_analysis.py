@@ -873,6 +873,16 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
         # Compute requested metrics over full time series
         region_metrics_full = compute_region_metrics(region_arrays, metrics)
 
+        # Fix y-axis: shift COM from local (1..N_region) to global segment indices
+        # Build lookup from region name to its 1-based start index
+        region_start_indices = {r.name: r.start_idx for r in region_ranges}
+        # Apply offset: COM_global = COM_local + (start_1based - 1)
+        for region_name, metrics_dict in region_metrics_full.items():
+            if "com" in metrics_dict:
+                start_1_based = region_start_indices[region_name]
+                offset = start_1_based - 1  # convert to 0-based offset
+                metrics_dict["com"] = metrics_dict["com"] + offset
+
         # Plot each requested metric
         video_title = f"{condition} {id} (N{nsegs})"
         for metric in metrics:
@@ -957,7 +967,7 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
 
         # Compute intensity data
         total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
-
+        # breakpoint()
         # Apply normalization if requested
         if normalize:
             total_sums = normalize_intensity_per_frame_2d(total_sums)
@@ -973,6 +983,16 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
 
         # Compute requested metrics over full time series
         region_metrics_full = compute_region_metrics(region_arrays, metrics)
+
+        # Fix y-axis: shift COM from local (1..N_region) to global segment indices
+        # Build lookup from region name to its 1-based start index
+        region_start_indices = {r.name: r.start_idx for r in region_ranges}
+        # Apply offset: COM_global = COM_local + (start_1based - 1)
+        for region_name, metrics_dict in region_metrics_full.items():
+            if "com" in metrics_dict:
+                start_1_based = region_start_indices[region_name]
+                offset = start_1_based - 1  # convert to 0-based offset
+                metrics_dict["com"] = metrics_dict["com"] + offset
 
         # Build angle axis for all cycles
         cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
