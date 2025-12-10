@@ -244,7 +244,7 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
     region_arrays : Dict[str, np.ndarray]
         {region_name: region_sums}, each with shape (N_region, n_frames).
     metrics : List[str]
-        List of metrics to compute: "com" and/or "total".
+        List of metrics to compute: "com", "total", and/or "flux".
 
     Returns
     -------
@@ -256,10 +256,51 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
         region_dict = {}
         if "com" in metrics:
             region_dict["com"] = compute_centre_of_mass_region(region_sums)
-        if "total" in metrics:
+        if "total" in metrics or "flux" in metrics:
+            # flux requires total intensities, so compute if either is requested
             region_dict["total"] = region_sums.sum(axis=0)
         region_metrics[region_name] = region_dict
     return region_metrics
+
+
+def compute_boundary_flux(I_SB: np.ndarray, I_JC: np.ndarray) -> Dict:
+    """Compute boundary flux between SB-OT and OT-JC regions.
+
+    Parameters
+    ----------
+    I_SB : np.ndarray
+        Shape (n_frames,), total intensity in SB region per frame.
+    I_JC : np.ndarray
+        Shape (n_frames,), total intensity in JC region per frame.
+
+    Returns
+    -------
+    flux_data : Dict
+        Dictionary containing:
+        - 'SB→OT': {'series': flux array of shape (n_frames-1,)}
+        - 'OT→JC': {'series': flux array of shape (n_frames-1,)}
+        - 'total_flux': scalar, sum of absolute fluxes
+        - 'net_flux': scalar, sum of signed fluxes
+    """
+    # Flux definitions:
+    # F_SB_to_OT(t) = I_SB(t) - I_SB(t+1)  [positive when SB loses intensity]
+    # F_OT_to_JC(t) = I_JC(t+1) - I_JC(t)  [positive when JC gains intensity]
+    F_SB_to_OT = I_SB[:-1] - I_SB[1:]
+    F_OT_to_JC = I_JC[1:] - I_JC[:-1]
+    
+    total_flux = np.sum(np.abs(F_SB_to_OT) + np.abs(F_OT_to_JC))
+    net_flux = np.sum(F_SB_to_OT + F_OT_to_JC)
+    
+    return {
+        'SB→OT': {
+            'series': F_SB_to_OT,
+        },
+        'OT→JC': {
+            'series': F_OT_to_JC,
+        },
+        'total_flux': total_flux,
+        'net_flux': net_flux,
+    }
 
 
 def extract_frame_window(com_series: np.ndarray,
@@ -691,6 +732,245 @@ def plot_intra_region_totals_frame_mode(all_region_totals: List[Tuple[Dict[str, 
     plt.show()
 
 
+def plot_boundary_flux_frame_mode(all_flux_data: List[Tuple[Dict, str, 'FrameRange', Cycle]],
+                                   video_title: str,
+                                   norm_label: str
+                                   ) -> None:
+    """Create single subplot of boundary flux vs frame index for multiple cycles.
+
+    Parameters
+    ----------
+    all_flux_data : List[Tuple[Dict, str, FrameRange, Cycle]]
+        List of (flux_data, cycle_info, frame_range, cycle) for each cycle to plot.
+        flux_data contains 'SB→OT' and 'OT→JC' keys with 'series', 'total_flux', 'net_flux'.
+    video_title : str
+        Title for the plot.
+    norm_label : str
+        Label indicating normalization status.
+    """
+    fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+
+    # Fixed colors for boundaries
+    boundary_colors = {'SB→OT': 'blue', 'OT→JC': 'red'}
+    
+    # Create color map for consistent cycle styling (line styles)
+    unique_cycles = set()
+    for _, cycle_info, _, _ in all_flux_data:
+        if cycle_info.startswith("Cycle "):
+            cycle_num = cycle_info.split()[1]
+            unique_cycles.add(f"Cycle {cycle_num}")
+        else:
+            cycle_idx = cycle_info.split(',')[0].strip()
+            unique_cycles.add(cycle_idx)
+    
+    # Use line styles to distinguish cycles
+    line_styles = ['-']#, '--', '-.', ':']
+    cycle_line_styles = {}
+    for i, cycle_key in enumerate(sorted(unique_cycles)):
+        cycle_line_styles[cycle_key] = line_styles[i % len(line_styles)]
+
+    # Track which (cycle, boundary) combinations have been labeled
+    labeled_entries = set()
+
+    for flux_data, cycle_info, fr, cycle in all_flux_data:
+        # Extract cycle identifier
+        if cycle_info.startswith("Cycle "):
+            cycle_key = f"Cycle {cycle_info.split()[1]}"
+        else:
+            cycle_key = cycle_info.split(',')[0].strip()
+        
+        line_style = cycle_line_styles[cycle_key]
+        
+        # Frame indices for flux (one less than original window due to differencing)
+        # Associate flux at step t with frame t (the earlier frame in the transition)
+        t_flux = np.arange(fr.start, fr.end)
+        
+        # Plot both boundaries
+        for boundary_name in ['SB→OT', 'OT→JC']:
+            flux_series = flux_data[boundary_name]['series']
+            color = boundary_colors[boundary_name]
+            
+            # Create label with total_flux and net_flux
+            label_key = (cycle_key, boundary_name)
+            if label_key not in labeled_entries:
+                total_f = flux_data['total_flux']
+                net_f = flux_data['net_flux']
+                label = f"{cycle_info} {boundary_name} (total={total_f:.1f}, net={net_f:.1f})"
+                labeled_entries.add(label_key)
+            else:
+                label = ""
+            
+            ax.plot(t_flux, flux_series, label=label, color=color, linestyle=line_style, alpha=0.8)
+
+    # Add vertical reference lines for cycle boundaries
+    plotted_cycles = set()
+    for _, cycle_info, fr, cycle in all_flux_data:
+        if cycle_info.startswith("Cycle "):
+            cycle_key = f"Cycle {cycle_info.split()[1]}"
+        else:
+            cycle_key = cycle_info.split(',')[0].strip()
+        
+        if cycle_key not in plotted_cycles:
+            plotted_cycles.add(cycle_key)
+            ax.axvline(cycle.flex.start, color='black', linestyle='-', linewidth=1, alpha=0.5)
+            ax.axvline(cycle.ext.end, color='black', linestyle='-', linewidth=1, alpha=0.5)
+            ax.axvline(cycle.flex.end, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+            ax.axvline(cycle.ext.start, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+
+    ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
+    ax.set_xlabel("Frame index")
+    ax.set_ylabel("Boundary Flux (signed)")
+    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (based on {norm_label})")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best", fontsize=8)
+    
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np.ndarray, str, Cycle]],
+                                   phase: str,
+                                   n_interp_samples: int,
+                                   video_title: str,
+                                   norm_label: str
+                                   ) -> None:
+    """Create single subplot of boundary flux vs angle for multiple cycles.
+
+    Parameters
+    ----------
+    all_flux_data : List[Tuple[Dict, np.ndarray, np.ndarray, str, Cycle]]
+        List of (flux_data, x_positions, angles, legend_label, cycle) for each cycle.
+        flux_data contains 'SB→OT' and 'OT→JC' keys with 'series', 'total_flux', 'net_flux'.
+    phase : str
+        "flexion", "extension", or "both".
+    n_interp_samples : int
+        Number of samples per phase used for interpolation.
+    video_title : str
+        Title for the plot.
+    norm_label : str
+        Label indicating normalization status.
+    """
+    fig, ax = plt.subplots(1, 1, figsize=(15, 6))
+
+    # Fixed colors for boundaries
+    boundary_colors = {'SB→OT': 'blue', 'OT→JC': 'red'}
+    
+    # Create color map for consistent cycle styling
+    unique_cycles = set()
+    for _, _, _, legend_label, _ in all_flux_data:
+        cycle_num = legend_label.split()[1]
+        unique_cycles.add(f"Cycle {cycle_num}")
+    
+    # Use line styles to distinguish cycles
+    line_styles = ['-']#, '--', '-.', ':']
+    cycle_line_styles = {}
+    for i, cycle_key in enumerate(sorted(unique_cycles)):
+        cycle_line_styles[cycle_key] = line_styles[i % len(line_styles)]
+
+    # Build x-axis ticks based on angle positions
+    all_tick_positions = []
+    all_tick_labels = []
+
+    for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
+        if phase == "flexion":
+            flex_labels = np.linspace(30, 135, n_interp_samples)
+            target_angles = np.arange(30, 136, 15)
+            for target_angle in target_angles:
+                idx = np.argmin(np.abs(flex_labels - target_angle))
+                if idx < len(x_positions) - 1:  # Ensure within flux array bounds
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+        elif phase == "extension":
+            ext_labels = np.linspace(135, 30, n_interp_samples)
+            target_angles = np.arange(135, 29, -15)
+            for target_angle in target_angles:
+                idx = np.argmin(np.abs(ext_labels - target_angle))
+                if idx < len(x_positions) - 1:  # Ensure within flux array bounds
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+        else:  # "both"
+            flex_labels = np.linspace(30, 135, n_interp_samples)
+            flex_target_angles = np.arange(30, 136, 15)
+            for target_angle in flex_target_angles:
+                idx = np.argmin(np.abs(flex_labels - target_angle))
+                if idx < len(x_positions) - 1:
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+            
+            ext_labels = np.linspace(135, 30, n_interp_samples)
+            ext_target_angles = np.arange(120, 44, -15)
+            for target_angle in ext_target_angles:
+                idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
+                if idx < len(x_positions) - 1:
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+
+    # Track which (cycle, boundary) combinations have been labeled
+    labeled_entries = set()
+
+    for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
+        cycle_num = legend_label.split()[1]
+        cycle_key = f"Cycle {cycle_num}"
+        line_style = cycle_line_styles[cycle_key]
+        
+        # x positions for flux (one less than interpolated data due to differencing)
+        x_flux = x_positions[:-1]
+        
+        # Plot both boundaries
+        for boundary_name in ['SB→OT', 'OT→JC']:
+            flux_series = flux_data[boundary_name]['series']
+            color = boundary_colors[boundary_name]
+            
+            # Create label with scalar metrics
+            label_key = (cycle_key, boundary_name)
+            if label_key not in labeled_entries:
+                total_f = flux_data['total_flux']
+                net_f = flux_data['net_flux']
+                label = f"{legend_label} {boundary_name} (total={total_f:.1f}, net={net_f:.1f})"
+                labeled_entries.add(label_key)
+            else:
+                label = ""
+            
+            ax.plot(x_flux, flux_series, label=label, color=color, linestyle=line_style, alpha=0.8)
+
+    # Add cycle demarcation lines
+    for i, (flux_data, x_positions, angles, legend_label, cycle) in enumerate(all_flux_data):
+        if i > 0:
+            cycle_start = x_positions[0]
+            ax.axvline(cycle_start, color='black', linestyle='-', linewidth=1, alpha=0.5)
+    
+    # Black line at end of last cycle
+    last_cycle_end = all_flux_data[-1][1][-1]
+    ax.axvline(last_cycle_end, color='black', linestyle='-', linewidth=1, alpha=0.5)
+    
+    # Gray lines at flex/ext transitions (only for "both" phase)
+    if phase == "both":
+        for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
+            transition_line = x_positions[n_interp_samples-1]
+            ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+
+    # Set x-axis limits
+    if all_flux_data:
+        min_x = min(x_positions[0] for _, x_positions, _, _, _ in all_flux_data)
+        max_x = max(x_positions[-1] for _, x_positions, _, _, _ in all_flux_data)
+        ax.set_xlim(min_x, max_x)
+
+    # Set x-axis ticks and labels
+    if all_tick_positions:
+        ax.set_xticks(all_tick_positions)
+        ax.set_xticklabels(all_tick_labels)
+
+    ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
+    ax.set_xlabel("Knee Angle (°)")
+    ax.set_ylabel("Boundary Flux (signed)")
+    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {norm_label})")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best", fontsize=8)
+    
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
                                         phase: str,
                                         n_interp_samples: int,
@@ -952,6 +1232,40 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
 
                 plot_intra_region_totals_frame_mode(all_region_totals, video_title, norm_label)
 
+            elif metric == "flux":
+                # Collect flux data for all selected cycles
+                all_flux_data = []
+                for cycle_idx in cycle_indices:
+                    cycle = meta.get_cycle(cycle_idx)
+                    if phase == "flexion":
+                        frame_ranges = [cycle.flex]
+                        phase_labels = ["flexion"]
+                    elif phase == "extension":
+                        frame_ranges = [cycle.ext]
+                        phase_labels = ["extension"]
+                    else:  # "both" - plot flexion and extension phases separately
+                        frame_ranges = [cycle.flex, cycle.ext]
+                        phase_labels = ["flexion", "extension"]
+
+                    # Create legend label
+                    if phase == "both":
+                        legend_label = f"Cycle {cycle_idx+1}, frames {cycle.flex.start+1}-{cycle.flex.end+1} and {cycle.ext.start+1}-{cycle.ext.end+1}"
+                    else:
+                        legend_label = f"Cycle {cycle_idx+1}, {phase}"
+
+                    for fr, phase_label in zip(frame_ranges, phase_labels):
+                        # Extract intensity windows for SB and JC regions
+                        I_SB_window = extract_frame_window(region_metrics_full['SB']['total'], fr.start, fr.end)
+                        I_JC_window = extract_frame_window(region_metrics_full['JC']['total'], fr.start, fr.end)
+                        
+                        # Compute boundary flux for this window
+                        flux_data = compute_boundary_flux(I_SB_window, I_JC_window)
+                        
+                        cycle_info = legend_label
+                        all_flux_data.append((flux_data, cycle_info, fr, cycle))
+
+                plot_boundary_flux_frame_mode(all_flux_data, video_title, norm_label)
+
     else:  # mode == "angle"
         # New angle-based mode with interpolation and contiguous plotting
         # Load video and masks
@@ -1008,26 +1322,30 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                 cycle = meta.get_cycle(cycle_idx)
 
                 # Interpolate metric data for each region
+                # Note: flux is not stored per-region; we interpolate totals and compute flux later
                 cycle_metric_data = {}
                 for region_name in region_metrics_full.keys():
+                    # Flux uses total intensities, not a per-region flux series
+                    source_metric = "total" if metric == "flux" else metric
+                    
                     if phase == "flexion":
                         # Only flexion phase
-                        flex_data = extract_frame_window(region_metrics_full[region_name][metric],
+                        flex_data = extract_frame_window(region_metrics_full[region_name][source_metric],
                                                        cycle.flex.start, cycle.flex.end)
                         interp_data, _ = interpolate_com_to_angle(flex_data, n_interp_samples, 30, 135)
                         cycle_metric_data[region_name] = interp_data
 
                     elif phase == "extension":
                         # Only extension phase
-                        ext_data = extract_frame_window(region_metrics_full[region_name][metric],
+                        ext_data = extract_frame_window(region_metrics_full[region_name][source_metric],
                                                       cycle.ext.start, cycle.ext.end)
                         interp_data, _ = interpolate_com_to_angle(ext_data, n_interp_samples, 135, 30)
                         cycle_metric_data[region_name] = interp_data
 
                     else:  # "both" - concatenate flexion + extension
-                        flex_data = extract_frame_window(region_metrics_full[region_name][metric],
+                        flex_data = extract_frame_window(region_metrics_full[region_name][source_metric],
                                                        cycle.flex.start, cycle.flex.end)
-                        ext_data = extract_frame_window(region_metrics_full[region_name][metric],
+                        ext_data = extract_frame_window(region_metrics_full[region_name][source_metric],
                                                       cycle.ext.start, cycle.ext.end)
 
                         flex_interp, _ = interpolate_com_to_angle(flex_data, n_interp_samples, 30, 135)
@@ -1054,6 +1372,20 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                 plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
             elif metric == "total":
                 plot_intra_region_totals_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
+            elif metric == "flux":
+                # For flux, compute from interpolated SB and JC total intensities
+                all_flux_data = []
+                for cycle_metric_data, x_positions, angles, legend_label, cycle in all_cycle_data:
+                    # Extract interpolated SB and JC intensities
+                    I_SB_interp = cycle_metric_data['SB']
+                    I_JC_interp = cycle_metric_data['JC']
+                    
+                    # Compute flux in angle space
+                    flux_data = compute_boundary_flux(I_SB_interp, I_JC_interp)
+                    
+                    all_flux_data.append((flux_data, x_positions, angles, legend_label, cycle))
+                
+                plot_boundary_flux_angle_mode(all_flux_data, phase, n_interp_samples, video_title, norm_label)
 
 
 if __name__ == "__main__":
@@ -1071,7 +1403,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=["angle", "frame"], default="angle",
                        help="Plotting mode: angle (rescaled, contiguous) or frame (default: angle)")
     parser.add_argument("--metric", default="com",
-                       help="Comma-separated metrics to plot: com,total (default: com)")
+                       help="Comma-separated metrics to plot: com,total,flux (default: com)")
     parser.add_argument("--n-interp-samples", type=int, default=105,
                        help="Number of interpolation samples per phase in angle mode (default: 105)")
 
