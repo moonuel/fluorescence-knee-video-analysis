@@ -125,6 +125,33 @@ def draw_segment_boundaries(video: np.ndarray, radial_regions: np.ndarray, meta)
     return overlay
 
 
+def normalize_intensity_per_frame_2d(total_sums: np.ndarray) -> np.ndarray:
+    """
+    Normalize intensity values per frame (column-wise) to 0–100 scale.
+
+    This mirrors the normalization logic from generate_spatiotemporal_heatmaps.py,
+    applied to the (n_segments, n_frames) array where each column is a frame.
+
+    Args:
+        total_sums: Array with shape (n_segments, n_frames) containing raw intensities
+
+    Returns:
+        Normalized array with same shape, values scaled 0–100 per frame
+    """
+    norm_intensity = total_sums.astype(float).copy()
+    n_segments, n_frames = norm_intensity.shape
+
+    for frame_idx in range(n_frames):
+        frame_data = norm_intensity[:, frame_idx]
+        min_val, max_val = frame_data.min(), frame_data.max()
+        if max_val > min_val:
+            norm_intensity[:, frame_idx] = 100 * (frame_data - min_val) / (max_val - min_val)
+        else:
+            norm_intensity[:, frame_idx] = 0
+
+    return norm_intensity
+
+
 def load_intensity_data(video: np.ndarray,
                         masks: np.ndarray
                         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -374,7 +401,8 @@ def build_angle_axis_for_cycles(cycle_indices: List[int],
 
 
 def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange', Cycle]],
-                                      video_title: str
+                                      video_title: str,
+                                      norm_label: str
                                       ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs frame index for multiple cycles.
 
@@ -442,7 +470,7 @@ def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.n
         ax.set_title(f"{name} Intra-region COM")
 
     axes[-1].set_xlabel("Frame index")
-    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles")
+    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (based on {norm_label})")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -454,7 +482,8 @@ def plot_intra_region_coms_frame_mode(all_region_coms: List[Tuple[Dict[str, np.n
 def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
                                       phase: str,
                                       n_interp_samples: int,
-                                      video_title: str
+                                      video_title: str,
+                                      norm_label: str
                                       ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs angle for multiple cycles.
 
@@ -574,7 +603,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
             ax.set_xticklabels(all_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based)")
+    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {norm_label})")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -584,7 +613,8 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
 
 
 def plot_intra_region_totals_frame_mode(all_region_totals: List[Tuple[Dict[str, np.ndarray], str, 'FrameRange', Cycle]],
-                                        video_title: str
+                                        video_title: str,
+                                        norm_label: str
                                         ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region total intensity vs frame index for multiple cycles.
 
@@ -652,7 +682,7 @@ def plot_intra_region_totals_frame_mode(all_region_totals: List[Tuple[Dict[str, 
         ax.set_title(f"{name} Intra-region Total Intensity")
 
     axes[-1].set_xlabel("Frame index")
-    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles")
+    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (based on {norm_label})")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -664,7 +694,8 @@ def plot_intra_region_totals_frame_mode(all_region_totals: List[Tuple[Dict[str, 
 def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
                                         phase: str,
                                         n_interp_samples: int,
-                                        video_title: str
+                                        video_title: str,
+                                        norm_label: str
                                         ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region total intensity vs angle for multiple cycles.
 
@@ -784,7 +815,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
             ax.set_xticklabels(all_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based)")
+    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {norm_label})")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -793,16 +824,19 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     plt.show()
 
 
-def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n_interp_samples=105, metrics=None):
+def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n_interp_samples=105, metrics=None, normalize=True):
     """Main analysis pipeline."""
     if cycle_indices is None:
         cycle_indices = [0]
     if metrics is None:
         metrics = ["com"]
 
+    # Create normalization label for plots and console output
+    norm_label = "normalized intensities" if normalize else "raw intensities"
     print(f"Loading video: {condition} {id} (N{nsegs})")
     print(f"Processing cycles: {cycle_indices} in {mode} mode")
     print(f"Computing metrics: {metrics}")
+    print(f"Normalization: {norm_label}")
 
     # Get metadata
     meta = get_knee_meta(condition, int(id), int(nsegs))
@@ -822,6 +856,10 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
 
         # Compute intensity data
         total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
+
+        # Apply normalization if requested
+        if normalize:
+            total_sums = normalize_intensity_per_frame_2d(total_sums)
 
         # Get anatomical regions from metadata
         region_ranges = [
@@ -869,7 +907,7 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                         cycle_info = legend_label
                         all_region_coms.append((region_coms_window, cycle_info, fr, cycle))
 
-                plot_intra_region_coms_frame_mode(all_region_coms, video_title)
+                plot_intra_region_coms_frame_mode(all_region_coms, video_title, norm_label)
 
             elif metric == "total":
                 # Collect data for all selected cycles
@@ -902,7 +940,7 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                         cycle_info = legend_label
                         all_region_totals.append((region_totals_window, cycle_info, fr, cycle))
 
-                plot_intra_region_totals_frame_mode(all_region_totals, video_title)
+                plot_intra_region_totals_frame_mode(all_region_totals, video_title, norm_label)
 
     else:  # mode == "angle"
         # New angle-based mode with interpolation and contiguous plotting
@@ -919,6 +957,10 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
 
         # Compute intensity data
         total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
+
+        # Apply normalization if requested
+        if normalize:
+            total_sums = normalize_intensity_per_frame_2d(total_sums)
 
         # Get anatomical regions from metadata
         region_ranges = [
@@ -989,9 +1031,9 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
 
             # Plot the results for this metric
             if metric == "com":
-                plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples, video_title)
+                plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
             elif metric == "total":
-                plot_intra_region_totals_angle_mode(all_cycle_data, phase, n_interp_samples, video_title)
+                plot_intra_region_totals_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
 
 
 if __name__ == "__main__":
@@ -1013,8 +1055,20 @@ if __name__ == "__main__":
     parser.add_argument("--n-interp-samples", type=int, default=105,
                        help="Number of interpolation samples per phase in angle mode (default: 105)")
 
+    # Normalization toggle (default True)
+    norm_group = parser.add_mutually_exclusive_group()
+    norm_group.add_argument(
+        "--normalize", dest="normalize", action="store_true",
+        help="Enable per-frame intensity normalization (default)"
+    )
+    norm_group.add_argument(
+        "--no-normalize", dest="normalize", action="store_false",
+        help="Disable per-frame intensity normalization"
+    )
+    parser.set_defaults(normalize=True)
+
     args = parser.parse_args()
 
     cycle_indices = [int(x.strip()) for x in args.cycle_indices.split(',')]
     metrics = [x.strip() for x in args.metric.split(',')]
-    main(args.condition, args.id, args.nsegs, cycle_indices, args.phase, args.mode, args.n_interp_samples, metrics)
+    main(args.condition, args.id, args.nsegs, cycle_indices, args.phase, args.mode, args.n_interp_samples, metrics, args.normalize)
