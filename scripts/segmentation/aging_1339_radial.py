@@ -1,180 +1,37 @@
-"""
-Radial segmentation-based analysis of the 1339 aging knee video data.
-Segments the knee into N equally-spaced radial slices, and then groups them into chunks associated with the left/middle/right portions of the knee.
-"""
+from pipelines.base import KneeSegmentationPipeline
+from utils import utils
 
+class Aging1339(KneeSegmentationPipeline):
 
-import utils.io as io
-import utils.views as views
-import utils.utils as utils
-import core.data_processing as dp
-import core.radial_segmentation as rdl
-import core.knee_segmentation as ks
-import numpy as np
-import cv2
-import numpy as np
-from skimage.exposure import match_histograms
-from config import VERBOSE
-from typing import Tuple
-import matplotlib.pyplot as plt
+    def __init__(self, input_path, video_id, condition, n_segments=64, output_dir=None):
+        super().__init__(input_path, video_id, condition, n_segments, output_dir)
 
-def save_1339_data():
-    """Imports, centers, crops, and saves frames 0-650 of the 1339 aging video data. Only needs to be used once"""
-    video = io.load_hdf5_video_chunk("../data/raw/right-0 min-regional movement_00001339_grayscale.h5", (0,650), verbose=True)
-    video = np.rot90(video, k=1, axes=(1,2))
-    video = np.flip(video, axis=2)
+    def preprocess(self, video=None, rot90_k=1, rot_angle=-26, crop_size=500, empty_fill_value=17, inplace=False):
+        return super().preprocess(video, rot90_k, rot_angle, crop_size, empty_fill_value, inplace)
 
-    video, _ = ks.centre_video(video)
-    video = utils.center_crop(video, 500)
+    def generate_otsu_mask(self, video=None, blur_kernel=(25,25), thresh_scale=0.55, hist_frame=198, inplace=False):
+        return super().generate_otsu_mask(video, blur_kernel, thresh_scale, hist_frame, inplace)
 
-    io.save_nparray(video, "../data/segmented/1339_knee_frames_0-649_ctrd.npy")
-    return
+    def refine_otsu_mask(self, mask=None, morph_open_kernel=(25,25), morph_close_kernel=None, morph_erode_kernel=None, morph_dilate_kernel=(21,21), inplace=False):
+        return super().refine_otsu_mask(mask, morph_open_kernel, morph_close_kernel, morph_erode_kernel, morph_dilate_kernel, inplace)
 
-def load_1339_data() -> np.ndarray:
-    """Loads the saved data. See save_1339_data()"""
-    return io.load_nparray("../data/segmented/1339_knee_frames_0-649_ctrd.npy")
+    def generate_interior_mask(self, hist_video=None, adaptive_block=161, adaptive_c=12, inplace=False):
+        return super().generate_interior_mask(hist_video, adaptive_block, adaptive_c, inplace)
 
-def match_histograms_video(video, reference_frame=None):
-    """
-    Apply histogram matching to each frame in the video.
-    
-    Args:
-        video: np.ndarray of shape (n_frames, height, width)
-        reference_frame: optional np.ndarray (height, width), default is video[0]
+    def generate_femur_mask(self, outer_mask=None, interior_mask=None, inplace=False):
+        outer_mask = utils.morph_erode(self.otsu_mask, (75,75))
+        return super().generate_femur_mask(outer_mask, interior_mask, inplace)
 
-    Returns:
-        matched_video: np.ndarray of same shape as input
-    """
-    if reference_frame is None:
-        reference_frame = video[0]
+    def refine_femur_mask(self, mask=None, morph_open_kernel=None, morph_close_kernel=(35,35), morph_erode_kernel=None, morph_dilate_kernel=None, inplace=False):
+        femur_mask = self.femur_mask
+        femur_mask[:, 352:, :] = 0
+        femur_mask[:, :157, :] = 0
+        femur_mask[:, :, :205] = 0
+        return super().refine_femur_mask(mask, morph_open_kernel, morph_close_kernel, morph_erode_kernel, morph_dilate_kernel, inplace)
 
-    if isinstance(reference_frame, int):
-        print(f"reference_frame is type(int). Taking reference_frame = video[{reference_frame}] instead.")
-        reference_frame = video[reference_frame]
-
-    if not isinstance(reference_frame, np.ndarray):
-        raise TypeError(f"{reference_frame=} should be of type: np.ndarray. Given: {type(reference_frame)=}")
-        
-
-    matched_video = np.empty_like(video)
-    for i in range(video.shape[0]):
-        matched_video[i] = match_histograms(video[i], reference_frame)
-        
-    return matched_video
-
-
-def forward_fill_jagged(arr):
-    """
-    Forward fills empty frames in a jagged NumPy array (dtype=object).
-    
-    Parameters:
-        arr (np.ndarray): jagged array of shape (nframes, npts*, 2)
-        
-    Returns:
-        np.ndarray: forward-filled jagged array (same shape/dtype)
-    """
-    filled = arr.copy()
-    last_valid = None
-    
-    for i, frame in enumerate(filled):
-        frame = np.asarray(frame)
-        if frame.size == 0:
-            if last_valid is not None:
-                filled[i] = last_valid
-        else:
-            last_valid = frame
-    
-    return filled
-
-
-def get_mask_around_femur(video:np.ndarray) -> np.ndarray:
-    """Takes the centered grayscale 1339 video and returns a binary mask appropriate for estimating the position of the femur."""
-
-    video_blrd = utils.blur_video(video)
-    video_blrd_hist = match_histograms_video(video_blrd, 155) # For consistency of Otsu segmentation
-
-    # Get outer mask
-    otsu_mask = ks.get_otsu_masks(video_blrd_hist, 0.6)
-    # otsu_mask = utils.morph_erode(otsu_mask, (41,41))
-    
-    # views.show_frames(otsu_mask, "debugging otsu mask params")
-    # views.draw_mask_boundary(video_blrd_hist, otsu_mask)
-
-    # Get inner mask
-    femur_mask = ks.mask_adaptive(video_blrd, 151, 8)
-
-    # Get mask for femur estimation
-    femur_mask = rdl.interior_mask(otsu_mask, femur_mask)
-
-    # Refinements
-    femur_mask = utils.blur_video(femur_mask, (5,5)) 
-    femur_mask = (femur_mask > 0).astype(np.uint8) * 255 # clip blurred mask to binary mask
-
-    femur_mask[:, 352:, :] = 0
-    femur_mask[:, :157, :] = 0
-    femur_mask[:, :, :192] = 0
-
-    return femur_mask
-
-
-
-def main():
-    print("main() called!")
-
-    video = load_1339_data()
-    video = np.flip(video, axis=2)
-    nfs, h, w = video.shape
-    print(f"{video.shape=}")
-    
-    agl = -26
-    video = utils.rotate_video(video, agl)
-    video[video==0] = 17 # Fill empty pixels with background noise 
-
-    video = utils.blur_video(video, kernel_dims=(11,11), sigma=3)
-
-    # Estimate femur position
-    mask = get_mask_around_femur(video)
-    femur_bndry = rdl.sample_femur_interior_pts(mask, 128)
-    # views.draw_points(video, femur_bndry)
-
-    # Estimate femur tip
-    femur_tip_bndry = rdl.estimate_femur_tip_boundary(femur_bndry)
-    femur_tip_bndry = rdl.filter_outlier_points_centroid(femur_tip_bndry, eps=60)
-    # femur_tip_bndry = forward_fill_jagged(femur_tip_bndry)
-    # v1 = views.draw_points(video, femur_tip_bndry)
-
-    femur_tip = rdl.get_centroid_pts(femur_tip_bndry)
-    femur_tip = rdl.smooth_points(femur_tip, 10)
-    # views.draw_points(v1, femur_tip)
-
-    # Estimate femur midpoint
-    femur_mid_bndry = rdl.estimate_femur_midpoint_boundary(femur_bndry, 0.1, 0.4)
-    # femur_mid_bndry = forward_fill_jagged(femur_mid_bndry)
-    v2 = views.draw_points(video, femur_mid_bndry, False)
-    
-    femur_mid = rdl.get_centroid_pts(femur_mid_bndry)
-    femur_mid = rdl.smooth_points(femur_mid, 10)    
-    
-    # views.draw_points(v2, femur_mid)
-
-    # Get Otsu mask
-    video_hist = rdl.match_histograms_video(video, video[244])
-    otsu_masks = ks.get_otsu_masks(video_hist, thresh_scale=0.6)
-
-    # Radially segment video
-    radial_masks = rdl.label_radial_masks(otsu_masks, femur_tip, femur_mid, 16)
-
-    breakpoint()
-
-    return
-
-    # Save segmentation data
-    io.save_nparray(video, "../data/segmented/1339_knee_radial_video_N16.npy")
-    io.save_nparray(radial_masks, "../data/segmented/1339_knee_radial_masks_N16.npy")
-    io.save_nparray(radial_regions, "../data/segmented/1339_knee_radial_regions_N16.npy")
-
-    return
-
+    def radial_segmentation(self, mask=None, femur_mask=None, n_lines=128, n_segments=64, tip_range=(0.05,0.5), midpoint_range=(0.6,0.9), smooth_window=9, inplace=False):
+        return super().radial_segmentation(mask, femur_mask, n_lines, n_segments, tip_range, midpoint_range, smooth_window, inplace)
 
 if __name__ == "__main__":
-    main()
+    pipeline = Aging1339("data/raw/right-0 min-regional movement_00001339.npy", "1339", "aging")
+    pipeline.run(debug=True)
