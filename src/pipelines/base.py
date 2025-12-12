@@ -116,6 +116,8 @@ class KneeSegmentationPipeline:
         self.interior_mask = None
         self.femur_mask = None
         self.radial_mask = None
+        self.femur_tip = None
+        self.femur_midpt = None
         print(f"Initialized segmentation pipeline: {condition}_{video_id} (N={n_segments})")
 
     # ------------------------------------------------------------------
@@ -369,6 +371,8 @@ class KneeSegmentationPipeline:
 
         if inplace:
             self.radial_mask = radial_labels
+            self.femur_tip = femur_tip
+            self.femur_midpt = femur_midpt
 
         return radial_labels
 
@@ -573,7 +577,23 @@ class KneeSegmentationPipeline:
         print("Step 7: Performing radial segmentation...")
         self.radial_segmentation(inplace=True)
         if debug:
-            views.show_frames([self.radial_mask * (255 // 64), views.draw_mask_boundary(self.processed_video, self.radial_mask)], "7. Radial Segmentation")
+            # draw boundary between seg 1 and seg N on processed_video
+            boundary_overlay = views.draw_boundary_line(
+                self.processed_video,
+                self.radial_mask,
+                seg_num=1,
+                n_segments=self.n_segments,
+                show_video=False,
+            )
+
+            boundary_overlay = views.draw_outer_radial_mask_boundary(
+                boundary_overlay, self.radial_mask)
+
+            views.show_frames([
+                self.radial_mask * (255 // self.n_segments),
+                boundary_overlay
+            ], "7. Radial Segmentation with Boundary Line")
+
             if debug_pause: input("Press Enter to continue...")
 
         print("\n=== Pipeline Complete ===\n")
