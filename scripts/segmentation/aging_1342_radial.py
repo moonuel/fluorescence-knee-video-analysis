@@ -1,168 +1,168 @@
-import numpy as np
-import cv2
-from core import knee_segmentation as ks
+from pipelines.base import KneeSegmentationPipeline
+from utils import utils
 from core import radial_segmentation as rdl
-from utils import utils, io, views
-from functools import partial
-
-def get_femur_mask():
-    
-    video = io.load_nparray("../data/segmented/1342_knee_frames_ctrd.npy")[:500]
-    video = utils.center_crop(video, 500)
-    video = np.rot90(video, k=1, axes=(1,2))
-    video = np.flip(video, axis=2)
-    nfs, h, w = video.shape
-    print(nfs, h, w)
-    video = utils.rotate_video(video, 8)
-    video[video == 0] = 16 # Fill empty borders with I=16
-
-    # Blur
-    video = utils.blur_video(video)
-
-    # Rescale intensities for more consistent segmentation
-    ref_fm = video[48]
-    video_hist = rdl.match_histograms_video(video, ref_fm)
-
-    # Get outer mask
-    outer_mask = ks.get_otsu_masks(video_hist, thresh_scale=0.8)
-    outer_mask = utils.morph_erode(outer_mask, (25,25)) # To shrink it/remove noise a bit 
-
-    # Get inner mask
-    inner_mask = ks.mask_adaptive(video_hist, 141, 8)
-
-    # Get femur mask
-    femur_mask = rdl.interior_mask(outer_mask, inner_mask)
-    femur_mask = utils.morph_open(femur_mask, (15,15))
-    femur_mask = utils.morph_close(femur_mask, (25,25))
-    femur_mask = utils.blur_video(femur_mask)
-    femur_mask = femur_mask > 127
-
-    # views.show_frames(video, "video")
-    views.show_frames(video_hist, "video hist")
-    # views.show_frames(outer_mask, "outer mask")
-    # views.show_frames(inner_mask, "inner mask")
-    # views.show_frames(femur_mask, "femur mask")
-    v0 = views.draw_mask_boundary(video, femur_mask)
-    views.show_frames(v0, "mask boundary")
-
-    return femur_mask
 
 
-def get_boundary_points(mask, N_lns):
+class Aging1342Segmentation(KneeSegmentationPipeline):
+    """Segmentation pipeline for aging knee 1342 using the new interface.
 
-    mask = mask.copy()
-
-    # Manual refinements
-    mask[:, :182, :] = 0
-    mask[:, 320:, :] = 0
-    mask[:, :, 308:] = 0
-
-    boundary_points = rdl.sample_femur_interior_pts(mask, N_lns=N_lns)
-
-    # v0 = views.draw_points((mask*63).astype(np.uint8), boundary_points)
-    # views.show_frames(v0)
-
-    return boundary_points
-
-
-def forward_fill_jagged(arr):
+    Parameter mapping notes vs. legacy script:
+    - Preprocessing: center crop 500, rot90_k=1, rotate +8 deg, fill empty=16.
+      (Matches `load_video()` in old script; the femur-mask-specific horizontal flip
+       is *not* used for the final radial masks, so we omit it here.)
+    - Otsu mask: blur + histogram match to frame 76, thresh_scale=0.8,
+      morphological open (29, 29) as in `get_otsu_mask`.
+    - Interior mask: adaptive threshold with block=141, C=8 as in `get_femur_mask`.
+    - Femur mask: intersection of outer + interior, then open(15, 15), close(25, 25)
+      to approximate the legacy femur mask pipeline.
+    - Radial segmentation: manual cuts on femur mask before boundary sampling
+      (rows <182, rows >=320, cols >=308 set to 0), N_lns=128, N_segments=64,
+      tip range 0.1–0.5 and midpoint range 0.6–1.0 using midpoint-boundary
+      estimator for both tip and midpoint (matching legacy behavior).
     """
-    Forward fills empty frames in a jagged NumPy array (dtype=object).
-    
-    Parameters:
-        arr (np.ndarray): jagged array of shape (nframes, npts*, 2)
-        
-    Returns:
-        np.ndarray: forward-filled jagged array (same shape/dtype)
-    """
-    filled = arr.copy()
-    last_valid = None
-    
-    for i, frame in enumerate(filled):
-        frame = np.asarray(frame)
-        if frame.size == 0:
-            if last_valid is not None:
-                filled[i] = last_valid
-        else:
-            last_valid = frame
-    
-    return filled
 
+    # ------------------------
+    # Preprocessing
+    # ------------------------
+    def preprocess(self, video=None, rot90_k=1, rot_angle=-12, crop_size=500,
+                   empty_fill_value=16, inplace=False):
+        """Apply rotation, crop, and border fill.
 
-def estimate_femur_tip(boundary_points, cutoff):
+        Legacy mapping:
+        - utils.center_crop(video, 500)
+        - np.rot90(video, k=1, axes=(1, 2))
+        - utils.rotate_video(video, 8)
+        - video[video == 0] = 16
+        """
+        return super().preprocess(video, rot90_k, rot_angle, crop_size,
+                                  empty_fill_value, inplace)
 
-    femur_tip_boundary = rdl.estimate_femur_tip_boundary(boundary_points, cutoff)
+    # ------------------------
+    # Otsu / Outer Mask
+    # ------------------------
+    def generate_otsu_mask(self, video=None, blur_kernel=(25, 25),
+                           thresh_scale=0.8, hist_frame=76, inplace=False):
+        """Outer mask using Otsu with histogram matching to frame 76.
 
-    femur_tip = rdl.get_centroid_pts(femur_tip_boundary)
-    femur_tip = rdl.smooth_points(femur_tip, window_size=9)
+        Legacy mapping:
+        - video = utils.blur_video(video)
+        - video_hist = rdl.match_histograms_video(video, video[76])
+        - otsu_mask = ks.get_otsu_masks(video_hist, 0.8)
+        - otsu_mask = utils.morph_open(otsu_mask, (29, 29))
+        (We split the open step into refine_otsu_mask.)
+        """
+        return super().generate_otsu_mask(video, blur_kernel,
+                                          thresh_scale, hist_frame, inplace)
 
-    return femur_tip
+    def refine_otsu_mask(self, mask=None, morph_open_kernel=(29, 29),
+                         morph_close_kernel=None, morph_erode_kernel=None,
+                         morph_dilate_kernel=(21,21), inplace=False):
+        """Apply morphological opening as in legacy get_otsu_mask."""
+        return super().refine_otsu_mask(mask, morph_open_kernel,
+                                        morph_close_kernel, morph_erode_kernel,
+                                        morph_dilate_kernel, inplace)
 
+    # ------------------------
+    # Interior / Femur Mask
+    # ------------------------
+    def generate_interior_mask(self, hist_video=None, adaptive_block=141,
+                               adaptive_c=8, inplace=False):
+        """Interior mask using adaptive thresholding.
 
-def estimate_femur_midpoint(boundary_points, start, end):
+        Legacy mapping from get_femur_mask:
+        - inner_mask = ks.mask_adaptive(video_hist, 141, 8)
+        """
+        return super().generate_interior_mask(hist_video, adaptive_block,
+                                              adaptive_c, inplace)
 
-    femur_midpt_boundary = rdl.estimate_femur_midpoint_boundary(boundary_points, start, end)
+    def refine_femur_mask(self, mask=None, morph_open_kernel=(15, 15),
+                          morph_close_kernel=(21, 21), morph_erode_kernel=None,
+                          morph_dilate_kernel=None, inplace=False):
+        """Approximate legacy femur_mask refinement.
 
-    femur_midpt = rdl.get_centroid_pts(femur_midpt_boundary)
-    femur_midpt = rdl.smooth_points(femur_midpt, window_size=9)
+        Legacy steps:
+        - femur_mask = morph_open(femur_mask, (15, 15))
+        - femur_mask = morph_close(femur_mask, (25, 25))
+        - femur_mask = blur_video(femur_mask)  # then threshold >127
 
-    return femur_midpt
+        Here we keep open+close. If you want, we could also add a mild blur
+        before thresholding in a custom override.
+        """
+        # mask = self.femur_mask
+        # mask[:,:193,:] = 0
+        # mask[:,327:,:] = 0
+        # mask[:,:,:189] = 0
+        # mask[:,:,348:] = 0
+        return super().refine_femur_mask(mask, morph_open_kernel,
+                                         morph_close_kernel, morph_erode_kernel,
+                                         morph_dilate_kernel, inplace)
 
+    # ------------------------
+    # Radial Segmentation
+    # ------------------------
+    def radial_segmentation(self, mask=None, femur_mask=None, n_lines=128,
+                            n_segments=64, tip_range=(0.05, 0.5),
+                            midpoint_range=(0.5, 0.8), smooth_window=9,
+                            inplace=False):
+        """Radial segmentation with manual boundary cuts.
 
-def load_video():
+        Legacy mapping:
+        - Manual femur mask cuts before sampling boundary points:
+            mask[:, :182, :] = 0
+            mask[:, 320:, :] = 0
+            mask[:, :, 308:] = 0
+        - boundary_points = rdl.sample_femur_interior_pts(mask, N_lns=128)
+        - femur_tip  = estimate_femur_midpoint(boundary_points, 0.1, 0.5)
+        - femur_midpt = estimate_femur_midpoint(boundary_points, 0.6, 1.0)
+        - radial_masks = rdl.label_radial_masks(otsu_mask, femur_tip, femur_midpt, N=64)
+        """
+        if mask is None:
+            mask = self.otsu_mask
+        if femur_mask is None:
+            femur_mask = self.femur_mask
 
-    video = io.load_nparray("../data/segmented/1342_knee_frames_ctrd.npy")[:497]
-    video = utils.center_crop(video, 500)
-    video = np.rot90(video, k=1, axes=(1,2))
-    # video = np.flip(video, axis=2)
-    nfs, h, w = video.shape
-    print(nfs, h, w)
-    video = utils.rotate_video(video, 8)
-    video[video == 0] = 16 # Fill empty borders with I=16
+        # Apply manual refinements for boundary sampling on a copy
+        boundary_mask = femur_mask.copy()
+        boundary_mask[:, :182, :] = 0
+        boundary_mask[:, 320:, :] = 0
+        boundary_mask[:, :, 308:] = 0
 
-    return video
+        boundary_points = rdl.sample_femur_interior_pts(boundary_mask,
+                                                        N_lns=n_lines)
+        boundary_points = rdl.forward_fill_jagged(boundary_points)
 
+        # Tip: use midpoint-boundary estimator on [0.1, 0.5]
+        s, e = tip_range
+        tip_bndry = rdl.estimate_femur_midpoint_boundary(boundary_points, s, e)
+        tip_bndry = rdl.forward_fill_jagged(tip_bndry)
+        femur_tip = rdl.get_centroid_pts(tip_bndry)
+        femur_tip = rdl.smooth_points(femur_tip, smooth_window)
 
-def get_otsu_mask(video):
+        # Midpoint: midpoint-boundary estimator on [0.6, 1.0]
+        s, e = midpoint_range
+        midpt_bndry = rdl.estimate_femur_midpoint_boundary(boundary_points,
+                                                            s, e)
+        midpt_bndry = rdl.forward_fill_jagged(midpt_bndry)
+        femur_midpt = rdl.get_centroid_pts(midpt_bndry)
+        femur_midpt = rdl.smooth_points(femur_midpt, smooth_window)
 
-    video = utils.blur_video(video)
-    video_hist = rdl.match_histograms_video(video, video[76])
+        radial_labels = rdl.label_radial_masks(mask, femur_tip, femur_midpt,
+                                               N=n_segments)
 
-    otsu_mask = ks.get_otsu_masks(video_hist, 0.8)
-    otsu_mask = utils.morph_open(otsu_mask, (29,29))
+        if inplace:
+            self.radial_mask = radial_labels
+            self.femur_tip = femur_tip
+            self.femur_midpt = femur_midpt
 
-    return otsu_mask
-
+        return radial_labels
 
 
 if __name__ == "__main__":
-
-    video = load_video()
-    otsu_mask = get_otsu_mask(video)
-    # mask = get_femur_mask()
-    # io.save_nparray(mask, "../data/segmented/1342_aging_mask_0-499.npy")
-
-    mask = io.load_nparray("../data/segmented/1342_aging_mask_0-499.npy")[:497]
-
-    boundary_points = get_boundary_points(mask, N_lns=128)
-    
-    femur_tip = estimate_femur_midpoint(boundary_points, start=0.1, end=0.5)
-    femur_midpt = estimate_femur_midpoint(boundary_points, start=0.6, end=1)
-
-    radial_masks = rdl.label_radial_masks(otsu_mask, femur_tip, femur_midpt, N=64)
-
-    v0 = views.draw_points((mask*31).astype(np.uint8), femur_tip)
-    v0 = views.draw_points(v0, femur_midpt)
-    v0 = views.draw_points(v0, boundary_points)
-    v0 = views.draw_line(v0, femur_midpt, femur_tip)
-    views.show_frames(v0)
-    
-    # v1 = views.draw_mask_boundaries(video, radial_masks)
-    # views.show_frames(v1)
-
-    views.show_frames([radial_masks * (255 // radial_masks.max()), video])
-
-    breakpoint()
-
-    # io.save_nparray(video, "../data/segmented/aging_1342_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/segmented/aging_1342_radial_masks_N16.npy")
+    # Input path and naming consistent with other scripts (adjust if needed)
+    pipeline = Aging1342Segmentation(
+        input_path="data/raw/right 10 min-regional movement_00001342.npy",  # or updated path
+        video_id="1342",
+        condition="aging",
+        n_segments=64,
+    )
+    pipeline.run(debug=True)
