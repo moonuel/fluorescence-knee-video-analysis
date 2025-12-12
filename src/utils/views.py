@@ -740,6 +740,98 @@ def rescale_video(video:np.ndarray, scale_factor:int, show_video:bool=True, show
     return video_rscld
 
 
+def draw_boundary_line(video: np.ndarray,
+                       radial_mask: np.ndarray,
+                       seg_num: int,
+                       n_segments: int = None,
+                       intensity: int = 255,
+                       thickness: int = 1,
+                       show_video: bool = False) -> np.ndarray:
+    """
+    Draws the boundary line between two neighboring radial segments.
+
+    The "boundary" of seg_num is defined as the interface between seg_num-1
+    and seg_num. For seg_num = 1, the previous segment is N (wrap-around).
+
+    Args:
+        video: Grayscale video, shape (T, H, W), dtype uint8 (or convertible).
+        radial_mask: Label mask, shape (T, H, W), values 0..N.
+        seg_num: Segment index whose boundary we want to draw.
+        n_segments: Total number of segments (if None, inferred from max label).
+        intensity: Pixel intensity for the boundary (0–255).
+        thickness: Line thickness in pixels.
+        show_video: If True, preview via show_frames.
+
+    Returns:
+        A copy of `video` with the boundary line overlaid.
+    """
+    if VERBOSE:
+        print("draw_boundary_line() called!")
+
+    video = np.asarray(video)
+    labels = np.asarray(radial_mask)
+
+    assert video.shape == labels.shape, (
+        f"Shape mismatch: video {video.shape} vs radial_mask {labels.shape}")
+
+    if video.dtype != np.uint8:
+        video_u8 = video.astype(np.uint8)
+    else:
+        video_u8 = video.copy()
+
+    if n_segments is None:
+        n_segments = int(labels.max())
+
+    if not (1 <= seg_num <= n_segments):
+        raise ValueError(
+            f"seg_num must be in [1, {n_segments}], got {seg_num}")
+
+    prev_seg = n_segments if seg_num == 1 else seg_num - 1
+
+    T, H, W = labels.shape
+    output = video_u8.copy()
+
+    for t in range(T):
+        frame = output[t]
+        lab   = labels[t]
+
+        # Build two binary masks (0/1) for the neighboring segments
+        seg_curr = (lab == seg_num).astype(np.uint8)
+        seg_prev = (lab == prev_seg).astype(np.uint8)
+
+        if seg_curr.max() == 0 and seg_prev.max() == 0:
+            # Nothing to draw in this frame
+            continue
+
+        # Find boundary pixels: for each pixel in seg_curr,
+        # check if any adjacent pixel belongs to seg_prev
+        # Shift seg_prev in the 4-connected directions
+        up    = np.zeros_like(seg_prev); up[1:,  :] = seg_prev[:-1,  :]
+        down  = np.zeros_like(seg_prev); down[:-1, :] = seg_prev[1:,   :]
+        left  = np.zeros_like(seg_prev); left[:, 1:] = seg_prev[:, :-1]
+        right = np.zeros_like(seg_prev); right[:, :-1] = seg_prev[:, 1:]
+
+        # Any neighboring prev pixel next to a current pixel
+        neighbor_prev = up | down | left | right
+
+        # Boundary pixels are where seg_curr is true and has prev neighbor
+        boundary = (seg_curr & neighbor_prev).astype(np.uint8) * 255
+
+        if boundary.max() == 0:
+            continue
+
+        # Draw the boundary as a contour line
+        contours, _ = cv2.findContours(boundary, cv2.RETR_EXTERNAL,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(frame, contours, -1, color=intensity,
+                         thickness=thickness)
+
+    if show_video:
+        show_frames(output, title=f"Boundary line for segment {seg_num}")
+
+    return output
+
+
 def draw_text(frame:np.ndarray, text:str, pos:str='bl') -> np.ndarray:
     """Draws text on a frame. Some planned options in the future"""
 
@@ -749,7 +841,7 @@ def draw_text(frame:np.ndarray, text:str, pos:str='bl') -> np.ndarray:
     positions = {"bl": (20, h-10)} # TODO: other positions
     coords = positions[pos]
 
-    cv2.putText(frame, text, coords, fontFace = cv2.FONT_HERSHEY_SIMPLEX, 
+    cv2.putText(frame, text, coords, fontFace = cv2.FONT_HERSHEY_SIMPLEX,
             fontScale = 0.3, color = (255,255,0), thickness = 1, lineType=cv2.LINE_AA)
 
 
