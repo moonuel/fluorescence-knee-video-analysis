@@ -17,6 +17,7 @@ import numpy as np
 from pathlib import Path
 from utils import io, views
 import tifffile as tif
+from config.knee_metadata import get_knee_meta
 
 # Target videos: all 7 at N=64
 # Map (condition, video_id) to the actual file naming convention used in data/segmented/
@@ -67,11 +68,53 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
     radial_gray = radial_gray.astype(np.uint8)
 
     # 2. Boundary overlay on processed video (right side of concat)
-    # Draw boundary between seg 1 and N
+    # Start with processed video for boundary overlays
+    boundary_overlay = video.copy()
+
+    # Reference boundary between seg 1 and seg N (brightest)
     boundary_overlay = views.draw_boundary_line(
-        video, radial, seg_num=1, n_segments=n_segments, show_video=False
+        boundary_overlay,
+        radial,
+        seg_num=1,
+        n_segments=n_segments,
+        intensity=255,  # brightest
+        thickness=1,
+        show_video=False,
     )
-    # Draw outer union boundary
+
+    # Anatomical region boundaries if metadata available
+    try:
+        meta = get_knee_meta(condition, int(video_id), n_segments)
+        regions = meta.regions
+        jc = regions.get("JC")
+        ot = regions.get("OT")
+        sb = regions.get("SB")
+        if jc and ot and sb:
+            # Boundary between JC and OT (mid-bright)
+            boundary_overlay = views.draw_boundary_line(
+                boundary_overlay,
+                radial,
+                seg_num=ot.start,  # boundary between JC and OT
+                n_segments=n_segments,
+                intensity=200,  # slightly dimmer
+                thickness=1,
+                show_video=False,
+            )
+
+            # Boundary between OT and SB (dimmer)
+            boundary_overlay = views.draw_boundary_line(
+                boundary_overlay,
+                radial,
+                seg_num=sb.start,  # boundary between OT and SB
+                n_segments=n_segments,
+                intensity=150,  # dimmer still
+                thickness=1,
+                show_video=False,
+            )
+    except Exception as e:
+        print(f"Warning: no region metadata for {condition}_{video_id}_N{n_segments}, skipping anatomical boundaries: {e}")
+
+    # Outer radial mask boundary
     boundary_overlay = views.draw_outer_radial_mask_boundary(
         boundary_overlay, radial
     )
