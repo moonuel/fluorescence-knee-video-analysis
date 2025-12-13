@@ -3,7 +3,7 @@
 VERBOSE = True
 OUTPUT = False
 
-TYPES = {
+TYPES = { # TODO: remove this
     308: "normal",
     1190: "normal",
     1193: "normal",
