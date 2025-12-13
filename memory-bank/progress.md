@@ -24,7 +24,7 @@
 - **Package Structure**: Modular `src/` package with core, utils, and config
 - **Environment Management**: Multiple conda environments (1.0, 1.1, 1.2) with incremental updates
 - **Performance Optimization**: Multiprocessing for video stabilization, memory mapping for large arrays
-- **Visualization**: Matplotlib-based plotting and PDF export
+- **Visualization**: Matplotlib-based plotting, PDF export, segmentation preview export (MP4/TIF), and anatomical region boundaries (JC/OT/SB)
 
 ## What's Left to Build
 
@@ -111,6 +111,7 @@
 - Automated intensity extraction from segmented regions
 - Cycle-averaged analysis with temporal synchronization
 - Publication-quality visualization outputs
+- Segmentation preview export for all processed videos (MP4/TIF)
 - Modular codebase enabling analysis extensions
 
 ### Remaining Goals 🎯

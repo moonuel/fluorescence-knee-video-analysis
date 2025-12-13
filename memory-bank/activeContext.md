@@ -7,6 +7,8 @@ The project has implemented a complete spatiotemporal analysis pipeline for fluo
 - **Complete Heatmap Pipeline**: Implemented `generate_spatiotemporal_heatmaps.py` with full COM calculation and temporal synchronization
 - **Data Preparation**: Created `prepare_intensity_data.py` for automated Excel export of intensity data with cycle metadata
 - **Visualization Tools**: Developed `plot_com_cycles_from_heatmaps.py` for comparative COM plotting across multiple videos
+- **Segmentation Previews**: Exported MP4 and TIF previews for all 7 videos at N=64 via `export_saved_segmentation_previews.py`
+- **Anatomical Boundaries**: Extended `KneeSegmentationPipeline._show_radial_preview()` to display JC/OT and OT/SB region boundaries from `knee_metadata.py`
 - **Temporal Alignment**: Added 50:50 rescaling for equal-duration flexion/extension phase comparison
 - **Multi-Video Analysis**: Enabled batch processing and comparison of all 7 videos (4 normal, 3 aging)
 
