@@ -16,6 +16,10 @@ from config.knee_metadata import get_knee_meta, Cycle
 import sys
 import argparse
 
+# Angles to show on x-axis (others will have blank labels)
+# IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
+IMPORTANT_ANGLE_LABELS = {30, 45, 60, 75, 90, 105, 120, 135}
+
 @dataclass
 class RegionRange:
     """Defines a contiguous anatomical region by segment indices."""
@@ -596,11 +600,29 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
         for ax in axes:
             ax.set_xlim(min_x, max_x)
 
+    # Filter x-axis labels to reduce visual clutter: keep only specific angles
+    filtered_tick_labels = []
+    if all_tick_labels:
+        for label in all_tick_labels:
+            angle = None
+            if label.endswith("°"):
+                try:
+                    angle = int(label[:-1])
+                except ValueError:
+                    angle = None
+            if angle in IMPORTANT_ANGLE_LABELS:
+                filtered_tick_labels.append(label)
+            else:
+                # Use a whitespace label so the tick is present but unlabeled
+                filtered_tick_labels.append(" ")
+    else:
+        filtered_tick_labels = all_tick_labels
+
     # Set x-axis ticks and labels for all subplots
     if all_tick_positions:
         for ax in axes:
             ax.set_xticks(all_tick_positions)
-            ax.set_xticklabels(all_tick_labels)
+            ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
     fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {norm_label})")
@@ -808,11 +830,29 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         for ax in axes:
             ax.set_xlim(min_x, max_x)
 
+    # Filter x-axis labels to reduce visual clutter: keep only specific angles
+    filtered_tick_labels = []
+    if all_tick_labels:
+        for label in all_tick_labels:
+            angle = None
+            if label.endswith("°"):
+                try:
+                    angle = int(label[:-1])
+                except ValueError:
+                    angle = None
+            if angle in IMPORTANT_ANGLE_LABELS:
+                filtered_tick_labels.append(label)
+            else:
+                # Use a whitespace label so the tick is present but unlabeled
+                filtered_tick_labels.append(" ")
+    else:
+        filtered_tick_labels = all_tick_labels
+
     # Set x-axis ticks and labels for all subplots
     if all_tick_positions:
         for ax in axes:
             ax.set_xticks(all_tick_positions)
-            ax.set_xticklabels(all_tick_labels)
+            ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
     fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {norm_label})")
@@ -1089,6 +1129,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    cycle_indices = [int(x.strip()) for x in args.cycle_indices.split(',')]
+    cycle_indices = [int(x.strip()) - 1 for x in args.cycle_indices.split(',')]  # Convert 1-based user input to 0-based internal
     metrics = [x.strip() for x in args.metric.split(',')]
     main(args.condition, args.id, args.nsegs, cycle_indices, args.phase, args.mode, args.n_interp_samples, metrics, args.normalize)
