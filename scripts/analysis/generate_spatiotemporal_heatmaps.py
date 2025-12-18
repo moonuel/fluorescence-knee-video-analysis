@@ -393,10 +393,58 @@ def save_results_to_excel(excel_path: str, intensity_data: pd.DataFrame,
         normalize: Whether data is normalized (affects sheet name)
     """
     sheet_name = "normalized_frames" if normalize else "raw_frames"
+    n_segments = intensity_data.shape[1]
+    
+    # Compute angle mappings and tick positions exactly as in plot_heatmap
+    split_index = avg_flex.shape[0]
+    flex_labels = np.linspace(30, 130, avg_flex.shape[0])
+    ext_labels = np.linspace(135, 30, avg_ext.shape[0])
+    
+    # Define desired ticks for each phase
+    flex_tick_labels = np.arange(30, 131, 15)   # 30 → 130
+    ext_tick_labels = np.arange(135, 29, -15)   # 135 → 30
+    
+    # Find corresponding indices within each phase
+    flex_tick_positions = [np.abs(flex_labels - deg).argmin() for deg in flex_tick_labels]
+    ext_tick_positions = split_index + np.array([np.abs(ext_labels - deg).argmin() 
+                                                   for deg in ext_tick_labels])
+    
+    # Combine both
+    tick_positions = np.concatenate([flex_tick_positions, ext_tick_positions])
+    tick_labels = [f"{d}" for d in np.concatenate([flex_tick_labels, ext_tick_labels])]
+    
+    # Helper to create labeled DataFrame with Angle index and segment column headers
+    def create_labeled_df(data: np.ndarray, tick_positions: list[int], tick_labels: list[str]) -> pd.DataFrame:
+        n_rows = data.shape[0]
+        # Create DataFrame with segment columns 1..N
+        df = pd.DataFrame(data, columns=[str(i+1) for i in range(data.shape[1])])
+        # Create index where only tick positions are labeled
+        index_labels = [""] * n_rows
+        for pos, label in zip(tick_positions, tick_labels):
+            if 0 <= pos < n_rows:
+                index_labels[pos] = label
+        df.index = index_labels
+        df.index.name = "Angle"
+        return df
+    
+    # Create labeled DataFrames for flexion and extension using their respective tick positions
+    df_flex = create_labeled_df(avg_flex, flex_tick_positions, [f"{d}" for d in flex_tick_labels])
+    df_ext = create_labeled_df(avg_ext, [p - split_index for p in ext_tick_positions], [f"{d}" for d in ext_tick_labels])
+    
+    # Create combined DataFrame (flexion then extension)
+    df_combined = pd.concat([df_flex, df_ext], axis=0)
+    # Label combined using the full tick positions
+    df_combined = create_labeled_df(np.concatenate([avg_flex, avg_ext], axis=0), tick_positions, tick_labels)
+    
+    # Label intensity_data columns similarly
+    intensity_df = intensity_data.copy()
+    intensity_df.columns = [str(i+1) for i in range(n_segments)]
+    
     with pd.ExcelWriter(excel_path) as writer:
-        intensity_data.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
-        pd.DataFrame(avg_flex).to_excel(writer, sheet_name="avg_flexion", index=False, header=False)
-        pd.DataFrame(avg_ext).to_excel(writer, sheet_name="avg_extension", index=False, header=False)
+        intensity_df.to_excel(writer, sheet_name=sheet_name, index=False, header=True)
+        df_flex.to_excel(writer, sheet_name="avg_flexion", index=True, header=True)
+        df_ext.to_excel(writer, sheet_name="avg_extension", index=True, header=True)
+        df_combined.to_excel(writer, sheet_name="avg_combined", index=True, header=True)
 
 
 # ============================================================================
