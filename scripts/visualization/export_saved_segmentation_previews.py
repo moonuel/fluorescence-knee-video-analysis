@@ -14,6 +14,7 @@ Usage:
 """
 
 import numpy as np
+import cv2
 from pathlib import Path
 from utils import io, views
 import tifffile as tif
@@ -71,15 +72,35 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
     # Start with processed video for boundary overlays
     boundary_overlay = video.copy()
 
-    # Reference boundary between seg 1 and seg N (brightest)
+    # Compute all inter‑segment boundaries in one pass (faint dashed lines)
+    all_boundaries = views.compute_label_boundaries(
+        radial,
+        include_background=False,
+        connectivity=4
+    )
+    # Overlay faint dashed boundaries for all segments
+    boundary_overlay = views.overlay_boundary_mask(
+        boundary_overlay,
+        all_boundaries,
+        intensity=80,           # faint
+        thickness=1,
+        dashed=True,
+        dash_len=5,
+        gap_len=3,
+        inplace=True            # modify boundary_overlay directly
+    )
+
+    # Reference boundary between seg 1 and seg N (brightest) – on top
     boundary_overlay = views.draw_boundary_line(
         boundary_overlay,
         radial,
         seg_num=1,
         n_segments=n_segments,
-        intensity=255,  # brightest
+        intensity=255,          # brightest
         thickness=1,
         show_video=False,
+        inplace=True,           # draw directly into boundary_overlay
+        dashed=False
     )
 
     # Anatomical region boundaries if metadata available
@@ -96,9 +117,11 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
                 radial,
                 seg_num=ot.start,  # boundary between JC and OT
                 n_segments=n_segments,
-                intensity=200,  # slightly dimmer
+                intensity=200,     # slightly dimmer
                 thickness=1,
                 show_video=False,
+                inplace=True,
+                dashed=False
             )
 
             # Boundary between OT and SB (dimmer)
@@ -107,16 +130,21 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
                 radial,
                 seg_num=sb.start,  # boundary between OT and SB
                 n_segments=n_segments,
-                intensity=150,  # dimmer still
+                intensity=150,     # dimmer still
                 thickness=1,
                 show_video=False,
+                inplace=True,
+                dashed=False
             )
     except Exception as e:
         print(f"Warning: no region metadata for {condition}_{video_id}_N{n_segments}, skipping anatomical boundaries: {e}")
 
-    # Outer radial mask boundary
+    # Outer radial mask boundary (solid, bright)
     boundary_overlay = views.draw_outer_radial_mask_boundary(
-        boundary_overlay, radial
+        boundary_overlay, radial,
+        intensity=255,
+        thickness=1,
+        show_video=False
     )
 
     # 3. Horizontally concatenate (exactly like views.show_frames([radial_gray, boundary_overlay]))
@@ -125,6 +153,17 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
 
     # Stack horizontally: [radial_gray | boundary_overlay]
     preview = np.concatenate([radial_gray, boundary_overlay], axis=2)
+
+    # Add frame numbers to each frame
+    for frame_idx in range(preview.shape[0]):
+        frame = preview[frame_idx]
+        h, w = frame.shape
+        btm_l_pos = (10, h - 10)
+
+        # Draw frame number on bottom left
+        cv2.putText(frame, f"Frame {frame_idx}", btm_l_pos,
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7,
+                    color=(255, 255, 255), thickness=1, lineType=cv2.LINE_AA)
 
     print(f"Preview shape: {preview.shape}, dtype: {preview.dtype}")
 
