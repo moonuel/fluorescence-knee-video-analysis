@@ -746,7 +746,11 @@ def draw_boundary_line(video: np.ndarray,
                        n_segments: int = None,
                        intensity: int = 255,
                        thickness: int = 1,
-                       show_video: bool = False) -> np.ndarray:
+                       show_video: bool = False,
+                       inplace: bool = False,
+                       dashed: bool = False,
+                       dash_len: int = 5,
+                       gap_len: int = 3) -> np.ndarray:
     """
     Draws the boundary line between two neighboring radial segments.
 
@@ -761,9 +765,13 @@ def draw_boundary_line(video: np.ndarray,
         intensity: Pixel intensity for the boundary (0–255).
         thickness: Line thickness in pixels.
         show_video: If True, preview via show_frames.
+        inplace: If True, draw directly into the provided video array (no copy).
+        dashed: If True, draw boundary as dashed line.
+        dash_len: Length of each dash in pixels (if dashed=True).
+        gap_len: Length of gap between dashes in pixels (if dashed=True).
 
     Returns:
-        A copy of `video` with the boundary line overlaid.
+        Video with the boundary line overlaid (copy unless inplace=True).
     """
     if VERBOSE:
         print("draw_boundary_line() called!")
@@ -777,7 +785,7 @@ def draw_boundary_line(video: np.ndarray,
     if video.dtype != np.uint8:
         video_u8 = video.astype(np.uint8)
     else:
-        video_u8 = video.copy()
+        video_u8 = video.copy() if not inplace else video
 
     if n_segments is None:
         n_segments = int(labels.max())
@@ -789,7 +797,7 @@ def draw_boundary_line(video: np.ndarray,
     prev_seg = n_segments if seg_num == 1 else seg_num - 1
 
     T, H, W = labels.shape
-    output = video_u8.copy()
+    output = video_u8
 
     for t in range(T):
         frame = output[t]
@@ -820,6 +828,18 @@ def draw_boundary_line(video: np.ndarray,
         if boundary.max() == 0:
             continue
 
+        if dashed:
+            # Convert boundary mask to coordinates, apply dash pattern
+            y_coords, x_coords = np.where(boundary > 0)
+            period = dash_len + gap_len
+            # Keep pixels where (x + y) % period < dash_len
+            keep_mask = (x_coords + y_coords) % period < dash_len
+            y_coords = y_coords[keep_mask]
+            x_coords = x_coords[keep_mask]
+            # Create new boundary mask with only kept pixels
+            boundary = np.zeros_like(boundary)
+            boundary[y_coords, x_coords] = 255
+
         # Draw the boundary as a contour line
         contours, _ = cv2.findContours(boundary, cv2.RETR_EXTERNAL,
                                        cv2.CHAIN_APPROX_SIMPLE)
@@ -828,6 +848,119 @@ def draw_boundary_line(video: np.ndarray,
 
     if show_video:
         show_frames(output, title=f"Boundary line for segment {seg_num}")
+
+    return output
+
+
+def compute_label_boundaries(mask_labels: np.ndarray,
+                             include_background: bool = False,
+                             connectivity: int = 4) -> np.ndarray:
+    """
+    Compute boundary mask where neighboring pixels have different labels.
+
+    Args:
+        mask_labels: Label mask, shape (T, H, W), values 0..N.
+        include_background: If True, include transitions between label>0 and label=0.
+        connectivity: 4 or 8 connectivity for neighbor checking.
+
+    Returns:
+        Binary mask of boundaries, shape (T, H, W), dtype uint8 (0 or 255).
+    """
+    T, H, W = mask_labels.shape
+    boundaries = np.zeros((T, H, W), dtype=np.uint8)
+
+    for t in range(T):
+        lab = mask_labels[t]
+        # Check differences with shifted versions
+        if connectivity in (4, 8):
+            # 4‑connectivity: up, down, left, right
+            up = np.zeros_like(lab); up[1:, :] = lab[:-1, :]
+            down = np.zeros_like(lab); down[:-1, :] = lab[1:, :]
+            left = np.zeros_like(lab); left[:, 1:] = lab[:, :-1]
+            right = np.zeros_like(lab); right[:, :-1] = lab[:, 1:]
+
+            diff = (lab != up) | (lab != down) | (lab != left) | (lab != right)
+
+            if connectivity == 8:
+                # Add diagonal neighbors
+                up_left = np.zeros_like(lab); up_left[1:, 1:] = lab[:-1, :-1]
+                up_right = np.zeros_like(lab); up_right[1:, :-1] = lab[:-1, 1:]
+                down_left = np.zeros_like(lab); down_left[:-1, 1:] = lab[1:, :-1]
+                down_right = np.zeros_like(lab); down_right[:-1, :-1] = lab[1:, 1:]
+                diff = diff | (lab != up_left) | (lab != up_right) | (lab != down_left) | (lab != down_right)
+
+        else:
+            raise ValueError("connectivity must be 4 or 8")
+
+        if not include_background:
+            # Exclude transitions where either pixel is background (0)
+            # Keep only transitions where both pixels are >0
+            diff = diff & (lab > 0) & (
+                (up > 0) | (down > 0) | (left > 0) | (right > 0)
+            )
+
+        boundaries[t] = (diff * 255).astype(np.uint8)
+
+    return boundaries
+
+
+def overlay_boundary_mask(video: np.ndarray,
+                          boundary_mask: np.ndarray,
+                          intensity: int = 255,
+                          thickness: int = 1,
+                          dashed: bool = False,
+                          dash_len: int = 5,
+                          gap_len: int = 3,
+                          inplace: bool = False) -> np.ndarray:
+    """
+    Overlay a pre‑computed boundary mask onto a video.
+
+    Args:
+        video: Grayscale video, shape (T, H, W), dtype uint8.
+        boundary_mask: Binary boundary mask, shape (T, H, W), dtype uint8 (0 or 255).
+        intensity: Pixel intensity for boundaries.
+        thickness: Line thickness (pixels). If >1, dilates the boundary mask.
+        dashed: If True, draw boundaries as dashed.
+        dash_len: Dash length in pixels (if dashed).
+        gap_len: Gap length in pixels (if dashed).
+        inplace: If True, draw directly into the provided video array.
+
+    Returns:
+        Video with boundaries overlaid (copy unless inplace=True).
+    """
+    assert video.shape == boundary_mask.shape
+    if video.dtype != np.uint8:
+        video = video.astype(np.uint8)
+    if boundary_mask.dtype != np.uint8:
+        boundary_mask = boundary_mask.astype(np.uint8)
+
+    output = video if inplace else video.copy()
+    T, H, W = video.shape
+
+    # Optional dilation for thickness > 1
+    if thickness > 1:
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (thickness, thickness))
+        for t in range(T):
+            boundary_mask[t] = cv2.dilate(boundary_mask[t], kernel)
+
+    for t in range(T):
+        frame = output[t]
+        bmask = boundary_mask[t]
+
+        if dashed:
+            # Apply dash pattern by subsampling boundary pixels
+            y_coords, x_coords = np.where(bmask > 0)
+            period = dash_len + gap_len
+            keep_mask = (x_coords + y_coords) % period < dash_len
+            y_coords = y_coords[keep_mask]
+            x_coords = x_coords[keep_mask]
+            bmask = np.zeros_like(bmask)
+            bmask[y_coords, x_coords] = 255
+
+        # Draw contours
+        contours, _ = cv2.findContours(bmask, cv2.RETR_EXTERNAL,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(frame, contours, -1, color=intensity, thickness=1)
 
     return output
 
