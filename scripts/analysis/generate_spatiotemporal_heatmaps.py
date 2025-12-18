@@ -12,6 +12,7 @@ import os
 import os.path
 import argparse
 from config import TYPES
+from config.knee_metadata import KNEE_VIDEOS
 import scipy as sp
 from pathlib import Path
 
@@ -28,39 +29,75 @@ OPTIONS = {
 # HELPER FUNCTIONS
 # ============================================================================
 
-def parse_arguments() -> tuple[argparse.Namespace, bool]:
+def parse_arguments() -> tuple[argparse.Namespace, bool, list[int] | None, bool]:
     """
-    Parse command line arguments and return args namespace and normalize flag.
+    Parse command line arguments and return args namespace, normalize flag, cycle indices, and rescale flag.
 
     Returns:
-        Tuple of (parsed_args, normalize_flag) where normalize_flag is True for normalization enabled.
+        Tuple of (parsed_args, normalize_flag, cycle_indices, rescale_50_50_flag) where:
+        - normalize_flag is True for normalization enabled
+        - cycle_indices is list of 1-based cycle numbers or None for all cycles
+        - rescale_flag is True to enable 50:50 rescaled heatmaps (default)
     """
     parser = argparse.ArgumentParser(
         description="Generate spatiotemporal heatmaps from knee video intensity data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 Examples:
-  python {sys.argv[0]} 1339 64 total                    # Default: with normalization
-  python {sys.argv[0]} 1339 64 total --no-normalize     # Without normalization
+  python {sys.argv[0]} normal 1339 64 total                    # Default: with normalization, all cycles
+  python {sys.argv[0]} aging 1339 64 total --no-normalize      # Without normalization
+  python {sys.argv[0]} normal 0308 64 total --cycles 1,3       # Only cycles 1 and 3
 
 Valid video types are: {list(TYPES)}
-Options for the third argument are:
+Options for the fourth argument are:
 """ + "\n".join(f"  '{k}': {v}" for k, v in OPTIONS.items())
     )
 
+    # Extract unique conditions from KNEE_VIDEOS metadata
+    available_conditions = sorted(set(condition for condition, _, _ in KNEE_VIDEOS.keys()))
+    parser.add_argument("condition", choices=available_conditions, help="Condition (e.g. normal, aging, dmm-0w)")
     parser.add_argument("video_number", type=int, help="Video identifier number")
     parser.add_argument("segment_count", type=int, help="Number of segments")
     parser.add_argument("opt", choices=OPTIONS.keys(),
                        help="Processing option")
     parser.add_argument("--no-normalize", action="store_true",
                        help="Disable intensity normalization (default: normalization enabled)")
+    parser.add_argument(
+        "--cycles",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated 1-based cycle numbers to include, e.g. '1,3'. "
+            "If omitted, all cycles in the Excel file are used."
+        ),
+    )
+
+    # 50:50 rescale option (default: enabled)
+    rescale_group = parser.add_mutually_exclusive_group()
+    rescale_group.add_argument(
+        "--rescale", dest="rescale", action="store_true",
+        help="Enable 50:50 rescaled heatmaps (default)"
+    )
+    rescale_group.add_argument(
+        "--no-rescale", dest="rescale", action="store_false",
+        help="Disable 50:50 rescaled heatmaps"
+    )
+    parser.set_defaults(rescale_50_50=True)
 
     args = parser.parse_args()
 
     # Set normalize flag (default True, inverted by --no-normalize)
     normalize = not args.no_normalize
 
-    return args, normalize
+    # Parse cycle indices (1-based)
+    cycle_indices = None
+    if args.cycles is not None:
+        try:
+            cycle_indices = [int(x.strip()) for x in args.cycles.split(",") if x.strip()]
+        except ValueError:
+            parser.error("--cycles must be a comma-separated list of integers, e.g. '1,3'")
+
+    return args, normalize, cycle_indices, args.rescale_50_50
 
 
 def validate_input_file(video_number: int, segment_count: int) -> str:
@@ -267,7 +304,7 @@ def create_combined_com_series(com_flex: np.ndarray, com_ext: np.ndarray) -> pd.
 
 
 def plot_heatmap(avg_flex: np.ndarray, avg_ext: np.ndarray, avg_com_cycles: pd.Series,
-                 pdf_path: str, title_suffix: str = "", normalize: bool = True) -> None:
+                 pdf_path: str, title_prefix: str = "", title_suffix: str = "", normalize: bool = True, selection_label: str = "") -> None:
     """
     Plot and save heatmap with COM overlay to PDF.
 
@@ -278,6 +315,7 @@ def plot_heatmap(avg_flex: np.ndarray, avg_ext: np.ndarray, avg_com_cycles: pd.S
         pdf_path: Path to save PDF
         title_suffix: Optional suffix for plot title
         normalize: Whether data is normalized (affects title)
+        selection_label: Optional label describing cycle selection for COM legend
     """
     with PdfPages(pdf_path) as pdf:
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -286,13 +324,26 @@ def plot_heatmap(avg_flex: np.ndarray, avg_ext: np.ndarray, avg_com_cycles: pd.S
         im = ax.imshow(combined.T, aspect="auto", cmap="viridis", origin="lower")
 
         # Plot avg_com_cycles as a solid red line over the heatmap
-        ax.plot(np.arange(len(avg_com_cycles)), avg_com_cycles, 
-                color='red', linewidth=2, label='Average COM')
+        ax.plot(np.arange(len(avg_com_cycles)), avg_com_cycles,
+                color='red', linewidth=2, label="Average COM")
         ax.legend(loc='upper right')
+
+        # Add cycle information as text annotation in bottom-left corner
+        if selection_label:
+            ax.text(
+                0.01, 0.01,
+                selection_label,
+                transform=ax.transAxes,
+                va="bottom",
+                ha="left",
+                fontsize=8,
+                color="white",
+                bbox=dict(facecolor="black", alpha=0.4, edgecolor="none", pad=3),
+            )
         
         # Flexion/Extension split
         split_index = avg_flex.shape[0]
-        ax.axvline(x=split_index - 0.5, color="white", linestyle="--", linewidth=1.5)
+        ax.axvline(x=split_index, color="white", linestyle="--", linewidth=1.5)
         
         # Define angle mappings
         flex_labels = np.linspace(30, 130, avg_flex.shape[0])
@@ -318,7 +369,7 @@ def plot_heatmap(avg_flex: np.ndarray, avg_ext: np.ndarray, avg_com_cycles: pd.S
 
         # Titles and colorbar
         intensity_label = "Avg Normalized Intensity (%)" if normalize else "Avg Raw Intensity"
-        title = f"Averaged {'Normalized ' if normalize else 'Raw '}Intensity: Flexion (Left) | Extension (Right)"
+        title = f"{title_prefix} – Averaged {'Normalized ' if normalize else 'Raw '}Intensity Heatmap"
         if title_suffix:
             title += f" {title_suffix}"
         ax.set_title(title)
@@ -352,7 +403,7 @@ def save_results_to_excel(excel_path: str, intensity_data: pd.DataFrame,
 # MAIN FUNCTION
 # ============================================================================
 
-def main(video_number: int, segment_count: int, opt: str, input_xlsx: str, normalize: bool = True) -> None:
+def main(condition: str, video_number: int, segment_count: int, opt: str, input_xlsx: str, normalize: bool = True, cycle_indices: list[int] | None = None, rescale_50_50: bool = True) -> None:
     """
     Main processing function for generating spatiotemporal heatmaps.
 
@@ -362,13 +413,69 @@ def main(video_number: int, segment_count: int, opt: str, input_xlsx: str, norma
         opt: Processing option ("total" or "unit")
         input_xlsx: Path to the input Excel file
         normalize: Whether to normalize intensity values (default: True)
+        cycle_indices: List of 1-based cycle numbers to include, or None for all cycles
+        rescale: Whether to generate 50:50 rescaled heatmaps (default: True)
     """
 
     # Create filename suffix for non-normalized data
     norm_suffix = "_nonorm" if not normalize else ""
 
+    # Initialize cycle selection tracking
+    selected_cycle_indices_1based: list[int] | None = None
+    selected_flex_ranges: list[tuple[int, int]] | None = None
+    selected_ext_ranges: list[tuple[int, int]] | None = None
+
     # Load and clean data
     df_intensity, starts_flex, ends_flex, starts_ext, ends_ext = load_and_clean_data(input_xlsx, opt)
+
+    # Apply cycle selection if requested
+    num_cycles_flex = len(starts_flex)
+    num_cycles_ext = len(starts_ext)
+    if num_cycles_flex != num_cycles_ext:
+        raise ValueError(
+            f"Mismatch between flexion cycles ({num_cycles_flex}) and extension cycles ({num_cycles_ext})"
+        )
+    num_cycles = num_cycles_flex
+
+    if cycle_indices is not None:
+        # 1-based → 0-based
+        idx_zero_based = []
+        for c in cycle_indices:
+            if c < 1 or c > num_cycles:
+                raise ValueError(
+                    f"Requested cycle {c} is out of range; file has {num_cycles} cycles (1-based)"
+                )
+            idx_zero_based.append(c - 1)
+
+        idx = np.array(idx_zero_based, dtype=int)
+
+        starts_flex = starts_flex[idx]
+        ends_flex   = ends_flex[idx]
+        starts_ext  = starts_ext[idx]
+        ends_ext    = ends_ext[idx]
+
+        selected_cycle_indices_1based = cycle_indices
+        selected_flex_ranges = list(zip(starts_flex, ends_flex))
+        selected_ext_ranges  = list(zip(starts_ext, ends_ext))
+
+        print(f"Using cycles (1-based): {cycle_indices}")
+        print(f"Total cycles available in Excel: {num_cycles}")
+        print(f"Flexion frame ranges (1-based): {selected_flex_ranges}")
+        print(f"Extension frame ranges (1-based): {selected_ext_ranges}")
+    else:
+        # When using all cycles, still build the tracking structures for legend
+        selected_cycle_indices_1based = list(range(1, num_cycles + 1))
+        selected_flex_ranges = list(zip(starts_flex, ends_flex))
+        selected_ext_ranges  = list(zip(starts_ext, ends_ext))
+
+        print(f"Using all {num_cycles} cycles found in Excel.")
+        print(f"Flexion frame ranges (1-based): {selected_flex_ranges}")
+        print(f"Extension frame ranges (1-based): {selected_ext_ranges}")
+
+    # Create cycle suffix for filenames when subset selected
+    cycles_suffix = ""
+    if selected_cycle_indices_1based is not None:
+        cycles_suffix = "_cycles_" + "_".join(str(c) for c in selected_cycle_indices_1based)
 
     # Normalize intensity per frame (conditionally)
     if normalize:
@@ -397,23 +504,40 @@ def main(video_number: int, segment_count: int, opt: str, input_xlsx: str, norma
     # Oliver please finish this step. The peak intensity value will form a contour line to indicate how the peak intensity moves.
     # We will compare it with COM curve, then modify COM definition
 
-    # Save results - original heatmap
-    excel_path = str(PROJECT_ROOT / "figures" / "spatiotemporal_maps" / f"heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.xlsx")
-    pdf_path = str(PROJECT_ROOT / "figures" / "spatiotemporal_maps" / f"heatmap_{opt}{norm_suffix}_{video_number}N{segment_count}.pdf")
+    # Build selection label for plots
+    selection_label = ""
+    if selected_cycle_indices_1based is not None:
+        cycle_summaries = []
+        for c, (fs, fe), (es, ee) in zip(selected_cycle_indices_1based, selected_flex_ranges, selected_ext_ranges):
+            cycle_summaries.append(f"Cycle {c}: {fs}-{fe}, {es}-{ee}")
+        selection_label = "\n".join(cycle_summaries)
 
-    save_results_to_excel(excel_path, norm_intensity, avg_flex, avg_ext, normalize=normalize)
-    plot_heatmap(avg_flex, avg_ext, avg_com_cycles, pdf_path, normalize=normalize)
+    # Create title prefix for plots
+    title_prefix = f"{condition} {video_number} (N={segment_count})"
 
-    print("Exported:", excel_path, pdf_path)
+    # Ensure output directory exists
+    output_dir = PROJECT_ROOT / "figures" / "spatiotemporal_maps"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save results - 50/50 rescaled heatmap
-    excel_path_50 = str(PROJECT_ROOT / "figures" / "spatiotemporal_maps" / f"heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.xlsx")
-    pdf_path_50 = str(PROJECT_ROOT / "figures" / "spatiotemporal_maps" / f"heatmap_{opt}{norm_suffix}_rescaled_{video_number}N{segment_count}.pdf")
+    if rescale:
+        # Save results - 50/50 rescaled heatmap
+        excel_path_50 = str(output_dir / f"heatmap_{opt}{norm_suffix}{cycles_suffix}_rescaled_{video_number}N{segment_count}.xlsx")
+        pdf_path_50 = str(output_dir / f"heatmap_{opt}{norm_suffix}{cycles_suffix}_rescaled_{video_number}N{segment_count}.pdf")
 
-    save_results_to_excel(excel_path_50, norm_intensity, avg_flex_50, avg_ext_50, normalize=normalize)
-    plot_heatmap(avg_flex_50, avg_ext_50, avg_com_cycles_50_50, pdf_path_50, title_suffix="(Rescaled 50:50)", normalize=normalize)
+        save_results_to_excel(excel_path_50, norm_intensity, avg_flex_50, avg_ext_50, normalize=normalize)
+        plot_heatmap(avg_flex_50, avg_ext_50, avg_com_cycles_50_50, pdf_path_50, title_prefix=title_prefix, title_suffix="(Temporally Rescaled)", normalize=normalize, selection_label=selection_label)
 
-    print("Exported:", excel_path_50, pdf_path_50)
+        print("Exported:", excel_path_50, pdf_path_50)
+    else:
+        # Save results - original heatmap
+        print("Skipping 50:50 rescaled heatmap outputs (per --no-rescale)")
+        excel_path = str(output_dir / f"heatmap_{opt}{norm_suffix}{cycles_suffix}_{video_number}N{segment_count}.xlsx")
+        pdf_path = str(output_dir / f"heatmap_{opt}{norm_suffix}{cycles_suffix}_{video_number}N{segment_count}.pdf")
+
+        save_results_to_excel(excel_path, norm_intensity, avg_flex, avg_ext, normalize=normalize)
+        plot_heatmap(avg_flex, avg_ext, avg_com_cycles, pdf_path, title_prefix=title_prefix, normalize=normalize, selection_label=selection_label)
+
+        print("Exported:", excel_path, pdf_path)
 
 
 # ============================================================================
@@ -422,13 +546,13 @@ def main(video_number: int, segment_count: int, opt: str, input_xlsx: str, norma
 
 if __name__ == "__main__":
     # Parse command line arguments
-    args, normalize = parse_arguments()
+    args, normalize, cycle_indices, rescale = parse_arguments()
 
     # Validate input file exists
     input_xlsx = validate_input_file(args.video_number, args.segment_count)
 
     # Run main processing
-    main(args.video_number, args.segment_count, args.opt, input_xlsx, normalize)
+    main(args.condition, args.video_number, args.segment_count, args.opt, input_xlsx, normalize, cycle_indices, rescale)
 
 
 # ============================================================================
