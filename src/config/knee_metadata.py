@@ -88,6 +88,7 @@ KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = {
             Cycle(FrameRange.from_1based(253, 298), FrameRange.from_1based(299, 335)),
             Cycle(FrameRange.from_1based(585, 618), FrameRange.from_1based(630, 669)),
             Cycle(FrameRange.from_1based(156, 199), FrameRange.from_1based(210, 250)),
+            Cycle(FrameRange.from_1based(342, 393), FrameRange.from_1based(407, 439)),
         ],
         regions={
             "JC": RegionSegments(1, 29),
