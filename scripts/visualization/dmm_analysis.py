@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+from pathlib import Path
 from utils import io, views, utils
 from core import data_processing as dp
 from config.knee_metadata import get_knee_meta, Cycle
@@ -19,6 +21,62 @@ import argparse
 # Angles to show on x-axis (others will have blank labels)
 # IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
 IMPORTANT_ANGLE_LABELS = {30, 45, 60, 75, 90, 105, 120, 135}
+
+
+def get_labeled_angles_for_phase(phase: str, n_interp_samples: int) -> Tuple[List[int], List[str]]:
+    """Return the labeled angles (integers) and their display labels for a given phase.
+    
+    Parameters
+    ----------
+    phase : str
+        "flexion", "extension", or "both".
+    n_interp_samples : int
+        Number of interpolation samples per phase.
+    
+    Returns
+    -------
+    labeled_angles : List[int]
+        Integer angles that should be labeled (e.g., [30, 45, 60, ...]).
+    angle_labels : List[str]
+        Display labels (e.g., ["30°", "45°", "60°", ...]).
+    """
+    if phase == "flexion":
+        labeled_angles = list(range(30, 136, 15))  # 30, 45, ..., 135
+        angle_labels = [f"{a}°" for a in labeled_angles]
+    elif phase == "extension":
+        labeled_angles = list(range(135, 29, -15))  # 135, 120, ..., 30
+        angle_labels = [f"{a}°" for a in labeled_angles]
+    else:  # "both"
+        # Flex half: 30..135
+        flex_angles = list(range(30, 136, 15))
+        # Ext half: 120..45 (skip 135 and 30)
+        ext_angles = list(range(120, 44, -15))
+        labeled_angles = flex_angles + ext_angles
+        angle_labels = [f"{a}°" for a in flex_angles] + [f"{a}°" for a in ext_angles]
+    return labeled_angles, angle_labels
+
+
+def find_closest_sample_indices(angles_array: np.ndarray, target_angles: List[int]) -> np.ndarray:
+    """Find indices in angles_array closest to each target angle.
+    
+    Parameters
+    ----------
+    angles_array : np.ndarray
+        Shape (n_samples,) of continuous angle values.
+    target_angles : List[int]
+        Integer angles to locate.
+    
+    Returns
+    -------
+    indices : np.ndarray
+        Shape (len(target_angles),) of indices into angles_array.
+    """
+    indices = []
+    for target in target_angles:
+        idx = np.argmin(np.abs(angles_array - target))
+        indices.append(idx)
+    return np.array(indices)
+
 
 @dataclass
 class RegionRange:
@@ -713,6 +771,133 @@ def plot_intra_region_totals_frame_mode(all_region_totals: List[Tuple[Dict[str, 
     plt.show()
 
 
+def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
+                    meta: 'KneeVideoMeta',
+                    phase: str,
+                    metric: str,
+                    normalize: bool,
+                    n_interp_samples: int,
+                    output_path: Path) -> None:
+    """Export the plotted data to an Excel workbook with multiple sheets.
+    
+    Parameters
+    ----------
+    all_cycle_data : List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]]
+        The same data structure used for plotting.
+    meta : KneeVideoMeta
+        Video metadata.
+    phase : str
+        "flexion", "extension", or "both".
+    metric : str
+        "com" or "total".
+    normalize : bool
+        Whether intensities were normalized.
+    n_interp_samples : int
+        Number of interpolation samples per phase.
+    output_path : Path
+        Path to save the Excel file.
+    """
+    # Create output directory if needed
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # 1. Sheet: run_info
+    run_info = pd.DataFrame([{
+        "condition": meta.condition,
+        "video_id": meta.video_id,
+        "n_segments": meta.n_segments,
+        "mode": "angle",
+        "phase": phase,
+        "metric": metric,
+        "normalize": normalize,
+        "n_interp_samples": n_interp_samples,
+        "important_angle_labels": ",".join(str(a) for a in sorted(IMPORTANT_ANGLE_LABELS)),
+        "cycles_requested": ",".join(str(cycle_num) for cycle_num in range(1, len(all_cycle_data) + 1))
+    }])
+    
+    # 2. Sheet: cycles
+    cycles_data = []
+    for i, (_, _, _, legend_label, cycle) in enumerate(all_cycle_data):
+        cycles_data.append({
+            "cycle_number": i + 1,
+            "cycle_index_0based": i,
+            "flex_start_frame": cycle.flex.start + 1,  # 1-based
+            "flex_end_frame": cycle.flex.end + 1,
+            "ext_start_frame": cycle.ext.start + 1,
+            "ext_end_frame": cycle.ext.end + 1,
+            "legend_label": legend_label
+        })
+    cycles_df = pd.DataFrame(cycles_data)
+    
+    # 3. Sheet: timeseries_long (full plotted curves)
+    timeseries_rows = []
+    for i, (cycle_metric_data, x_positions, angles, legend_label, _) in enumerate(all_cycle_data):
+        cycle_num = i + 1
+        for sample_idx in range(len(x_positions)):
+            timeseries_rows.append({
+                "cycle_number": cycle_num,
+                "sample_in_cycle": sample_idx,
+                "x": x_positions[sample_idx],
+                "angle_deg": angles[sample_idx],
+                "angle_label": "",  # will fill in labeled_angles sheet
+                "SB": cycle_metric_data["SB"][sample_idx],
+                "OT": cycle_metric_data["OT"][sample_idx],
+                "JC": cycle_metric_data["JC"][sample_idx]
+            })
+    timeseries_df = pd.DataFrame(timeseries_rows)
+    
+    # 4. Sheet: labeled_angles (exactly what's shown on plot)
+    labeled_rows = []
+    labeled_angles, angle_labels = get_labeled_angles_for_phase(phase, n_interp_samples)
+    
+    # Special rule: for phase="both", the last data element should be labeled 30°
+    if phase == "both":
+        # Add 30° at the end of extension half for each cycle
+        labeled_angles.append(30)
+        angle_labels.append("30°")
+    
+    for i, (cycle_metric_data, x_positions, angles, legend_label, _) in enumerate(all_cycle_data):
+        cycle_num = i + 1
+        # Find indices for each labeled angle
+        indices = find_closest_sample_indices(angles, labeled_angles)
+        
+        for label_idx, (target_angle, label_str) in enumerate(zip(labeled_angles, angle_labels)):
+            sample_idx = indices[label_idx]
+            # Determine phase block
+            if phase == "flexion":
+                phase_block = "flex"
+            elif phase == "extension":
+                phase_block = "ext"
+            else:  # "both"
+                # Check if sample is in flexion or extension half
+                if sample_idx < n_interp_samples:
+                    phase_block = "flex"
+                else:
+                    phase_block = "ext"
+            
+            labeled_rows.append({
+                "cycle_number": cycle_num,
+                "phase_block": phase_block,
+                "angle_label_deg": target_angle,
+                "x": x_positions[sample_idx],
+                "sample_in_cycle": sample_idx,
+                "angle_deg": angles[sample_idx],
+                "SB": cycle_metric_data["SB"][sample_idx],
+                "OT": cycle_metric_data["OT"][sample_idx],
+                "JC": cycle_metric_data["JC"][sample_idx]
+            })
+    
+    labeled_df = pd.DataFrame(labeled_rows)
+    
+    # Write to Excel
+    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        run_info.to_excel(writer, sheet_name='run_info', index=False)
+        cycles_df.to_excel(writer, sheet_name='cycles', index=False)
+        timeseries_df.to_excel(writer, sheet_name='timeseries_long', index=False)
+        labeled_df.to_excel(writer, sheet_name='labeled_angles', index=False)
+    
+    print(f"✅ Excel export saved to: {output_path}")
+
+
 def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
                                         phase: str,
                                         n_interp_samples: int,
@@ -864,7 +1049,8 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     plt.show()
 
 
-def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n_interp_samples=105, metrics=None, normalize=True):
+def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n_interp_samples=105, metrics=None, normalize=True,
+         export_xlsx: bool = False, export_path: str | None = None):
     """Main analysis pipeline."""
     if cycle_indices is None:
         cycle_indices = [0]
@@ -1088,11 +1274,24 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                     legend_label,           # legend label
                     cycle                   # cycle metadata (for reference lines if needed)
                 ))
-
             # Plot the results for this metric
             if metric == "com":
+                if export_xlsx:
+                    out_path = (
+                        Path(export_path)
+                        if export_path
+                        else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+                    )
+                    export_to_excel(all_cycle_data, meta, phase, metric, normalize, n_interp_samples, out_path)
                 plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
             elif metric == "total":
+                if export_xlsx:
+                    out_path = (
+                        Path(export_path)
+                        if export_path
+                        else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+                    )
+                    export_to_excel(all_cycle_data, meta, phase, metric, normalize, n_interp_samples, out_path)
                 plot_intra_region_totals_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
 
 
@@ -1115,6 +1314,16 @@ if __name__ == "__main__":
     parser.add_argument("--n-interp-samples", type=int, default=105,
                        help="Number of interpolation samples per phase in angle mode (default: 105)")
 
+    # Excel export
+    parser.add_argument(
+        "--export-xlsx", action="store_true",
+        help="Export plotted data (angle mode) to an Excel workbook"
+    )
+    parser.add_argument(
+        "--export-path", default=None,
+        help="Optional output .xlsx path (default: figures/dmm_analysis_exports/...)"
+    )
+
     # Normalization toggle (default True)
     norm_group = parser.add_mutually_exclusive_group()
     norm_group.add_argument(
@@ -1131,4 +1340,16 @@ if __name__ == "__main__":
 
     cycle_indices = [int(x.strip()) - 1 for x in args.cycle_indices.split(',')]  # Convert 1-based user input to 0-based internal
     metrics = [x.strip() for x in args.metric.split(',')]
-    main(args.condition, args.id, args.nsegs, cycle_indices, args.phase, args.mode, args.n_interp_samples, metrics, args.normalize)
+    main(
+        args.condition,
+        args.id,
+        args.nsegs,
+        cycle_indices,
+        args.phase,
+        args.mode,
+        args.n_interp_samples,
+        metrics,
+        args.normalize,
+        export_xlsx=args.export_xlsx,
+        export_path=args.export_path,
+    )
