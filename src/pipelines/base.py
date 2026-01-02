@@ -5,6 +5,7 @@ from functools import partial
 from utils import io, utils, views
 from core import knee_segmentation as ks
 from core import radial_segmentation as rdl
+from config.knee_metadata import get_knee_meta
 
 
 # -------------------------------------------------------------------------
@@ -116,6 +117,8 @@ class KneeSegmentationPipeline:
         self.interior_mask = None
         self.femur_mask = None
         self.radial_mask = None
+        self.femur_tip = None
+        self.femur_midpt = None
         print(f"Initialized segmentation pipeline: {condition}_{video_id} (N={n_segments})")
 
     # ------------------------------------------------------------------
@@ -196,6 +199,90 @@ class KneeSegmentationPipeline:
             views.show_frames(self.radial_mask)
         else:
             print("No radial mask available. Call radial_segmentation() first.")
+
+    def _get_region_boundary_segments(self):
+        """
+        Get segment numbers for JC/OT and OT/SB boundaries from metadata.
+        Returns (jc_ot_seg, ot_sb_seg) or None if metadata unavailable.
+        """
+        try:
+            meta = get_knee_meta(self.condition, int(self.video_id), self.n_segments)
+        except Exception as e:
+            print(f"Warning: no region metadata for {self.condition}_{self.video_id}_N{self.n_segments}: {e}")
+            return None
+
+        regions = meta.regions
+        jc = regions.get("JC")
+        ot = regions.get("OT")
+        sb = regions.get("SB")
+        if not (jc and ot and sb):
+            print(f"Warning: incomplete region metadata for {self.condition}_{self.video_id}_N{self.n_segments}")
+            return None
+
+        # Boundaries at starts of OT and SB ranges (1-based to 0-based conversion)
+        jc_ot_boundary_seg = ot.start  # boundary between JC and OT
+        ot_sb_boundary_seg = sb.start  # boundary between OT and SB
+        return jc_ot_boundary_seg, ot_sb_boundary_seg
+
+    def _show_radial_preview(self, title="Radial Segmentation Preview"):
+        """
+        Show the standard radial segmentation preview with boundary overlay.
+        Now includes anatomical region boundaries (JC/OT and OT/SB) if metadata available.
+        Used consistently in both debug and final preview modes.
+        """
+        if self.radial_mask is None or self.processed_video is None:
+            print("Radial mask or processed video not available.")
+            return
+
+        # Start with processed video for boundary overlays
+        boundary_overlay = self.processed_video.copy()
+
+        # 1) Reference boundary between seg 1 and seg N (brightest)
+        boundary_overlay = views.draw_boundary_line(
+            boundary_overlay,
+            self.radial_mask,
+            seg_num=1,
+            n_segments=self.n_segments,
+            intensity=255,  # brightest
+            thickness=1,
+            show_video=False,
+        )
+
+        # 2) Anatomical region boundaries if metadata available
+        region_bounds = self._get_region_boundary_segments()
+        if region_bounds is not None:
+            jc_ot_seg, ot_sb_seg = region_bounds
+
+            # Boundary between JC and OT (mid-bright)
+            boundary_overlay = views.draw_boundary_line(
+                boundary_overlay,
+                self.radial_mask,
+                seg_num=jc_ot_seg,
+                n_segments=self.n_segments,
+                intensity=200,  # slightly dimmer
+                thickness=1,
+                show_video=False,
+            )
+
+            # Boundary between OT and SB (dimmer)
+            boundary_overlay = views.draw_boundary_line(
+                boundary_overlay,
+                self.radial_mask,
+                seg_num=ot_sb_seg,
+                n_segments=self.n_segments,
+                intensity=150,  # dimmer still
+                thickness=1,
+                show_video=False,
+            )
+
+        # 3) Outer radial mask boundary
+        boundary_overlay = views.draw_outer_radial_mask_boundary(
+            boundary_overlay, self.radial_mask)
+
+        views.show_frames([
+            self.radial_mask * (255 // self.n_segments),
+            boundary_overlay
+        ], title)
 
     # ------------------------------------------------------------------
     # Mask Generation
@@ -369,6 +456,8 @@ class KneeSegmentationPipeline:
 
         if inplace:
             self.radial_mask = radial_labels
+            self.femur_tip = femur_tip
+            self.femur_midpt = femur_midpt
 
         return radial_labels
 
@@ -420,17 +509,20 @@ class KneeSegmentationPipeline:
         saved_radial = io.load_nparray(radial_path)
         saved_femur = io.load_nparray(femur_path)
 
-        # TEMP:
-        # saved_radial = (saved_radial // 4)*4
-
-        # Display the results
+        # Display the results using the standard radial preview
         print("Displaying saved segmentation results...")
-        views.show_frames([
-            saved_video,
-            # saved_femur,
-            saved_radial * (255 // self.n_segments),  # Color-code radial segments
-            views.draw_mask_boundary(saved_video, saved_radial)  # Overlay boundaries
-        ])
+
+        # Temporarily set instance attributes for _show_radial_preview
+        original_video = self.processed_video
+        original_radial = self.radial_mask
+        self.processed_video = saved_video
+        self.radial_mask = saved_radial
+
+        self._show_radial_preview("Saved Segmentation Results")
+
+        # Restore original attributes
+        self.processed_video = original_video
+        self.radial_mask = original_radial
 
     def confirm_save(self):
         """
@@ -573,15 +665,14 @@ class KneeSegmentationPipeline:
         print("Step 7: Performing radial segmentation...")
         self.radial_segmentation(inplace=True)
         if debug:
-            views.show_frames([self.radial_mask * (255 // 64), views.draw_mask_boundary(self.processed_video, self.radial_mask)], "7. Radial Segmentation")
+            self._show_radial_preview("7. Radial Segmentation with Boundary Line")
             if debug_pause: input("Press Enter to continue...")
 
         print("\n=== Pipeline Complete ===\n")
 
         # Always show final results unless in debug mode (to avoid duplication)
         if not debug:
-            views.show_frames([self.radial_mask * (255 // 64), self.femur_mask, self.processed_video],
-                            "Final Results")
+            self._show_radial_preview("Final Results")
 
         # Save results (ask for confirmation in debug mode, auto-save in production)
         if debug:

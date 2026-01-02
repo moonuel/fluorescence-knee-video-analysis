@@ -1,3 +1,4 @@
+# TODO: fix this man
 """
 Center of Mass (COM) Analysis from Pre-computed Heatmaps
 
@@ -26,7 +27,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
 import argparse
-from src.config import TYPES
+from config import TYPES
 
 
 # =============================================================================
@@ -67,7 +68,7 @@ def load_heatmap_excel(video_number: int, segment_count: int, opt: str,
     rescale_suffix = "_rescaled" if rescaled else ""
 
     # Construct input file path
-    input_xlsx = fr"../figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}{rescale_suffix}_{video_number}N{segment_count}.xlsx"
+    input_xlsx = fr"figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}{rescale_suffix}_{video_number}N{segment_count}.xlsx"
 
     if not os.path.isfile(input_xlsx):
         raise FileNotFoundError(
@@ -173,6 +174,76 @@ def resample_com_series_for_alignment(com_series: pd.Series, max_flex_len: int, 
     ])
     combined_values = np.concatenate([new_flex_values, new_ext_values])
     return pd.Series(combined_values, index=combined_idx, name="COM")
+
+
+def compute_com_stats(com_series: pd.Series) -> dict:
+    """
+    Compute mean, standard deviation, and excursion range of COM values.
+
+    NaN values are ignored when computing the statistics.
+
+    Args:
+        com_series: pandas Series containing COM values
+
+    Returns:
+        Dictionary with keys "mean", "sd", and "range"
+    """
+    values = com_series.values.astype(float)
+    values = values[~np.isnan(values)]  # drop NaNs
+
+    if len(values) == 0:
+        return {"mean": np.nan, "sd": np.nan, "range": np.nan}
+
+    mean_val = float(np.mean(values))
+    sd_val = float(np.std(values, ddof=1))  # sample SD
+    range_val = float(np.max(values) - np.min(values))
+
+    return {"mean": mean_val, "sd": sd_val, "range": range_val}
+
+
+def compute_oscillation_indices(com_series: pd.Series) -> dict:
+    """
+    Compute mean absolute frame-to-frame COM change for full cycle, flexion, and extension.
+
+    NaN values are ignored when computing the differences.
+
+    Args:
+        com_series: pandas Series containing COM values (sorted by index)
+
+    Returns:
+        Dictionary with keys "osc_full", "osc_flex", "osc_ext"
+    """
+    # Ensure sorted by index (flex < 0, ext >= 0)
+    com_series = com_series.sort_index()
+
+    # Split into flexion and extension
+    flex_series = com_series[com_series.index < 0]
+    ext_series = com_series[com_series.index >= 0]
+
+    def _osc(values: np.ndarray) -> float:
+        values = values.astype(float)
+        values = values[~np.isnan(values)]
+        if values.size < 2:
+            return np.nan
+        diffs = np.diff(values)
+        diffs = diffs[~np.isnan(diffs)]
+        if diffs.size == 0:
+            return np.nan
+        return float(np.mean(np.abs(diffs)))
+
+    # Full-cycle oscillation index
+    full_vals = com_series.values
+    osc_full = _osc(full_vals)
+
+    # Flexion and extension oscillation indices
+    osc_flex = _osc(flex_series.values)
+    osc_ext = _osc(ext_series.values)
+
+    return {
+        "osc_full": osc_full,
+        "osc_flex": osc_flex,
+        "osc_ext": osc_ext,
+    }
 
 
 def set_angle_xticks(flex_len: int, ext_len: int) -> None:
@@ -334,6 +405,10 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
 
     print(f"Aligning videos to max flexion length: {max_flex_len}, max extension length: {max_ext_len}")
 
+    # Initialize lists to collect COM statistics and oscillation indices for each video
+    stats_rows = []
+    osc_rows = []
+
     # Second pass: resample and plot
     for i, (com_series, video_label, idx) in enumerate(zip(all_com_series, valid_video_labels, valid_indices)):
         video_number = video_ids[idx]
@@ -348,6 +423,27 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
                 color=cmap(valid_indices[i]),
                 linewidth=2,
                 linestyle=linestyle)
+
+        # Compute COM statistics on the aligned series
+        stats = compute_com_stats(aligned_com_series)
+
+        # Compute oscillation indices on the aligned series
+        osc = compute_oscillation_indices(aligned_com_series)
+
+        condition = TYPES.get(video_number, "unknown")
+        stats_rows.append({
+            "video_id": f"{condition} {video_number}",
+            "mean COM": stats["mean"],
+            "sd COM": stats["sd"],
+            "range COM": stats["range"],
+        })
+
+        osc_rows.append({
+            "video_id": f"{condition} {video_number}",
+            "osc COM full": osc["osc_full"],
+            "osc COM flex": osc["osc_flex"],
+            "osc COM ext": osc["osc_ext"],
+        })
 
     # Vertical line at midpoint (flexion/extension transition)
     plt.axvline(0, linestyle="--", color='k', linewidth=1)
@@ -368,6 +464,38 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
         with PdfPages(pdf_path) as pdf:
             pdf.savefig(plt.gcf())
         print(f"Exported multi-video heatmap COM plot to: {pdf_path}")
+
+    # Build and output COM statistics table
+    stats_df = pd.DataFrame(stats_rows, columns=["video_id", "mean COM", "sd COM", "range COM"])
+
+    print("\nCOM statistics (aligned series, flexion + extension):")
+    print(stats_df.to_string(index=False))
+
+    # Save statistics to CSV with consistent naming
+    video_ids_str = '_'.join(map(str, video_ids))
+    norm_str = "nonorm" if not normalize else ""
+    rescale_str = "rescaled" if rescaled else ""
+    suffix = f"{norm_str}{'_' if norm_str and rescale_str else ''}{rescale_str}".strip("_")
+    if suffix:
+        suffix = f"_{suffix}"
+
+    stats_csv_path = fr"com_stats_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.csv"
+    stats_df.to_csv(stats_csv_path, index=False)
+    print(f"Saved COM statistics table to: {stats_csv_path}")
+
+    # Build and output COM oscillation indices table
+    osc_df = pd.DataFrame(
+        osc_rows,
+        columns=["video_id", "osc COM full", "osc COM flex", "osc COM ext"],
+    )
+
+    print("\nCOM oscillation indices (aligned series, flexion + extension):")
+    print(osc_df.to_string(index=False))
+
+    # Save oscillation indices to CSV with consistent naming
+    osc_csv_path = fr"com_osc_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.csv"
+    osc_df.to_csv(osc_csv_path, index=False)
+    print(f"Saved COM oscillation index table to: {osc_csv_path}")
 
     # Show interactively
     plt.show()

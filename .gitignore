@@ -19,3 +19,6 @@ scripts/*.mp4
 scripts/reference/*
 notebooks/
 temp/*
+
+.clinerules
+memory-bank/

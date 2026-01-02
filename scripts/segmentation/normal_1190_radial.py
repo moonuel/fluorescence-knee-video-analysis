@@ -1,124 +1,90 @@
-from utils import utils, io, views
-from core import knee_segmentation as ks
+from pipelines.base import KneeSegmentationPipeline
 from core import radial_segmentation as rdl
-import numpy as np
-from functools import partial
-import cv2
-import pandas as pd
-import os
-
-"""
-Steps:
-    >>> Get femur mask
-    >>> Estimate femur tip
-    >>> Estimate femur midpoint
-    >>> Get radial segmentation
-"""
-
-def get_femur_mask(video:np.ndarray) -> np.ndarray:
-
-    video_blr = utils.parallel_process_video(video, utils.blur_video, num_workers=4, batch_size=150)
-    # views.show_frames(video_blr)
-
-    # Rescale intensities for more consistent otsu segmentation
-    ref_fm = video[492]
-    match_histograms_func = partial(rdl.match_histograms_video, reference_frame=ref_fm) # Establish pure function
-    video_blr_hist = utils.parallel_process_video(video_blr, match_histograms_func, verbose=True, num_workers=4, batch_size=150) # Parallelize 
-    # views.show_frames(video_blr_hist)
-
-    # Get outer mask 
-    otsu_func = partial(ks.get_otsu_masks, thresh_scale=0.6)
-    outer_mask = utils.parallel_process_video(video_blr_hist, otsu_func, verbose=True, num_workers=4, batch_size=150)
-    
-    morph_erode_func = partial(utils.morph_erode, kernel_size=(41,41))
-    outer_mask = utils.parallel_process_video(outer_mask, morph_erode_func) #, batch_size=100, num_workers=4) # Parallel version
-    # outer_mask = utils.morph_erode(outer_mask, (36,36)) # Non-parallel version
-
-    # views.draw_mask_boundary(video, outer_mask)
-
-    # Get inner mask
-    inner_mask = ks.mask_adaptive(video_blr, 141, 6.5)
-
-    # Exclude noise from inner mask
-    femur_mask = rdl.interior_mask(outer_mask, inner_mask)
-
-    # Refinements
-    femur_mask = utils.morph_open(femur_mask, (11,11))
-
-    femur_mask = utils.blur_video(femur_mask, (15,15)) # Smooth/expand edges
-    femur_mask = (femur_mask > 0).astype(np.uint8) * 255 
-    
-    femur_mask = utils.morph_close(femur_mask, (27,23))
-
-    # Manual refinements 
-    femur_mask[:, 341: , :] = 0 # Cut y below 341
-    femur_mask[:, 0:132, :] = 0 # Cut y above 132
-    femur_mask[:, :, 291:] = 0 # Cut x above 291 
-    femur_mask[445:475, :, 278: ] = 0 # Between 445 and 474, cut x above 278
-    femur_mask[521:540, :, 282: ] = 0 # Between 521 and 539, cut x above 282
-
-    # views.show_frames(femur_mask)
-
-    return femur_mask
-
-def main():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
-    input_path = os.path.join(project_root, "data", "processed", "1190_knee_frames_ctrd.npy")
-
-    video = io.load_nparray(input_path)
-    video = utils.center_crop(video, 500)
-    video = np.rot90(video, k=1, axes=(1,2))
-
-    # Fill empty regions with L=18
-    video[video == 0] = 18
-
-    # views.show_frames(video)
-
-    # Get good femur mask
-    mask = get_femur_mask(video)
-
-    # Get interior boundary points
-    femur_boundary = rdl.sample_femur_interior_pts(mask, 128)
-
-    # Estimate femur tip 
-    femur_tip_ = rdl.estimate_femur_tip_boundary(femur_boundary, 0.6)
-    femur_tip_ = rdl.forward_fill_jagged(femur_tip_)
-    # femur_tip_ = rdl.filter_outlier_points_centroid(femur_tip_, 100) # Not necessary?   
-    
-    femur_tip = rdl.get_centroid_pts(femur_tip_)
-    femur_tip = rdl.smooth_points(femur_tip, window_size=15)
-
-    # Estimate femur midpoint
-    femur_midpt_ = rdl.estimate_femur_midpoint_boundary(femur_boundary, 0.1, 0.4)
-    femur_midpt_ = rdl.forward_fill_jagged(femur_midpt_)
-    # femur_midpt_ = rdl.filter_outlier_points_centroid(femur_midpt_, 100)
-    # views.draw_points(video, femur_midpt_)
-
-    femur_midpt = rdl.get_centroid_pts(femur_midpt_)
-    femur_midpt = rdl.smooth_points(femur_midpt, window_size=15)
-
-    # views.draw_points(video, femur_tip)
-    # views.draw_points(video, femur_midpt)
-
-    # Radially segment 
-    # circle_pts = rdl.get_N_points_on_circle(femur_tip, femur_midpt, N=64)
-    # radial_regions, radial_masks = rdl.get_radial_segments(video, femur_tip, circle_pts, thresh_scale=0.8)
-
-    video_for_mask = utils.blur_video(video)
-    video_for_mask = rdl.match_histograms_video(video_for_mask, video_for_mask[562])
-    otsu_mask = ks.get_otsu_masks(video_for_mask, 0.7)
-
-    radial_masks = rdl.label_radial_masks(otsu_mask, femur_tip, femur_midpt, 64)
-    views.draw_mask_boundary
-    v1 = views.show_frames(radial_masks * (255 // 64))
+from utils import utils
 
 
-    # Save segmentation data
-    # io.save_nparray(video, "../data/segmented/normal_1190_radial_video_N16.npy")
-    # io.save_nparray(radial_masks, "../data/segmented/normal_1190_radial_masks_N16.npy")
+class Normal1190(KneeSegmentationPipeline):
+    """Segmentation pipeline for normal knee 1190 using the new interface.
 
+    Mapped from legacy normal_1190_radial.py:
+    - Preprocessing: center crop 500, rot90=1, fill empty pixels with 18
+      (no extra rotation).
+    - Otsu outer mask: histogram match to frame 492, thresh_scale=0.6,
+      then a relatively strong erode (41x41).
+    - Interior mask: adaptive block=141, C=6.5.
+    - Femur mask refinement: open(11,11), close(27,23) plus manual cuts in
+      y and x matching the legacy cropping logic.
+    - Radial segmentation: use base implementation with parameters tuned to
+      match legacy choices: n_lines=128, n_segments=64, tip range ~0.6,
+      midpoint range (0.1, 0.4), smoothing window=15.
+    """
+
+    # ------------------------
+    # Preprocessing
+    # ------------------------
+    def preprocess(self, video=None, rot90_k=1, rot_angle=None, crop_size=500,
+                   empty_fill_value=18, inplace=False):
+        return super().preprocess(video, rot90_k, rot_angle, crop_size,
+                                  empty_fill_value, inplace)
+
+    # ------------------------
+    # Otsu / Outer Mask
+    # ------------------------
+    def generate_otsu_mask(self, video=None, blur_kernel=(25, 25),
+                           thresh_scale=0.7, hist_frame=492, inplace=False):
+        return super().generate_otsu_mask(video, blur_kernel,
+                                          thresh_scale, hist_frame, inplace)
+
+    def refine_otsu_mask(self, mask=None, morph_open_kernel=None,
+                         morph_close_kernel=(31,31), morph_erode_kernel=None,
+                         morph_dilate_kernel=None, inplace=False):
+        return super().refine_otsu_mask(mask, morph_open_kernel,
+                                        morph_close_kernel, morph_erode_kernel,
+                                        morph_dilate_kernel, inplace)
+
+    # ------------------------
+    # Interior / Femur Mask
+    # ------------------------
+    def generate_interior_mask(self, hist_video=None, adaptive_block=151,
+                               adaptive_c=3, inplace=False):
+        return super().generate_interior_mask(hist_video, adaptive_block,
+                                              adaptive_c, inplace)
+
+    def refine_femur_mask(self, mask=None, morph_open_kernel=(5,5),
+                          morph_close_kernel=(15,15), morph_erode_kernel=None,
+                          morph_dilate_kernel=None, inplace=False):
+        mask = self.femur_mask
+        mask = utils.morph_dilate(mask, (11,11))
+        mask[:, 341:, :] = 0
+        mask[:, :132, :] = 0
+        mask[:, :, :189] = 0
+        mask[:, :, 374:] = 0
+        # mask[:, :, 291:] = 0
+        # mask[445:475, :, 278:] = 0
+        # mask[521:540, :, 282:] = 0
+
+        return super().refine_femur_mask(mask, morph_open_kernel,
+                                         morph_close_kernel, morph_erode_kernel,
+                                         morph_dilate_kernel, inplace)
+
+    # ------------------------
+    # Radial Segmentation
+    # ------------------------
+    def radial_segmentation(self, mask=None, femur_mask=None, n_lines=128,
+                            n_segments=64, tip_range=(0.05, 0.4),
+                            midpoint_range=(0.5, 0.95), smooth_window=9,
+                            inplace=False):
+        return super().radial_segmentation(mask, femur_mask, n_lines,
+                                           n_segments, tip_range,
+                                           midpoint_range, smooth_window,
+                                           inplace)
 
 
 if __name__ == "__main__":
-    main()
+    pipeline = Normal1190(
+        input_path="data/raw/1 con-0 min-fluid movement_00001190.npy",
+        video_id="1190",
+        condition="normal",
+        n_segments=64,
+    )
+    pipeline.run(debug=True)
