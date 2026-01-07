@@ -336,6 +336,13 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
                 offset = start_1_based - 1  # convert to 0-based offset
                 metrics_dict["com"] = metrics_dict["com"] + offset
 
+    # Compute boundary flux if requested (on raw frame data)
+    if "flux" in metrics and "SB" in region_metrics and "JC" in region_metrics:
+        I_SB = region_metrics["SB"]["total"]
+        I_JC = region_metrics["JC"]["total"]
+        flux_data = compute_boundary_flux(I_SB, I_JC)
+        region_metrics["BoundaryFlux"] = flux_data
+
     return region_metrics
 
 
@@ -1091,7 +1098,8 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
 
 def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n_interp_samples=105, metrics=None, normalize=True,
          export_xlsx: bool = False, export_path: str | None = None):
-    """Main analysis pipeline."""
+    
+    # Set default processing
     if cycle_indices is None:
         cycle_indices = [0]
     if metrics is None:
@@ -1107,64 +1115,147 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
     # Get metadata
     meta = get_knee_meta(condition, int(id), int(nsegs))
 
-    if mode == "angle":
-        # New angle-based mode with interpolation and contiguous plotting
-        # Load video and masks
-        video, masks = load_video_data(condition, id, nsegs)
+    # New angle-based mode with interpolation and contiguous plotting
+    # Load video and masks
+    video, masks = load_video_data(condition, id, nsegs)
 
-        # Draw segment boundaries on video
-        video_with_boundaries = draw_segment_boundaries(video, masks, meta)
-        video_with_boundaries = views.draw_outer_radial_mask_boundary( # Add outer knee boundary
-            video_with_boundaries, masks, intensity=255, thickness=1
-        )
-        views.show_frames([video_with_boundaries, (masks*(255//64))], "Validate data with segment boundaries")
+    # Draw segment boundaries on video
+    video_with_boundaries = draw_segment_boundaries(video, masks, meta)
+    video_with_boundaries = views.draw_outer_radial_mask_boundary( # Add outer knee boundary
+        video_with_boundaries, masks, intensity=255, thickness=1
+    )
+    views.show_frames([video_with_boundaries, (masks*(255//64))], "Validate data with segment boundaries")
 
-        # Compute intensity data
-        total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
-        
-        # Apply normalization if requested
-        if normalize:
-            total_sums = normalize_intensity_per_frame_2d(total_sums)
+    # Compute intensity data
+    total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
+    
+    # Apply normalization if requested
+    if normalize:
+        total_sums = normalize_intensity_per_frame_2d(total_sums)
 
-        # Split into three anatomical parts
-        region_ranges = [ # Get anatomical regions from metadata
-            RegionRange(name, reg.start, reg.end)
-            for name, reg in meta.regions.items()]
-        region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
+    # Split into three anatomical parts
+    region_ranges = [ # Get anatomical regions from metadata
+        RegionRange(name, reg.start, reg.end)
+        for name, reg in meta.regions.items()]
+    region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
 
-        # Compute requested metrics over full time series
-        region_metrics_full = compute_region_metrics(region_arrays, metrics, region_ranges)
+    # Compute requested metrics over full time series
+    region_metrics_full = compute_region_metrics(region_arrays, metrics, region_ranges)
+    # breakpoint()
+    # Build angle axis for all cycles
+    cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
+        cycle_indices, meta, phase, n_interp_samples
+    )
 
-        # Build angle axis for all cycles
-        cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
-            cycle_indices, meta, phase, n_interp_samples
-        )
+    # Plot each requested metric
+    video_title = f"{condition} {id} (N{nsegs})"
+    for metric in metrics:
+        # Collect interpolated data for all cycles
+        all_cycle_data = []
+        for i, cycle_idx in enumerate(cycle_indices):
+            cycle = meta.get_cycle(cycle_idx)
 
-        # Plot each requested metric
-        video_title = f"{condition} {id} (N{nsegs})"
-        for metric in metrics:
-            # Collect interpolated data for all cycles
-            all_cycle_data = []
+            # Interpolate metric data for each region
+            # Note: flux is not stored per-region; we interpolate totals and compute flux later
+            cycle_metric_data = {}
+            for region_name in region_metrics_full.keys():
+                # Flux uses total intensities, not a per-region flux series
+                source_metric = "total" if metric == "flux" else metric
+                
+                # Concatenate flexion + extension
+                flex_data = extract_frame_window(region_metrics_full[region_name][source_metric],
+                                                cycle.flex.start, cycle.flex.end)
+                ext_data = extract_frame_window(region_metrics_full[region_name][source_metric],
+                                                cycle.ext.start, cycle.ext.end)
+
+                flex_interp, _ = interpolate_com_to_angle(flex_data, n_interp_samples, 30, 135)
+                ext_interp, _ = interpolate_com_to_angle(ext_data, n_interp_samples, 135, 30)
+
+                cycle_metric_data[region_name] = np.concatenate([flex_interp, ext_interp])
+
+            # Create legend label
+            if phase == "both":
+                legend_label = f"Cycle {cycle_idx+1}, frames {cycle.flex.start+1}-{cycle.flex.end+1} and {cycle.ext.start+1}-{cycle.ext.end+1}"
+            else:
+                legend_label = f"Cycle {cycle_idx+1}, {phase}"
+
+            all_cycle_data.append((
+                cycle_metric_data,      # interpolated metric data per region
+                cycle_x_offsets[i],     # x positions for this cycle
+                cycle_angles[i],        # angle values for this cycle
+                legend_label,           # legend label
+                cycle                   # cycle metadata (for reference lines if needed)
+            ))
+        # Plot the results for this metric
+        if metric == "com":
+            if export_xlsx:
+                out_path = (
+                    Path(export_path)
+                    if export_path
+                    else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+                )
+                export_to_excel(all_cycle_data, meta, phase, metric, normalize, n_interp_samples, out_path)
+            plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
+        elif metric == "total":
+            if export_xlsx:
+                out_path = (
+                    Path(export_path)
+                    if export_path
+                    else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+                )
+                export_to_excel(all_cycle_data, meta, phase, metric, normalize, n_interp_samples, out_path)
+            plot_intra_region_totals_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
+        elif metric == "flux":
+            # Use pre-computed flux from raw frame data, then interpolate for visualization
+            flux_result_full = region_metrics_full['BoundaryFlux']
+            all_flux_data = []
             for i, cycle_idx in enumerate(cycle_indices):
                 cycle = meta.get_cycle(cycle_idx)
 
-                # Interpolate metric data for each region
-                # Note: flux is not stored per-region; we interpolate totals and compute flux later
-                cycle_metric_data = {}
-                for region_name in region_metrics_full.keys():
-                    # Flux uses total intensities, not a per-region flux series
-                    source_metric = "total" if metric == "flux" else metric
-                    
-                    # Concatenate flexion + extension
-                    flex_data = extract_frame_window(region_metrics_full[region_name][source_metric],
-                                                    cycle.flex.start, cycle.flex.end)
-                    ext_data = extract_frame_window(region_metrics_full[region_name][source_metric],
-                                                    cycle.ext.start, cycle.ext.end)
+                # Compute scalar metrics (total_flux/net_flux) per-cycle from raw totals
+                # NOTE: compute_boundary_flux expects intensity series with length N.
+                # We pass the raw per-frame totals for SB and JC over the cycle window.
+                if phase == "flexion":
+                    I_SB_window = extract_frame_window(region_metrics_full['SB']['total'], cycle.flex.start, cycle.flex.end)
+                    I_JC_window = extract_frame_window(region_metrics_full['JC']['total'], cycle.flex.start, cycle.flex.end)
+                elif phase == "extension":
+                    I_SB_window = extract_frame_window(region_metrics_full['SB']['total'], cycle.ext.start, cycle.ext.end)
+                    I_JC_window = extract_frame_window(region_metrics_full['JC']['total'], cycle.ext.start, cycle.ext.end)
+                else:  # "both"
+                    I_SB_flex = extract_frame_window(region_metrics_full['SB']['total'], cycle.flex.start, cycle.flex.end)
+                    I_JC_flex = extract_frame_window(region_metrics_full['JC']['total'], cycle.flex.start, cycle.flex.end)
+                    I_SB_ext = extract_frame_window(region_metrics_full['SB']['total'], cycle.ext.start, cycle.ext.end)
+                    I_JC_ext = extract_frame_window(region_metrics_full['JC']['total'], cycle.ext.start, cycle.ext.end)
+                    I_SB_window = np.concatenate([I_SB_flex, I_SB_ext])
+                    I_JC_window = np.concatenate([I_JC_flex, I_JC_ext])
 
-                    flex_interp, _ = interpolate_com_to_angle(flex_data, n_interp_samples, 30, 135)
-                    ext_interp, _ = interpolate_com_to_angle(ext_data, n_interp_samples, 135, 30)
+                flux_scalars = compute_boundary_flux(I_SB_window, I_JC_window)
 
-                    cycle_metric_data[region_name] = np.concatenate([flex_interp, ext_interp])
+                # Extract raw flux windows for each boundary
+                flux_windows = {}
+                for boundary_name in ['SB→OT', 'OT→JC']:
+                    raw_series = flux_result_full[boundary_name]['series']
+
+                    if phase == "flexion":
+                        # Extract flexion window (flux indices match frame transitions)
+                        flux_window = raw_series[cycle.flex.start:cycle.flex.end]
+                        interp_series, _ = interpolate_com_to_angle(flux_window, n_interp_samples - 1, 30, 135)
+                        flux_windows[boundary_name] = interp_series
+
+                    elif phase == "extension":
+                        # Extract extension window
+                        flux_window = raw_series[cycle.ext.start:cycle.ext.end]
+                        interp_series, _ = interpolate_com_to_angle(flux_window, n_interp_samples - 1, 135, 30)
+                        flux_windows[boundary_name] = interp_series
+
+                    else:  # "both" - concatenate flexion + extension
+                        flex_window = raw_series[cycle.flex.start:cycle.flex.end]
+                        ext_window = raw_series[cycle.ext.start:cycle.ext.end]
+
+                        flex_interp, _ = interpolate_com_to_angle(flex_window, n_interp_samples - 1, 30, 135)
+                        ext_interp, _ = interpolate_com_to_angle(ext_window, n_interp_samples - 1, 135, 30)
+
+                        flux_windows[boundary_name] = np.concatenate([flex_interp, ext_interp])
 
                 # Create legend label
                 if phase == "both":
@@ -1172,46 +1263,28 @@ def main(condition, id, nsegs, cycle_indices=None, phase="both", mode="angle", n
                 else:
                     legend_label = f"Cycle {cycle_idx+1}, {phase}"
 
-                all_cycle_data.append((
-                    cycle_metric_data,      # interpolated metric data per region
-                    cycle_x_offsets[i],     # x positions for this cycle
-                    cycle_angles[i],        # angle values for this cycle
-                    legend_label,           # legend label
-                    cycle                   # cycle metadata (for reference lines if needed)
+                # Package flux data for plotting
+                flux_data_formatted = {
+                    'SB→OT': {
+                        'series': flux_windows['SB→OT'],
+                    },
+                    'OT→JC': {
+                        'series': flux_windows['OT→JC'],
+                    },
+                    # Scalars live at top-level (used by plot labels)
+                    'total_flux': flux_scalars['total_flux'],
+                    'net_flux': flux_scalars['net_flux'],
+                }
+
+                all_flux_data.append((
+                    flux_data_formatted,
+                    cycle_x_offsets[i],
+                    cycle_angles[i],
+                    legend_label,
+                    cycle
                 ))
-            # Plot the results for this metric
-            if metric == "com":
-                if export_xlsx:
-                    out_path = (
-                        Path(export_path)
-                        if export_path
-                        else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
-                    )
-                    export_to_excel(all_cycle_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-                plot_intra_region_coms_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
-            elif metric == "total":
-                if export_xlsx:
-                    out_path = (
-                        Path(export_path)
-                        if export_path
-                        else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
-                    )
-                    export_to_excel(all_cycle_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-                plot_intra_region_totals_angle_mode(all_cycle_data, phase, n_interp_samples, video_title, norm_label)
-            elif metric == "flux":
-                # For flux, compute from interpolated SB and JC total intensities
-                all_flux_data = []
-                for cycle_metric_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-                    # Extract interpolated SB and JC intensities
-                    I_SB_interp = cycle_metric_data['SB']
-                    I_JC_interp = cycle_metric_data['JC']
-                    
-                    # Compute flux in angle space
-                    flux_data = compute_boundary_flux(I_SB_interp, I_JC_interp)
-                    
-                    all_flux_data.append((flux_data, x_positions, angles, legend_label, cycle))
-                
-                plot_boundary_flux_angle_mode(all_flux_data, phase, n_interp_samples, video_title, norm_label)
+
+            plot_boundary_flux_angle_mode(all_flux_data, phase, n_interp_samples, video_title, norm_label)
 
 
 if __name__ == "__main__":
