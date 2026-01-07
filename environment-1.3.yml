@@ -1,0 +1,22 @@
+name: knee-seg-1.3
+channels:
+  - conda-forge
+dependencies:
+  - h5py
+  - matplotlib
+  - numpy
+  - opencv
+  - openpyxl
+  - pandas
+  - pip
+  - python=3.11
+  - scikit-image # Added in 1.2
+  - scikit-learn
+  - tifffile
+  - ipykernel # Added in 1.3
+  - pip:
+    - knee-segmentation==0.1 # To be installed manually via: pip install -e .
+
+prefix: "C:\\Users\\olimoon\\.local\\share\\mamba\\envs\\knee-seg-1.3"
+
+# Export command: conda env export --from-history > environment-1.3.yml

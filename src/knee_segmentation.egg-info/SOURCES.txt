@@ -1,5 +1,7 @@
 README.md
 pyproject.toml
+src/config/__init__.py
+src/config/knee_metadata.py
 src/core/__init__.py
 src/core/data_processing.py
 src/core/knee_segmentation.py
@@ -8,6 +10,8 @@ src/knee_segmentation.egg-info/PKG-INFO
 src/knee_segmentation.egg-info/SOURCES.txt
 src/knee_segmentation.egg-info/dependency_links.txt
 src/knee_segmentation.egg-info/top_level.txt
+src/pipelines/__init__.py
+src/pipelines/base.py
 src/utils/__init__.py
 src/utils/io.py
 src/utils/utils.py
