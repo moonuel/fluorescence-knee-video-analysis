@@ -214,7 +214,7 @@ def normalize_intensity_per_frame_2d(total_sums: np.ndarray) -> np.ndarray:
     return norm_intensity
 
 
-def load_intensity_data(video: np.ndarray,
+def compute_intensity_data(video: np.ndarray,
                         masks: np.ndarray
                         ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute per-segment intensities using core.data_processing.compute_sums_nonzeros.
@@ -349,7 +349,7 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
     return metric_data
 
 
-def compute_boundary_flux(I_SB: np.ndarray, I_JC: np.ndarray) -> Dict:
+def compute_boundary_flux(I_SB: np.ndarray, I_JC: np.ndarray) -> Dict[str, np.ndarray]:
     """Compute boundary flux between SB-OT and OT-JC regions.
 
     Parameters
@@ -361,32 +361,51 @@ def compute_boundary_flux(I_SB: np.ndarray, I_JC: np.ndarray) -> Dict:
 
     Returns
     -------
-    flux_data : Dict
+    flux_data : Dict[str, np.ndarray]
         Dictionary containing:
-        - 'SB->OT': {'series': flux array of shape (n_frames-1,)}
-        - 'OT->JC': {'series': flux array of shape (n_frames-1,)}
-        - 'total_flux': scalar, sum of absolute fluxes
-        - 'net_flux': scalar, sum of signed fluxes
+        - 'SB->OT': flux array of shape (n_frames-1,)
+        - 'OT->JC': flux array of shape (n_frames-1,)
     """
     # Flux definitions:
     # F_SB_to_OT(t) = I_SB(t) - I_SB(t+1)  [positive when SB loses intensity]
     # F_OT_to_JC(t) = I_JC(t+1) - I_JC(t)  [positive when JC gains intensity]
     F_SB_to_OT = I_SB[:-1] - I_SB[1:]
     F_OT_to_JC = I_JC[1:] - I_JC[:-1]
-    
+
     total_flux = np.sum(np.abs(F_SB_to_OT) + np.abs(F_OT_to_JC))
-    net_flux = np.sum(F_SB_to_OT + F_OT_to_JC)
-    
+    net_flux = np.sum(F_SB_to_OT + F_OT_to_JC)    
     return {
-        'SB->OT': {
-            'series': F_SB_to_OT,
-        },
-        'OT->JC': {
-            'series': F_OT_to_JC,
-        },
-        'total_flux': total_flux,
-        'net_flux': net_flux,
+        'SB->OT': F_SB_to_OT,
+        'OT->JC': F_OT_to_JC,
+        "total_flux": total_flux,
+        "net_flux": net_flux
     }
+
+
+def compute_flux_scalars(I_SB: np.ndarray, I_JC: np.ndarray) -> Tuple[float, float]:
+    """Compute total and net flux scalars for a time series.
+
+    Parameters
+    ----------
+    I_SB : np.ndarray
+        Shape (n_frames,), total intensity in SB region per frame.
+    I_JC : np.ndarray
+        Shape (n_frames,), total intensity in JC region per frame.
+
+    Returns
+    -------
+    total_flux : float
+        Sum of absolute fluxes.
+    net_flux : float
+        Sum of signed fluxes.
+    """
+    F_SB_to_OT = I_SB[:-1] - I_SB[1:]
+    F_OT_to_JC = I_JC[1:] - I_JC[:-1]
+    
+    total_flux = float(np.sum(np.abs(F_SB_to_OT) + np.abs(F_OT_to_JC)))
+    net_flux = float(np.sum(F_SB_to_OT + F_OT_to_JC))
+    
+    return total_flux, net_flux
 
 
 def extract_frame_window(com_series: np.ndarray,
@@ -450,17 +469,21 @@ def interpolate_series_to_angle(series: np.ndarray,
     return interpolated, angles
 
 
-def interpolate_metric_for_cycle(metric_data: Dict[str, np.ndarray],
-                                 cycle: Cycle,
-                                 phase: str,
-                                 n_interp_samples: int
-                                 ) -> Dict[str, np.ndarray]:
-    """Interpolate metric data for a single cycle into the angle domain.
+def interpolate_data_for_cycle(metric_data: Dict[str, any],
+                               cycle: Cycle,
+                               phase: str,
+                               n_interp_samples: int
+                               ) -> Dict[str, any]:
+    """Interpolate all iterable members of metric_data for a single cycle into the angle domain.
+
+    This function handles both frame-based metrics (COM, total) and flux data uniformly.
+    Scalars (e.g., total_flux, net_flux) are carried over unchanged.
 
     Parameters
     ----------
-    metric_data : Dict[str, np.ndarray]
-        Dictionary of {series_name: series_data} where series_data is frame-based.
+    metric_data : Dict[str, any]
+        Dictionary of {series_name: data} where data can be a numpy array (to interpolate)
+        or a scalar (to pass through unchanged).
     cycle : Cycle
         Cycle object with flex and ext frame ranges.
     phase : str
@@ -470,15 +493,22 @@ def interpolate_metric_for_cycle(metric_data: Dict[str, np.ndarray],
 
     Returns
     -------
-    interpolated_data : Dict[str, np.ndarray]
-        Dictionary of {series_name: interpolated_series}.
+    interpolated_data : Dict[str, any]
+        Dictionary with interpolated arrays for series data, unchanged scalars for others.
     """
     interpolated_data = {}
     
-    for series_name, series in metric_data.items():
+    for series_name, data in metric_data.items():
+        # Skip non-iterable data (scalars like total_flux, net_flux)
+        if not isinstance(data, np.ndarray):
+            interpolated_data[series_name] = data
+            continue
+        
         # Extract flexion and extension windows
-        flex_data = series[cycle.flex.start:cycle.flex.end + 1]
-        ext_data = series[cycle.ext.start:cycle.ext.end + 1]
+        # For frame-based data: [start:end+1] gives n frames
+        # For flux data: [start:end] gives n-1 points (correct for differenced data)
+        flex_data = data[cycle.flex.start:cycle.flex.end + 1]
+        ext_data = data[cycle.ext.start:cycle.ext.end + 1]
         
         # Interpolate each phase
         if phase in ("flexion", "both"):
@@ -495,59 +525,6 @@ def interpolate_metric_for_cycle(metric_data: Dict[str, np.ndarray],
             interpolated_data[series_name] = np.concatenate([flex_interp, ext_interp])
     
     return interpolated_data
-
-
-def interpolate_flux_for_cycle(flux_data: Dict,
-                               cycle: Cycle,
-                               phase: str,
-                               n_interp_samples: int
-                               ) -> Dict[str, np.ndarray]:
-    """Interpolate flux data for a single cycle into the angle domain.
-
-    Flux series have length N-1 (differences between frames), so we use
-    n_interp_samples - 1 for interpolation.
-
-    Parameters
-    ----------
-    flux_data : Dict
-        Dictionary containing 'SB->OT' and 'OT->JC' keys with 'series'.
-    cycle : Cycle
-        Cycle object with flex and ext frame ranges.
-    phase : str
-        "flexion", "extension", or "both".
-    n_interp_samples : int
-        Number of interpolation samples per phase.
-
-    Returns
-    -------
-    interpolated_flux : Dict[str, np.ndarray]
-        Dictionary with 'SB->OT' and 'OT->JC' interpolated series.
-    """
-    interpolated_flux = {}
-    n_flux_samples = n_interp_samples - 1  # Flux has one fewer point
-    
-    for boundary_name in ['SB->OT', 'OT->JC']:
-        series = flux_data[boundary_name]['series']
-        
-        # Extract windows (flux indices match frame transitions)
-        flex_data = series[cycle.flex.start:cycle.flex.end]
-        ext_data = series[cycle.ext.start:cycle.ext.end]
-        
-        # Interpolate each phase
-        if phase in ("flexion", "both"):
-            flex_interp, _ = interpolate_series_to_angle(flex_data, n_flux_samples, 30, 135)
-        if phase in ("extension", "both"):
-            ext_interp, _ = interpolate_series_to_angle(ext_data, n_flux_samples, 135, 30)
-        
-        # Combine based on phase
-        if phase == "flexion":
-            interpolated_flux[boundary_name] = flex_interp
-        elif phase == "extension":
-            interpolated_flux[boundary_name] = ext_interp
-        else:  # "both"
-            interpolated_flux[boundary_name] = np.concatenate([flex_interp, ext_interp])
-    
-    return interpolated_flux
 
 
 def build_angle_axis_for_cycles(cycle_indices: List[int],
@@ -861,25 +838,27 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
         cycle_key = f"Cycle {cycle_num}"
         line_style = cycle_line_styles[cycle_key]
         
-        # x positions for flux (one less than interpolated data due to differencing)
-        x_flux = x_positions[:-1]
+        # Get scalar metrics from the flux data
+        total_f = flux_data.get('total_flux')
+        net_f = flux_data.get('net_flux')
         
         # Plot both boundaries
         for boundary_name in ['SB->OT', 'OT->JC']:
-            flux_series = flux_data[boundary_name]['series']
+            flux_series = flux_data[boundary_name]
             color = boundary_colors[boundary_name]
             
             # Create label with scalar metrics
             label_key = (cycle_key, boundary_name)
             if label_key not in labeled_entries:
-                total_f = flux_data['total_flux']
-                net_f = flux_data['net_flux']
-                label = f"{legend_label} {boundary_name} (total={total_f:.1f}, net={net_f:.1f})"
+                if total_f is not None and net_f is not None:
+                    label = f"{legend_label} {boundary_name} (total={total_f:.1f}, net={net_f:.1f})"
+                else:
+                    label = f"{legend_label} {boundary_name}"
                 labeled_entries.add(label_key)
             else:
                 label = ""
             
-            ax.plot(x_flux, flux_series, label=label, color=color, linestyle=line_style, alpha=0.8)
+            ax.plot(x_positions, flux_series, label=label, color=color, linestyle=line_style, alpha=0.8)
 
     # Add cycle demarcation lines
     for i, (flux_data, x_positions, angles, legend_label, cycle) in enumerate(all_flux_data):
@@ -1232,7 +1211,7 @@ def main(condition, id, nsegs,
         views.show_frames([video_with_boundaries, (masks*(255//64))], "Validate data with segment boundaries")
 
     # Compute intensity data
-    total_sums, total_nonzero, segment_labels = load_intensity_data(video, masks)
+    total_sums, total_nonzero, segment_labels = compute_intensity_data(video, masks)
     
     # Apply normalization if requested
     if normalize:
@@ -1257,17 +1236,12 @@ def main(condition, id, nsegs,
     for i, cycle_idx in enumerate(cycle_indices):
         cycle = meta.get_cycle(cycle_idx)
         
-        # Interpolate each metric
+        # Interpolate each metric using unified function
         cycle_metrics = {}
         for metric in metrics:
-            if metric == "flux":  # Flux data has nested {'series': array} structure
-                cycle_metrics["flux"] = interpolate_flux_for_cycle(
-                    metric_data_full["flux"], cycle, phase, n_interp_samples
-                )
-            else:
-                cycle_metrics[metric] = interpolate_metric_for_cycle(
-                    metric_data_full[metric], cycle, phase, n_interp_samples
-                )
+            cycle_metrics[metric] = interpolate_data_for_cycle(
+                metric_data_full[metric], cycle, phase, n_interp_samples
+            )
         
         # Create legend label
         if phase == "both":
