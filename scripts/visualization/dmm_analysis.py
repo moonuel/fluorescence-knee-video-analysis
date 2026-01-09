@@ -1178,7 +1178,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
 
 def main(condition, id, nsegs, 
          cycle_indices=None, phase="both", 
-         mode="angle", n_interp_samples=105, 
+         mode="angle", n_interp_samples=525, 
          metrics=None, normalize=True, preview=False,
          export_xlsx: bool = False, export_path: str | None = None):
     
@@ -1311,8 +1311,8 @@ if __name__ == "__main__":
                        help="Plotting mode: angle (rescaled, contiguous)")
     parser.add_argument("--metric", default="com",
                        help="Comma-separated metrics to plot: com,total,flux (default: com)")
-    parser.add_argument("--n-interp-samples", type=int, default=105,
-                       help="Number of interpolation samples per phase in angle mode (default: 105)")
+    parser.add_argument("--n-interp-samples", type=int, default=525,
+                       help="Number of interpolation samples per phase in angle mode (default: 525)")
 
     # Excel export
     parser.add_argument(
