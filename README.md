@@ -56,7 +56,6 @@ The system provides:
 │   ├── visualization/     # Plotting and figure generation
 │   └── utils/             # Utility scripts
 ├── notebooks/            # Jupyter notebooks for exploration
-├── memory-bank/          # Project documentation and context
 ├── data/                 # Input data (not in repo)
 ├── figures/              # Generated plots and outputs
 └── docs/                 # Additional documentation
