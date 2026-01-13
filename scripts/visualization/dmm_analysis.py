@@ -1219,12 +1219,15 @@ def main(condition, id, nsegs,
 
     # Split into three anatomical parts
     region_ranges = [ # Get anatomical regions from metadata
-        RegionRange(name, reg.start, reg.end)
+        RegionRange(name, reg.s, reg.e)
         for name, reg in meta.regions.items()]
-    region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
+    # region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
+
+    # TODO: Extract cycles 
+    # TODO: Compute metrics over cycles
 
     # Compute requested metrics over full time series
-    metric_data_full = compute_region_metrics(region_arrays, metrics, region_ranges)
+    # metric_data_full = compute_region_metrics(region_arrays, metrics, region_ranges)
     # Build angle axis for all cycles
     cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
         cycle_indices, meta, phase, n_interp_samples
@@ -1236,16 +1239,27 @@ def main(condition, id, nsegs,
     for i, cycle_idx in enumerate(cycle_indices):
         cycle = meta.get_cycle(cycle_idx)
         
-        # Interpolate each metric using unified function
-        cycle_metrics = {}
-        for metric in metrics:
-            cycle_metrics[metric] = interpolate_data_for_cycle(
-                metric_data_full[metric], cycle, phase, n_interp_samples
-            )
+        # XXX: Interpolate each metric using unified function
+        # cycle_metrics = {}
+        # for metric in metrics:
+        #     cycle_metrics[metric] = interpolate_data_for_cycle(
+        #         metric_data_full[metric], cycle, phase, n_interp_samples
+        #     )
         
+        # Extract cycle
+        flex_data = total_sums[:, cycle.flex.s:cycle.flex.e + 1]
+        ext_data = total_sums[:, cycle.ext.s:cycle.ext.e + 1]
+
+        # Split cycle into anatomical regions
+        flex_regions = split_three_parts_indexwise(flex_data, region_ranges)
+        ext_regions = split_three_parts_indexwise(ext_data, region_ranges)
+
+        # Compute metrics over cycle
+
+
         # Create legend label
         if phase == "both":
-            legend_label = f"Cycle {cycle_idx+1}, frames {cycle.flex.start+1}-{cycle.flex.end+1} and {cycle.ext.start+1}-{cycle.ext.end+1}"
+            legend_label = f"Cycle {cycle_idx+1}, frames {cycle.flex.s+1}-{cycle.flex.e+1} and {cycle.ext.s+1}-{cycle.ext.e+1}"
         else:
             legend_label = f"Cycle {cycle_idx+1}, {phase}"
         
