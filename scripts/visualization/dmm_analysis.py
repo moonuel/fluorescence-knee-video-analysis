@@ -507,8 +507,8 @@ def interpolate_data_for_cycle(metric_data: Dict[str, any],
         # Extract flexion and extension windows
         # For frame-based data: [start:end+1] gives n frames
         # For flux data: [start:end] gives n-1 points (correct for differenced data)
-        flex_data = data[cycle.flex.start:cycle.flex.end + 1]
-        ext_data = data[cycle.ext.start:cycle.ext.end + 1]
+        flex_data = data[cycle.flex.s:cycle.flex.e + 1]
+        ext_data = data[cycle.ext.s:cycle.ext.e + 1]
         
         # Interpolate each phase
         if phase in ("flexion", "both"):
@@ -947,10 +947,10 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
         cycles_data.append({
             "cycle_number": i + 1,
             "cycle_index_0based": i,
-            "flex_start_frame": cycle.flex.start + 1,  # 1-based
-            "flex_end_frame": cycle.flex.end + 1,
-            "ext_start_frame": cycle.ext.start + 1,
-            "ext_end_frame": cycle.ext.end + 1,
+            "flex_start_frame": cycle.flex.s + 1,  # 1-based
+            "flex_end_frame": cycle.flex.e + 1,
+            "ext_start_frame": cycle.ext.s + 1,
+            "ext_end_frame": cycle.ext.e + 1,
             "legend_label": legend_label
         })
     cycles_df = pd.DataFrame(cycles_data)

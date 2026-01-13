@@ -351,8 +351,8 @@ def main(tasks: List[Tuple[int, int, str]]):
         total_nonzero = pd.DataFrame(total_nonzero.T)
 
         # Build flexion/extension DataFrames from metadata (1-based for Excel)
-        flex_rows = [(c.flex.start + 1, c.flex.end + 1) for c in meta.cycles]
-        ext_rows = [(c.ext.start + 1, c.ext.end + 1) for c in meta.cycles]
+        flex_rows = [(c.flex.s + 1, c.flex.e + 1) for c in meta.cycles]
+        ext_rows = [(c.ext.s + 1, c.ext.e + 1) for c in meta.cycles]
         flex = pd.DataFrame(flex_rows, columns=["Start", "End"])
         ext = pd.DataFrame(ext_rows, columns=["Start", "End"])
 

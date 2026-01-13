@@ -12,17 +12,17 @@ Phase = Literal["flexion", "extension", "both"]
 @dataclass(frozen=True)
 class FrameRange:
     """0-based, inclusive frame range in video array indices."""
-    start: int  # inclusive
-    end: int    # inclusive
+    s: int  # inclusive
+    e: int    # inclusive
 
     def to_slice(self) -> slice:
         """For numpy slicing: video[frame_range.to_slice()]."""
-        return slice(self.start, self.end + 1)
+        return slice(self.s, self.e + 1)
 
     @classmethod
     def from_1based(cls, start_1: int, end_1: int) -> "FrameRange":
         """Construct from 1-based inclusive frame numbers (e.g. Excel)."""
-        return cls(start=start_1 - 1, end=end_1 - 1)
+        return cls(s=start_1 - 1, e=end_1 - 1)
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class Cycle:
 
     def full_cycle(self) -> FrameRange:
         """Overall range flex-start → ext-end."""
-        return FrameRange(start=self.flex.start, end=self.ext.end)
+        return FrameRange(s=self.flex.s, e=self.ext.e)
 
 
 @dataclass(frozen=True)
@@ -43,12 +43,12 @@ class RegionSegments:
     These stay 1-based to match notes/Excel; we expose a helper
     to convert to 0-based slice for arrays shaped (N_segments, ...).
     """
-    start: int  # 1-based inclusive
-    end: int    # 1-based inclusive
+    s: int  # 1-based inclusive
+    e: int    # 1-based inclusive
 
     def to_index_slice(self) -> slice:
         """0-based slice: total_sums[region_slice, :]."""
-        return slice(self.start - 1, self.end)
+        return slice(self.s - 1, self.e)
 
 
 @dataclass(frozen=True)
