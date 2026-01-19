@@ -122,9 +122,9 @@ def draw_segment_boundaries(video: np.ndarray, radial_regions: np.ndarray, meta)
     assert radial_regions.dtype in [np.uint8, np.int32, np.int64], f"Radial regions must be integer type, got {radial_regions.dtype}"
 
     # Get segment ranges from metadata
-    jc_start, jc_end = meta.regions["JC"].start, meta.regions["JC"].end
-    ot_start, ot_end = meta.regions["OT"].start, meta.regions["OT"].end
-    sb_start, sb_end = meta.regions["SB"].start, meta.regions["SB"].end
+    jc_start, jc_end = meta.regions["JC"].s, meta.regions["JC"].e
+    ot_start, ot_end = meta.regions["OT"].s, meta.regions["OT"].e
+    sb_start, sb_end = meta.regions["SB"].s, meta.regions["SB"].e
 
     # For efficiency, only consider boundaries between these specific segment pairs
     # JC-OT: between jc_end and ot_start
