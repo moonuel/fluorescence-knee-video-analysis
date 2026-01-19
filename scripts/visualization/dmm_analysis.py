@@ -432,17 +432,19 @@ def extract_frame_window(com_series: np.ndarray,
     return com_series[frame_start:frame_end + 1]
 
 
-def interpolate_series_to_angle(series: np.ndarray,
+def interpolate_series_to_angle(series,
                                 n_samples: int,
                                 angle_start: float,
                                 angle_end: float
-                                ) -> Tuple[np.ndarray, np.ndarray]:
+                                ) -> Tuple:
     """Interpolate a time series to fixed number of samples over an angle range.
+
+    If series is not iterable (e.g., a scalar), returns it as-is with None for angles.
 
     Parameters
     ----------
-    series : np.ndarray
-        Shape (n_frames,), data values for this phase.
+    series : array-like or scalar
+        Data values for this phase.
     n_samples : int
         Number of samples to interpolate to.
     angle_start : float
@@ -452,11 +454,14 @@ def interpolate_series_to_angle(series: np.ndarray,
 
     Returns
     -------
-    interpolated : np.ndarray
-        Shape (n_samples,), interpolated values.
-    angles : np.ndarray
-        Shape (n_samples,), corresponding angle values.
+    interpolated : array-like or scalar
+        Interpolated values or original scalar.
+    angles : np.ndarray or None
+        Corresponding angle values, or None for scalars.
     """
+    if not isinstance(series, Iterable):
+        return series, None
+
     # Create angle array
     angles = np.linspace(angle_start, angle_end, n_samples)
 
@@ -1141,9 +1146,6 @@ def main(condition, id, nsegs,
             # Interpolate flex metrics
             flex_interpolated = {}
             for series_name, data in flex_metrics_data[metric].items():
-                if not isinstance(data, Iterable):
-                    flex_interpolated[series_name] = data
-                    continue
                 interp, _ = interpolate_series_to_angle(data, n_interp_samples, 30, 135)
                 flex_interpolated[series_name] = interp
             flex_metrics_interp[metric] = flex_interpolated
@@ -1151,9 +1153,6 @@ def main(condition, id, nsegs,
             # Interpolate ext metrics
             ext_interpolated = {}
             for series_name, data in ext_metrics_data[metric].items():
-                if not isinstance(data, Iterable):
-                    ext_interpolated[series_name] = data
-                    continue
                 interp, _ = interpolate_series_to_angle(data, n_interp_samples, 135, 30)
                 ext_interpolated[series_name] = interp
             ext_metrics_interp[metric] = ext_interpolated
