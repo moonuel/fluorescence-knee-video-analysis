@@ -17,6 +17,7 @@ from core import data_processing as dp
 from config.knee_metadata import get_knee_meta, Cycle
 import sys
 import argparse
+from collections.abc import Iterable
 
 # Angles to show on x-axis (others will have blank labels)
 # IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
@@ -469,64 +470,6 @@ def interpolate_series_to_angle(series: np.ndarray,
     return interpolated, angles
 
 
-def interpolate_data_for_cycle(metric_data: Dict[str, any],
-                               cycle: Cycle,
-                               phase: str,
-                               n_interp_samples: int
-                               ) -> Dict[str, any]:
-    """Interpolate all iterable members of metric_data for a single cycle into the angle domain.
-
-    This function handles both frame-based metrics (COM, total) and flux data uniformly.
-    Scalars (e.g., total_flux, net_flux) are carried over unchanged.
-
-    Parameters
-    ----------
-    metric_data : Dict[str, any]
-        Dictionary of {series_name: data} where data can be a numpy array (to interpolate)
-        or a scalar (to pass through unchanged).
-    cycle : Cycle
-        Cycle object with flex and ext frame ranges.
-    phase : str
-        "flexion", "extension", or "both".
-    n_interp_samples : int
-        Number of interpolation samples per phase.
-
-    Returns
-    -------
-    interpolated_data : Dict[str, any]
-        Dictionary with interpolated arrays for series data, unchanged scalars for others.
-    """
-    interpolated_data = {}
-    
-    for series_name, data in metric_data.items():
-        # Skip non-iterable data (scalars like total_flux, net_flux)
-        if not isinstance(data, np.ndarray):
-            interpolated_data[series_name] = data
-            continue
-        
-        # Extract flexion and extension windows
-        # For frame-based data: [start:end+1] gives n frames
-        # For flux data: [start:end] gives n-1 points (correct for differenced data)
-        flex_data = data[cycle.flex.s:cycle.flex.e + 1]
-        ext_data = data[cycle.ext.s:cycle.ext.e + 1]
-        
-        # Interpolate each phase
-        if phase in ("flexion", "both"):
-            flex_interp, _ = interpolate_series_to_angle(flex_data, n_interp_samples, 30, 135)
-        if phase in ("extension", "both"):
-            ext_interp, _ = interpolate_series_to_angle(ext_data, n_interp_samples, 135, 30)
-        
-        # Combine based on phase
-        if phase == "flexion":
-            interpolated_data[series_name] = flex_interp
-        elif phase == "extension":
-            interpolated_data[series_name] = ext_interp
-        else:  # "both"
-            interpolated_data[series_name] = np.concatenate([flex_interp, ext_interp])
-    
-    return interpolated_data
-
-
 def build_angle_axis_for_cycles(cycle_indices: List[int],
                                meta: 'KneeVideoMeta',
                                phase: str,
@@ -602,6 +545,63 @@ def build_angle_axis_for_cycles(cycle_indices: List[int],
     return cycle_x_offsets, cycle_angles, cycle_lengths
 
 
+def build_angle_ticks(phase: str, n_interp_samples: int, x_positions_list: List[np.ndarray]) -> Tuple[List[float], List[str]]:
+    """Build tick positions and labels for angle-based plots.
+
+    Parameters
+    ----------
+    phase : str
+        "flexion", "extension", or "both".
+    n_interp_samples : int
+        Number of samples per phase.
+    x_positions_list : List[np.ndarray]
+        List of x_positions arrays for each cycle.
+
+    Returns
+    -------
+    Tuple[List[float], List[str]]
+        Tick positions and corresponding labels.
+    """
+    all_tick_positions = []
+    all_tick_labels = []
+
+    for x_positions in x_positions_list:
+        if phase == "flexion":
+            flex_labels = np.linspace(30, 135, n_interp_samples)
+            target_angles = np.arange(30, 136, 15)
+            for target_angle in target_angles:
+                idx = np.argmin(np.abs(flex_labels - target_angle))
+                if idx < len(x_positions):
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+        elif phase == "extension":
+            ext_labels = np.linspace(135, 30, n_interp_samples)
+            target_angles = np.arange(135, 29, -15)
+            for target_angle in target_angles:
+                idx = np.argmin(np.abs(ext_labels - target_angle))
+                if idx < len(x_positions):
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+        else:  # "both"
+            flex_labels = np.linspace(30, 135, n_interp_samples)
+            flex_target_angles = np.arange(30, 136, 15)
+            for target_angle in flex_target_angles:
+                idx = np.argmin(np.abs(flex_labels - target_angle))
+                if idx < len(x_positions):
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+
+            ext_labels = np.linspace(135, 30, n_interp_samples)
+            ext_target_angles = np.arange(120, 44, -15)  # Adjusted to avoid overlap with flex
+            for target_angle in ext_target_angles:
+                idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
+                if idx < len(x_positions):
+                    all_tick_positions.append(x_positions[idx])
+                    all_tick_labels.append(f'{int(target_angle)}°')
+
+    return all_tick_positions, all_tick_labels
+
+
 def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
                                       phase: str,
                                       n_interp_samples: int,
@@ -630,48 +630,9 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
     cycle_colors = plt.cm.tab10(range(len(unique_cycles)))
     color_map = dict(zip(sorted(unique_cycles), cycle_colors))
 
-    # Build x-axis ticks for each cycle based on angle positions
-    all_tick_positions = []
-    all_tick_labels = []
-
-    for cycle_com_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-        # Define angle mappings for this cycle's block
-        if phase == "flexion":
-            # Only flexion phase: 30° -> 135°
-            flex_labels = np.linspace(30, 135, n_interp_samples)
-            target_angles = np.arange(30, 136, 15)  # 30, 45, 60, 75, 90, 105, 120, 135
-            # Find indices in flex_labels closest to target_angles
-            for target_angle in target_angles:
-                idx = np.argmin(np.abs(flex_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
-
-        elif phase == "extension":
-            # Only extension phase: 135° -> 30°
-            ext_labels = np.linspace(135, 30, n_interp_samples)
-            target_angles = np.arange(135, 29, -15)  # 135, 120, 105, 90, 75, 60, 45, 30
-            # Find indices in ext_labels closest to target_angles
-            for target_angle in target_angles:
-                idx = np.argmin(np.abs(ext_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
-
-        else:  # "both" - flexion + extension concatenated
-            # Flexion part: 30° -> 135°
-            flex_labels = np.linspace(30, 135, n_interp_samples)
-            flex_target_angles = np.arange(30, 136, 15)  # 30, 45, 60, 75, 90, 105, 120, 135
-            for target_angle in flex_target_angles:
-                idx = np.argmin(np.abs(flex_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
-
-            # Extension part: 135° -> 30°
-            ext_labels = np.linspace(135, 30, n_interp_samples)
-            ext_target_angles = np.arange(120, 44, -15)  # 120, 105, 90, 75, 60, 45 (skip 135 and 30)
-            for target_angle in ext_target_angles:
-                idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
+    # Build x-axis ticks
+    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_cycle_data]
+    all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
 
     for ax, name in zip(axes, region_order):
         # Track which cycles have been labeled to avoid duplicate legend entries
@@ -792,43 +753,9 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     for i, cycle_key in enumerate(sorted(unique_cycles)):
         cycle_line_styles[cycle_key] = line_styles[i % len(line_styles)]
 
-    # Build x-axis ticks based on angle positions
-    all_tick_positions = []
-    all_tick_labels = []
-
-    for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
-        if phase == "flexion":
-            flex_labels = np.linspace(30, 135, n_interp_samples)
-            target_angles = np.arange(30, 136, 15)
-            for target_angle in target_angles:
-                idx = np.argmin(np.abs(flex_labels - target_angle))
-                if idx < len(x_positions) - 1:  # Ensure within flux array bounds
-                    all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
-        elif phase == "extension":
-            ext_labels = np.linspace(135, 30, n_interp_samples)
-            target_angles = np.arange(135, 29, -15)
-            for target_angle in target_angles:
-                idx = np.argmin(np.abs(ext_labels - target_angle))
-                if idx < len(x_positions) - 1:  # Ensure within flux array bounds
-                    all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
-        else:  # "both"
-            flex_labels = np.linspace(30, 135, n_interp_samples)
-            flex_target_angles = np.arange(30, 136, 15)
-            for target_angle in flex_target_angles:
-                idx = np.argmin(np.abs(flex_labels - target_angle))
-                if idx < len(x_positions) - 1:
-                    all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
-            
-            ext_labels = np.linspace(135, 30, n_interp_samples)
-            ext_target_angles = np.arange(120, 44, -15)
-            for target_angle in ext_target_angles:
-                idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
-                if idx < len(x_positions) - 1:
-                    all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
+    # Build x-axis ticks
+    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_flux_data]
+    all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
 
     # Track which (cycle, boundary) combinations have been labeled
     labeled_entries = set()
@@ -1053,48 +980,9 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     cycle_colors = plt.cm.tab10(range(len(unique_cycles)))
     color_map = dict(zip(sorted(unique_cycles), cycle_colors))
 
-    # Build x-axis ticks for each cycle based on angle positions
-    all_tick_positions = []
-    all_tick_labels = []
-
-    for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-        # Define angle mappings for this cycle's block
-        if phase == "flexion":
-            # Only flexion phase: 30° -> 135°
-            flex_labels = np.linspace(30, 135, n_interp_samples)
-            target_angles = np.arange(30, 136, 15)  # 30, 45, 60, 75, 90, 105, 120, 135
-            # Find indices in flex_labels closest to target_angles
-            for target_angle in target_angles:
-                idx = np.argmin(np.abs(flex_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
-
-        elif phase == "extension":
-            # Only extension phase: 135° -> 30°
-            ext_labels = np.linspace(135, 30, n_interp_samples)
-            target_angles = np.arange(135, 29, -15)  # 135, 120, 105, 90, 75, 60, 45, 30
-            # Find indices in ext_labels closest to target_angles
-            for target_angle in target_angles:
-                idx = np.argmin(np.abs(ext_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
-
-        else:  # "both" - flexion + extension concatenated
-            # Flexion part: 30° -> 135°
-            flex_labels = np.linspace(30, 135, n_interp_samples)
-            flex_target_angles = np.arange(30, 136, 15)  # 30, 45, 60, 75, 90, 105, 120, 135
-            for target_angle in flex_target_angles:
-                idx = np.argmin(np.abs(flex_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
-
-            # Extension part: 135° -> 30°
-            ext_labels = np.linspace(135, 30, n_interp_samples)
-            ext_target_angles = np.arange(120, 44, -15)  # 120, 105, 90, 75, 60, 45 (skip 135 and 30)
-            for target_angle in ext_target_angles:
-                idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
-                all_tick_positions.append(x_positions[idx])
-                all_tick_labels.append(f'{int(target_angle)}°')
+    # Build x-axis ticks
+    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_cycle_data]
+    all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
 
     for ax, name in zip(axes, region_order):
         # Track which cycles have been labeled to avoid duplicate legend entries
@@ -1221,13 +1109,7 @@ def main(condition, id, nsegs,
     region_ranges = [ # Get anatomical regions from metadata
         RegionRange(name, reg.s, reg.e)
         for name, reg in meta.regions.items()]
-    # region_arrays = split_three_parts_indexwise(total_sums, region_ranges)
 
-    # TODO: Extract cycles 
-    # TODO: Compute metrics over cycles
-
-    # Compute requested metrics over full time series
-    # metric_data_full = compute_region_metrics(region_arrays, metrics, region_ranges)
     # Build angle axis for all cycles
     cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
         cycle_indices, meta, phase, n_interp_samples
@@ -1239,13 +1121,6 @@ def main(condition, id, nsegs,
     for i, cycle_idx in enumerate(cycle_indices):
         cycle = meta.get_cycle(cycle_idx)
         
-        # XXX: Interpolate each metric using unified function
-        # cycle_metrics = {}
-        # for metric in metrics:
-        #     cycle_metrics[metric] = interpolate_data_for_cycle(
-        #         metric_data_full[metric], cycle, phase, n_interp_samples
-        #     )
-        
         # Extract cycle
         flex_data = total_sums[:, cycle.flex.s:cycle.flex.e + 1]
         ext_data = total_sums[:, cycle.ext.s:cycle.ext.e + 1]
@@ -1254,8 +1129,47 @@ def main(condition, id, nsegs,
         flex_regions = split_three_parts_indexwise(flex_data, region_ranges)
         ext_regions = split_three_parts_indexwise(ext_data, region_ranges)
 
-        # Compute metrics over cycle
+        # Compute metrics over cycle 
+        flex_metrics_data = compute_region_metrics(flex_regions, metrics, region_ranges)
+        ext_metrics_data = compute_region_metrics(ext_regions, metrics, region_ranges)
+        # Returns dict of format {"metric": {region_name: array}}
+        
+        # Interpolate metrics into angle domain
+        flex_metrics_interp = {}
+        ext_metrics_interp = {}
+        for metric in metrics:
+            # Interpolate flex metrics
+            flex_interpolated = {}
+            for series_name, data in flex_metrics_data[metric].items():
+                if not isinstance(data, Iterable):
+                    flex_interpolated[series_name] = data
+                    continue
+                interp, _ = interpolate_series_to_angle(data, n_interp_samples, 30, 135)
+                flex_interpolated[series_name] = interp
+            flex_metrics_interp[metric] = flex_interpolated
 
+            # Interpolate ext metrics
+            ext_interpolated = {}
+            for series_name, data in ext_metrics_data[metric].items():
+                if not isinstance(data, Iterable):
+                    ext_interpolated[series_name] = data
+                    continue
+                interp, _ = interpolate_series_to_angle(data, n_interp_samples, 135, 30)
+                ext_interpolated[series_name] = interp
+            ext_metrics_interp[metric] = ext_interpolated
+
+        # Concatenate flex and ext metrics
+        cycle_metrics = {}
+        for metric in metrics:
+            cycle_metrics[metric] = {}
+            for series_name in flex_metrics_interp[metric]:
+                flex_data = flex_metrics_interp[metric][series_name]
+                ext_data = ext_metrics_interp[metric][series_name]
+                if isinstance(flex_data, Iterable) and isinstance(ext_data, Iterable):
+                    cycle_metrics[metric][series_name] = np.concatenate([flex_data, ext_data])
+                else:
+                    # For scalars, keep as is (e.g., total_flux, net_flux for flux metric)
+                    cycle_metrics[metric][series_name] = flex_data  # Assuming flex and ext are the same or handle separately if needed
 
         # Create legend label
         if phase == "both":
@@ -1269,7 +1183,7 @@ def main(condition, id, nsegs,
             "legend_label": legend_label,
             "x_positions": cycle_x_offsets[i],
             "angles": cycle_angles[i],
-            "metrics": cycle_metrics,
+            "metrics": cycle_metrics, # NOTE: cycle_metrics was a dict of form {"metric": iterable}
         })
 
     # Plot each requested metric
