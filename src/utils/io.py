@@ -8,7 +8,52 @@ import cv2
 from pathlib import Path
 import cv2
 import h5py
-from typing import Optional
+from typing import Optional, List
+from dataclasses import dataclass, field
+
+
+# =============================================================================
+# FILENAME CONVENTIONS
+# =============================================================================
+
+@dataclass
+class FigureFilename:
+    """Enforces consistent naming for generated figures.
+
+    Format: {analysis_type}_{condition}_{video_id:04d}_N{n_segments}_{normalization}_{cycles}_{modifiers}.{extension}
+    """
+    analysis_type: str
+    condition: str
+    video_id: int
+    n_segments: int
+    normalization: str
+    cycles: str
+    modifiers: List[str] = field(default_factory=list)
+    extension: str = "pdf"
+
+    def __str__(self) -> str:
+        base = f"{self.analysis_type}_{self.condition}_{self.video_id:04d}_N{self.n_segments}_{self.normalization}_{self.cycles}"
+        if self.modifiers:
+            base += "_" + "_".join(self.modifiers)
+        return base + f".{self.extension}"
+
+    @classmethod
+    def from_meta(cls, analysis_type: str, meta: 'KneeVideoMeta', normalization: str, cycles: str, **kwargs) -> 'FigureFilename':
+        """Convenience constructor using KneeVideoMeta object."""
+        return cls(
+            analysis_type=analysis_type,
+            condition=meta.condition,
+            video_id=meta.video_id,
+            n_segments=meta.n_segments,
+            normalization=normalization,
+            cycles=cycles,
+            **kwargs
+        )
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
 
 def load_aging_knee_coords(filename:str, knee_id:Union[str, int]) -> Tuple[pd.DataFrame, Dict[str, int]]:
@@ -162,6 +207,7 @@ def load_mp4(filename: str) -> np.ndarray:
     cap.release()
     video = np.array(video, dtype=np.uint8)
     return video
+
 
 def save_avi(filepath: str, video: np.ndarray, fps: int = 30) -> None:
     """Save a NumPy video array to disk as an .avi (MJPG) file.
