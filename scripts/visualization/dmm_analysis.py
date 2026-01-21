@@ -1277,7 +1277,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    cycle_indices = [int(x.strip()) - 1 for x in args.cycle_indices.split(',')]  # Convert 1-based user input to 0-based internal
+    cycle_indices = [int(x.strip()) - 1 for x in args.cycles.split(',')]  # Convert 1-based user input to 0-based internal
     metrics = [x.strip() for x in args.metric.split(',')]
     main(
         args.condition,
