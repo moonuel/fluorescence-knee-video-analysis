@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
 from utils import io, views, utils
+from utils.io import FigureFilename
 from core import data_processing as dp
 from config.knee_metadata import get_knee_meta, Cycle
 import sys
@@ -22,6 +23,42 @@ from collections.abc import Iterable
 # Angles to show on x-axis (others will have blank labels)
 # IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
 IMPORTANT_ANGLE_LABELS = {30, 45, 60, 75, 90, 105, 120, 135}
+
+
+def construct_filename(analysis_type: str, meta: 'KneeVideoMeta', normalization: str, cycles: str, modifiers: List[str], extension: str = "png") -> str:
+    """Construct a standardized filename for saved figures.
+
+    Parameters
+    ----------
+    analysis_type : str
+        Type of analysis (e.g., "boundary_flux", "intra_region_totals").
+    meta : KneeVideoMeta
+        Video metadata containing condition, video_id, n_segments.
+    normalization : str
+        Normalization label (e.g., "normalized", "raw").
+    cycles : str
+        Cycle specification (e.g., "cycles1-3", "all_cycles").
+    modifiers : List[str]
+        Additional modifiers (e.g., ["angle_based"]).
+    extension : str, optional
+        File extension (default "png").
+
+    Returns
+    -------
+    str
+        Constructed filename.
+    """
+    fig_filename = FigureFilename(
+        analysis_type=analysis_type,
+        condition=meta.condition,
+        video_id=meta.video_id,
+        n_segments=meta.n_segments,
+        normalization=normalization,
+        cycles=cycles,
+        modifiers=modifiers,
+        extension=extension
+    )
+    return str(fig_filename)
 
 
 def get_labeled_angles_for_phase(phase: str, n_interp_samples: int) -> Tuple[List[int], List[str]]:
@@ -611,7 +648,8 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
                                       phase: str,
                                       n_interp_samples: int,
                                       video_title: str,
-                                      norm_label: str
+                                      norm_label: str,
+                                      meta: 'KneeVideoMeta'
                                       ) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs angle for multiple cycles.
 
@@ -623,6 +661,12 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
         "flexion", "extension", or "both".
     n_interp_samples : int
         Number of samples per phase used for interpolation.
+    video_title : str
+        Title for the plot.
+    norm_label : str
+        Label indicating normalization status.
+    meta : KneeVideoMeta
+        Video metadata.
     """
     fig, axes = plt.subplots(3, 1, sharex=True, figsize=(15, 10))
     region_order = ["SB", "OT", "JC"]  # top to bottom
@@ -710,20 +754,31 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
             ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {norm_label})")
+    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {norm_label} intensities)")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
 
+    # Save figure
+    cycles_str = "cycles_" + ",".join([str(n + 1) for n in cycle_indices])
+    filename = construct_filename("intra_region_coms", meta, norm_label, cycles_str, ["angle_based"])
+    save_path = Path("figures") / filename
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved figure to {save_path}")
+
     plt.tight_layout()
     plt.show()
+
+    
 
 
 def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np.ndarray, str, Cycle]],
                                    phase: str,
                                    n_interp_samples: int,
                                    video_title: str,
-                                   norm_label: str
+                                   norm_label: str,
+                                   meta: 'KneeVideoMeta'
                                    ) -> None:
     """Create single subplot of boundary flux vs angle for multiple cycles.
 
@@ -740,6 +795,8 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
         Title for the plot.
     norm_label : str
         Label indicating normalization status.
+    meta : KneeVideoMeta
+        Video metadata.
     """
     fig, ax = plt.subplots(1, 1, figsize=(15, 6))
 
@@ -822,10 +879,145 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
     ax.set_xlabel("Knee Angle (°)")
     ax.set_ylabel("Boundary Flux (signed)")
-    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {norm_label})")
+    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {norm_label} intensities)")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best", fontsize=8)
-    
+
+    # Save figure
+    cycles_str = "cycles_" + ",".join([str(n + 1) for n in cycle_indices])
+    filename = construct_filename("boundary_flux", meta, norm_label, cycles_str, ["angle_based"])
+    save_path = Path("figures") / filename
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved figure to {save_path}")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
+                                        phase: str,
+                                        n_interp_samples: int,
+                                        video_title: str,
+                                        norm_label: str,
+                                        meta: 'KneeVideoMeta'
+                                        ) -> None:
+    """Create 3 stacked subplots (SB, OT, JC) of intra-region total intensity vs angle for multiple cycles.
+
+    Parameters
+    ----------
+    all_cycle_data : List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]]
+        List of (cycle_total_data, x_positions, angles, legend_label, cycle) for each cycle.
+    phase : str
+        "flexion", "extension", or "both".
+    n_interp_samples : int
+        Number of samples per phase used for interpolation.
+    video_title : str
+        Title for the plot.
+    norm_label : str
+        Label indicating normalization status.
+    meta : KneeVideoMeta
+        Video metadata.
+    """
+    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(15, 10))
+    region_order = ["SB", "OT", "JC"]  # top to bottom
+
+    # Create color map for consistent cycle coloring
+    unique_cycles = set()
+    for _, _, _, legend_label, _ in all_cycle_data:
+        cycle_num = legend_label.split()[1]  # Extract "N" from "Cycle N, ..."
+        unique_cycles.add(f"Cycle {cycle_num}")
+    cycle_colors = plt.cm.tab10(range(len(unique_cycles)))
+    color_map = dict(zip(sorted(unique_cycles), cycle_colors))
+
+    # Build x-axis ticks
+    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_cycle_data]
+    all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
+
+    for ax, name in zip(axes, region_order):
+        # Track which cycles have been labeled to avoid duplicate legend entries
+        labeled_cycles = set()
+
+        for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
+            total = cycle_total_data[name]
+            cycle_num = legend_label.split()[1]
+            cycle_key = f"Cycle {cycle_num}"
+            color = color_map[cycle_key]
+
+            # Only add legend label once per cycle
+            label = legend_label if cycle_key not in labeled_cycles else ""
+            labeled_cycles.add(cycle_key)
+
+            ax.plot(x_positions, total, label=label, color=color)
+
+        # Add cycle demarcation lines
+        # Black lines: boundaries between cycles
+        # Gray lines: flex/ext transitions within each cycle
+        for i, (cycle_total_data, x_positions, angles, legend_label, cycle) in enumerate(all_cycle_data):
+            # Black line at start of each cycle (except if it's the first cycle's start)
+            if i > 0:  # Not the first cycle
+                cycle_start = x_positions[0]
+                ax.axvline(cycle_start, color='black', linestyle='-', linewidth=1)
+
+        # Black line at end of last cycle
+        last_cycle_end = all_cycle_data[-1][1][-1]
+        ax.axvline(last_cycle_end, color='black', linestyle='-', linewidth=1)
+
+        # Gray lines at flex/ext transitions (only for "both" phase)
+        if phase == "both":
+            for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
+                transition_line = x_positions[n_interp_samples-1]
+                ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
+
+        ax.set_ylabel(f"{name} Total Intensity")
+        ax.grid(True, alpha=0.3)
+        ax.set_title(f"{name} Intra-region Total Intensity")
+
+    # Set x-axis limits to eliminate empty space
+    if all_cycle_data:
+        min_x = min(x_positions[0] for _, x_positions, _, _, _ in all_cycle_data)
+        max_x = max(x_positions[-1] for _, x_positions, _, _, _ in all_cycle_data)
+        for ax in axes:
+            ax.set_xlim(min_x, max_x)
+
+    # Filter x-axis labels to reduce visual clutter: keep only specific angles
+    filtered_tick_labels = []
+    if all_tick_labels:
+        for label in all_tick_labels:
+            angle = None
+            if label.endswith("°"):
+                try:
+                    angle = int(label[:-1])
+                except ValueError:
+                    angle = None
+            if angle in IMPORTANT_ANGLE_LABELS:
+                filtered_tick_labels.append(label)
+            else:
+                # Use a whitespace label so the tick is present but unlabeled
+                filtered_tick_labels.append(" ")
+    else:
+        filtered_tick_labels = all_tick_labels
+
+    # Set x-axis ticks and labels for all subplots
+    if all_tick_positions:
+        for ax in axes:
+            ax.set_xticks(all_tick_positions)
+            ax.set_xticklabels(filtered_tick_labels)
+
+    axes[-1].set_xlabel("Knee Angle (°)")
+    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {norm_label} intensities)")
+
+    # Place legend on the top subplot (SB)
+    axes[0].legend(loc="best")
+
+    # Save figure
+    cycles_str = "cycles_" + ",".join([str(n + 1) for n in cycle_indices])
+    filename = construct_filename("intra_region_totals", meta, norm_label, cycles_str, ["angle_based"])
+    save_path = Path("figures") / filename
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved figure to {save_path}")
+
     plt.tight_layout()
     plt.show()
 
@@ -956,119 +1148,7 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
     
     print(f"✅ Excel export saved to: {output_path}")
 
-
-def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
-                                        phase: str,
-                                        n_interp_samples: int,
-                                        video_title: str,
-                                        norm_label: str
-                                        ) -> None:
-    """Create 3 stacked subplots (SB, OT, JC) of intra-region total intensity vs angle for multiple cycles.
-
-    Parameters
-    ----------
-    all_cycle_data : List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]]
-        List of (cycle_total_data, x_positions, angles, legend_label, cycle) for each cycle.
-    phase : str
-        "flexion", "extension", or "both".
-    n_interp_samples : int
-        Number of samples per phase used for interpolation.
-    """
-    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(15, 10))
-    region_order = ["SB", "OT", "JC"]  # top to bottom
-
-    # Create color map for consistent cycle coloring
-    unique_cycles = set()
-    for _, _, _, legend_label, _ in all_cycle_data:
-        cycle_num = legend_label.split()[1]  # Extract "N" from "Cycle N, ..."
-        unique_cycles.add(f"Cycle {cycle_num}")
-    cycle_colors = plt.cm.tab10(range(len(unique_cycles)))
-    color_map = dict(zip(sorted(unique_cycles), cycle_colors))
-
-    # Build x-axis ticks
-    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_cycle_data]
-    all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
-
-    for ax, name in zip(axes, region_order):
-        # Track which cycles have been labeled to avoid duplicate legend entries
-        labeled_cycles = set()
-
-        for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-            total = cycle_total_data[name]
-            cycle_num = legend_label.split()[1]
-            cycle_key = f"Cycle {cycle_num}"
-            color = color_map[cycle_key]
-
-            # Only add legend label once per cycle
-            label = legend_label if cycle_key not in labeled_cycles else ""
-            labeled_cycles.add(cycle_key)
-
-            ax.plot(x_positions, total, label=label, color=color)
-
-        # Add cycle demarcation lines
-        # Black lines: boundaries between cycles
-        # Gray lines: flex/ext transitions within each cycle
-        for i, (cycle_total_data, x_positions, angles, legend_label, cycle) in enumerate(all_cycle_data):
-            # Black line at start of each cycle (except if it's the first cycle's start)
-            if i > 0:  # Not the first cycle
-                cycle_start = x_positions[0]
-                ax.axvline(cycle_start, color='black', linestyle='-', linewidth=1)
-
-        # Black line at end of last cycle
-        last_cycle_end = all_cycle_data[-1][1][-1]
-        ax.axvline(last_cycle_end, color='black', linestyle='-', linewidth=1)
-
-        # Gray lines at flex/ext transitions (only for "both" phase)
-        if phase == "both":
-            for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-                transition_line = x_positions[n_interp_samples-1]
-                ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
-
-        ax.set_ylabel(f"{name} Total Intensity")
-        ax.grid(True, alpha=0.3)
-        ax.set_title(f"{name} Intra-region Total Intensity")
-
-    # Set x-axis limits to eliminate empty space
-    if all_cycle_data:
-        min_x = min(x_positions[0] for _, x_positions, _, _, _ in all_cycle_data)
-        max_x = max(x_positions[-1] for _, x_positions, _, _, _ in all_cycle_data)
-        for ax in axes:
-            ax.set_xlim(min_x, max_x)
-
-    # Filter x-axis labels to reduce visual clutter: keep only specific angles
-    filtered_tick_labels = []
-    if all_tick_labels:
-        for label in all_tick_labels:
-            angle = None
-            if label.endswith("°"):
-                try:
-                    angle = int(label[:-1])
-                except ValueError:
-                    angle = None
-            if angle in IMPORTANT_ANGLE_LABELS:
-                filtered_tick_labels.append(label)
-            else:
-                # Use a whitespace label so the tick is present but unlabeled
-                filtered_tick_labels.append(" ")
-    else:
-        filtered_tick_labels = all_tick_labels
-
-    # Set x-axis ticks and labels for all subplots
-    if all_tick_positions:
-        for ax in axes:
-            ax.set_xticks(all_tick_positions)
-            ax.set_xticklabels(filtered_tick_labels)
-
-    axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {norm_label})")
-
-    # Place legend on the top subplot (SB)
-    axes[0].legend(loc="best")
-
-    plt.tight_layout()
-    plt.show()
-
-
+    
 def main(condition, id, nsegs, 
          cycle_indices=None, phase="both", 
          mode="angle", n_interp_samples=525, 
@@ -1082,7 +1162,7 @@ def main(condition, id, nsegs,
         metrics = ["com"]
 
     # Create normalization label for plots and console output
-    norm_label = "normalized intensities" if normalize else "raw intensities"
+    norm_label = "norm" if normalize else "raw"
     print(f"Loading video: {condition} {id} (N{nsegs})")
     print(f"Processing cycles: {cycle_indices} in {mode} mode")
     print(f"Computing metrics: {metrics}")
@@ -1122,7 +1202,7 @@ def main(condition, id, nsegs,
 
     # Interpolate all metrics into angle domain for all cycles
     # Structure: [{cycle_idx, cycle, legend_label, x_positions, angles, metrics: {metric_name: {series_name: array}}}, ...]
-    all_cycle_data = []
+    all_cycle_data = [] # TODO: export total_sums to excel and manually check frame-wise diffs 
     for i, cycle_idx in enumerate(cycle_indices):
         cycle = meta.get_cycle(cycle_idx)
         
@@ -1201,25 +1281,25 @@ def main(condition, id, nsegs,
         ]
         
         if metric == "com":
-            if export_xlsx:
-                out_path = (
-                    Path(export_path)
-                    if export_path
-                    else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
-                )
-                export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_coms_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label)
+            # if export_xlsx:
+            #     out_path = (
+            #         Path(export_path)
+            #         if export_path
+            #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+            #     )
+            #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
+            plot_intra_region_coms_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, meta)
         elif metric == "total":
-            if export_xlsx:
-                out_path = (
-                    Path(export_path)
-                    if export_path
-                    else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
-                )
-                export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_totals_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label)
+            # if export_xlsx:
+            #     out_path = (
+            #         Path(export_path)
+            #         if export_path
+            #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+            #     )
+            #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
+            plot_intra_region_totals_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, meta)
         elif metric == "flux":
-            plot_boundary_flux_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label)
+            plot_boundary_flux_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, meta)
 
 
 if __name__ == "__main__":
@@ -1229,8 +1309,8 @@ if __name__ == "__main__":
     parser.add_argument("condition", help="Condition (e.g., normal, aging, dmm-0w)")
     parser.add_argument("id", help="Video ID")
     parser.add_argument("nsegs", help="Number of segments")
-    parser.add_argument("cycle_indices", nargs='?', default="0",
-                       help="Comma-separated cycle indices (default: 0)")
+    parser.add_argument("--cycles", default="1",
+                       help="Comma-separated 1-based cycle indices (default: 1)")
     parser.add_argument("phase", nargs='?', default="both",
                        choices=["flexion", "extension", "both"],
                        help="Phase to plot (default: both)")
