@@ -227,6 +227,9 @@ KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = {
             Cycle(FrameRange.from_1based(464, 488), FrameRange.from_1based(490, 512)),
             Cycle(FrameRange.from_1based(513, 530), FrameRange.from_1based(532, 553)),
             Cycle(FrameRange.from_1based(554, 576), FrameRange.from_1based(579, 609)),
+            Cycle(FrameRange.from_1based(1199, 1231), FrameRange.from_1based(1232, 1264)), # Revised cycles suggested by Huizhu on 2026-01-19
+            Cycle(FrameRange.from_1based(1265, 1299), FrameRange.from_1based(1300, 1336)),
+            Cycle(FrameRange.from_1based(1337, 1365), FrameRange.from_1based(1366, 1390)),
         ],
         regions={
             "JC": RegionSegments(1, 27),
@@ -293,7 +296,7 @@ KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = {
             Cycle(FrameRange.from_1based(1461, 1483), FrameRange.from_1based(1484, 1508)),
             Cycle(FrameRange.from_1based(1509, 1540), FrameRange.from_1based(1541, 1559)),
             Cycle(FrameRange.from_1based(1618, 1648), FrameRange.from_1based(1649, 1669)),
-            Cycle(FrameRange.from_1based(1672, 1696), FrameRange.from_1based(1697, 1720)),
+            Cycle(FrameRange.from_1based(1672, 1696), FrameRange.from_1based(1697, 1720)), 
         ],
         regions={
             "JC": RegionSegments(1, 27),  # Assuming default
