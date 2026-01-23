@@ -46,7 +46,7 @@ OPTIONS = {
 # =============================================================================
 
 def load_heatmap_excel(video_number: int, segment_count: int, opt: str,
-                       normalize: bool = True, rescaled: bool = False) -> tuple:
+                        normalize: bool = True, rescaled: bool = False, cycles: str = "1") -> tuple:
     """
     Load averaged flexion and extension intensity data from pre-computed heatmap Excel.
 
@@ -56,6 +56,7 @@ def load_heatmap_excel(video_number: int, segment_count: int, opt: str,
         opt: Processing option ("total" or "unit")
         normalize: Whether to load normalized heatmaps (default: True)
         rescaled: Whether to load rescaled (50:50) heatmaps (default: False)
+        cycles: Comma-separated 1-based cycle indices (default: "1")
 
     Returns:
         tuple: (avg_flex, avg_ext) - averaged intensity arrays
@@ -66,9 +67,10 @@ def load_heatmap_excel(video_number: int, segment_count: int, opt: str,
     # Construct filename suffixes
     norm_suffix = "_nonorm" if not normalize else ""
     rescale_suffix = "_rescaled" if rescaled else ""
-
+    cycles_suffix = f"_cycles_{cycles.replace(',', '_')}" if cycles != "1" else ""
     # Construct input file path
-    input_xlsx = fr"figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}{rescale_suffix}_{video_number}N{segment_count}.xlsx"
+    # input_xlsx = fr"figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}{rescale_suffix}_{video_number}N{segment_count}{cycles_suffix}.xlsx" # NOTE: I don't know what to do with norm_suffix
+    input_xlsx = fr"figures/spatiotemporal_maps/heatmap_{opt}{cycles_suffix}{norm_suffix}{rescale_suffix}_{video_number}N{segment_count}.xlsx"
 
     if not os.path.isfile(input_xlsx):
         raise FileNotFoundError(
@@ -78,8 +80,8 @@ def load_heatmap_excel(video_number: int, segment_count: int, opt: str,
 
     # Load the averaged data from Excel
     xls = pd.ExcelFile(input_xlsx)
-    avg_flex = pd.read_excel(xls, sheet_name="avg_flexion", header=None).values
-    avg_ext = pd.read_excel(xls, sheet_name="avg_extension", header=None).values
+    avg_flex = pd.read_excel(xls, sheet_name="avg_flexion", header=0, index_col=0).values
+    avg_ext = pd.read_excel(xls, sheet_name="avg_extension", header=0, index_col=0).values
     return avg_flex, avg_ext
 
 
@@ -286,7 +288,7 @@ def set_angle_xticks(flex_len: int, ext_len: int) -> None:
 # =============================================================================
 
 def process_single_video(video_number: int, segment_count: int, opt: str,
-                         normalize: bool = True, rescaled: bool = False) -> tuple:
+                          normalize: bool = True, rescaled: bool = False, cycles: str = "1") -> tuple:
     """
     Process a single video's heatmap data to compute COM series.
 
@@ -296,12 +298,13 @@ def process_single_video(video_number: int, segment_count: int, opt: str,
         opt: Option for intensity calculation
         normalize: Whether to use normalized heatmaps
         rescaled: Whether to use rescaled heatmaps
+        cycles: Comma-separated 1-based cycle indices (default: "1")
 
     Returns:
         tuple: (com_series, video_label)
     """
     # Load averaged intensity data from heatmap Excel
-    avg_flex, avg_ext = load_heatmap_excel(video_number, segment_count, opt, normalize, rescaled)
+    avg_flex, avg_ext = load_heatmap_excel(video_number, segment_count, opt, normalize, rescaled, cycles)
 
     # Compute COM from averaged flexion and extension arrays
     com_flex = compute_com_from_intensity_array(avg_flex)
@@ -360,7 +363,7 @@ def plot_single_video_com(com_series: pd.Series, video_id: str, pdf_path: str = 
 
 
 def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
-                            normalize: bool, rescaled: bool, pdf_path: str = None) -> None:
+                             normalize: bool, rescaled: bool, cycles: str = "1", pdf_path: str = None) -> None:
     """
     Plot average COM cycles for multiple videos on the same graph.
     Temporally aligns COM series by resampling to match the longest phase durations.
@@ -371,6 +374,7 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
         opt: Option for intensity calculation
         normalize: Whether using normalized heatmaps
         rescaled: Whether using rescaled heatmaps
+        cycles: Comma-separated 1-based cycle indices (default: "1")
         pdf_path: Optional path to save PDF
     """
     plt.figure(figsize=(19, 7))
@@ -385,12 +389,12 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
 
     for idx, video_number in enumerate(video_ids):
         try:
-            com_series, video_label = process_single_video(video_number, segment_count, opt, normalize, rescaled)
+            com_series, video_label = process_single_video(video_number, segment_count, opt, normalize, rescaled, cycles)
             all_com_series.append(com_series)
             valid_video_labels.append(video_label)
             valid_indices.append(idx)
         except Exception as e:
-            print(f"Error processing video {video_number}N{segment_count} ({opt}, norm={normalize}, rescaled={rescaled}): {e}")
+            print(f"Error processing video {video_number}N{segment_count} ({opt}, norm={normalize}, rescaled={rescaled}, cycles={cycles}): {e}")
             continue
 
     # Find maximum lengths across all videos
@@ -475,11 +479,12 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
     video_ids_str = '_'.join(map(str, video_ids))
     norm_str = "nonorm" if not normalize else ""
     rescale_str = "rescaled" if rescaled else ""
+    cycles_str = f"_cycles_{cycles.replace(',', '-')}" if cycles != "1" else ""
     suffix = f"{norm_str}{'_' if norm_str and rescale_str else ''}{rescale_str}".strip("_")
     if suffix:
         suffix = f"_{suffix}"
 
-    stats_csv_path = fr"com_stats_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.csv"
+    stats_csv_path = fr"com_stats_from_heatmap_{opt}{suffix}{cycles_str}_{video_ids_str}_N{segment_count}.csv"
     stats_df.to_csv(stats_csv_path, index=False)
     print(f"Saved COM statistics table to: {stats_csv_path}")
 
@@ -493,7 +498,7 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
     print(osc_df.to_string(index=False))
 
     # Save oscillation indices to CSV with consistent naming
-    osc_csv_path = fr"com_osc_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.csv"
+    osc_csv_path = fr"com_osc_from_heatmap_{opt}{suffix}{cycles_str}_{video_ids_str}_N{segment_count}.csv"
     osc_df.to_csv(osc_csv_path, index=False)
     print(f"Saved COM oscillation index table to: {osc_csv_path}")
 
@@ -505,7 +510,7 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
 # MAIN ORCHESTRATION FUNCTION
 # =============================================================================
 
-def main(video_ids: list, segment_count: int, opt: str, normalize: bool, rescaled: bool) -> None:
+def main(video_ids: list, segment_count: int, opt: str, normalize: bool, rescaled: bool, cycles: str = "1") -> None:
     """
     Main orchestration function for COM heatmap analysis.
 
@@ -515,6 +520,7 @@ def main(video_ids: list, segment_count: int, opt: str, normalize: bool, rescale
         opt: Option for intensity calculation
         normalize: Whether to use normalized heatmaps
         rescaled: Whether to use rescaled heatmaps
+        cycles: Comma-separated 1-based cycle indices (default: "1")
     """
     multiple_videos = len(video_ids) > 1
 
@@ -523,17 +529,18 @@ def main(video_ids: list, segment_count: int, opt: str, normalize: bool, rescale
         video_ids_str = '_'.join(map(str, video_ids))
         norm_str = "nonorm" if not normalize else ""
         rescale_str = "rescaled" if rescaled else ""
+        cycles_str = f"_cycles_{cycles.replace(',', '-')}" if cycles != "1" else ""
         suffix = f"{norm_str}{'_' if norm_str and rescale_str else ''}{rescale_str}".strip("_")
         if suffix:
             suffix = f"_{suffix}"
-        pdf_path = fr"com_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.pdf"
-        plot_multiple_videos_com(video_ids, segment_count, opt, normalize, rescaled, pdf_path=pdf_path)
+        pdf_path = fr"com_from_heatmap_{opt}{suffix}{cycles_str}_{video_ids_str}_N{segment_count}.pdf"
+        plot_multiple_videos_com(video_ids, segment_count, opt, normalize, rescaled, cycles, pdf_path=pdf_path)
     else:
         # Single video mode
         video_number = video_ids[0]
 
         # Process the video
-        com_series, video_label = process_single_video(video_number, segment_count, opt, normalize, rescaled)
+        com_series, video_label = process_single_video(video_number, segment_count, opt, normalize, rescaled, cycles)
 
         # Create extended video identifier
         video_type = TYPES.get(video_number, "unknown")
@@ -542,8 +549,11 @@ def main(video_ids: list, segment_count: int, opt: str, normalize: bool, rescale
         # Plot COM cycle for current video
         norm_str = "nonorm" if not normalize else ""
         rescale_str = "rescaled" if rescaled else ""
+        cycles_str = f"_cycles_{cycles.replace(',', '-')}" if cycles != "1" else ""
         suffix = f"{norm_str}{'_' if norm_str and rescale_str else ''}{rescale_str}".strip("_")
-        pdf_name = f"com_from_heatmap_{opt}{f'_{suffix}' if suffix else ''}_{video_number}N{segment_count}.pdf"
+        if suffix:
+            suffix = f"_{suffix}"
+        pdf_name = f"com_from_heatmap_{opt}{suffix}{cycles_str}_{video_number}N{segment_count}.pdf"
         pdf_path = pdf_name
         plot_single_video_com(com_series, video_id_extended, pdf_path=pdf_path)
 
@@ -558,9 +568,10 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 Examples:
-  python {sys.argv[0]} 1339 64 total                             # Default: normalized, original
+  python {sys.argv[0]} 1339 64 total                             # Default: normalized, original, cycle 1
   python {sys.argv[0]} 1339 64 total --no-normalize               # Non-normalized
   python {sys.argv[0]} 1339,308,1190 64 total --rescaled          # Multiple videos, 50:50 rescaled
+  python {sys.argv[0]} 1339 64 total --cycles 1,2,3               # Use cycles 1, 2, and 3
 
 Valid video types are: {list(TYPES)}
 Options for the third argument are:
@@ -574,6 +585,8 @@ Options for the third argument are:
                        help="Use non-normalized heatmaps (default: normalized)")
     parser.add_argument("--rescaled", action="store_true",
                        help="Use 50:50 rescaled heatmaps (default: original)")
+    parser.add_argument("--cycles", default="1",
+                       help="Comma-separated 1-based cycle indices (default: 1)")
 
     args = parser.parse_args()
 
@@ -587,13 +600,11 @@ Options for the third argument are:
     # Set flags (default True for normalize, False for rescaled)
     normalize = not args.no_normalize
     rescaled = args.rescaled
+    cycles = args.cycles
 
     # Validate video IDs (warn but don't fail)
     for vid_id in video_ids:
         if vid_id not in TYPES:
             print(f"Warning: Video {vid_id} not found in TYPES config, but will attempt to process anyway.")
 
-    try:
-        main(video_ids, args.segment_count, args.opt, normalize, rescaled)
-    except Exception as e:
-        print(f"Error: {e}")
+    main(video_ids, args.segment_count, args.opt, normalize, rescaled, cycles)
