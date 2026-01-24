@@ -227,9 +227,10 @@ KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = {
             Cycle(FrameRange.from_1based(464, 488), FrameRange.from_1based(490, 512)),
             Cycle(FrameRange.from_1based(513, 530), FrameRange.from_1based(532, 553)),
             Cycle(FrameRange.from_1based(554, 576), FrameRange.from_1based(579, 609)),
-            Cycle(FrameRange.from_1based(1199, 1231), FrameRange.from_1based(1232, 1264)), # Revised cycles suggested by Huizhu on 2026-01-19
-            Cycle(FrameRange.from_1based(1265, 1299), FrameRange.from_1based(1300, 1336)),
-            Cycle(FrameRange.from_1based(1337, 1365), FrameRange.from_1based(1366, 1390)),
+            # Revised cycles suggested by Huizhu on 2026-01-19
+            Cycle(FrameRange.from_1based(1199, 1231), FrameRange.from_1based(1232, 1264)), # 8 
+            Cycle(FrameRange.from_1based(1265, 1299), FrameRange.from_1based(1300, 1336)), # 9
+            Cycle(FrameRange.from_1based(1337, 1365), FrameRange.from_1based(1366, 1390)), # 10
         ],
         regions={
             "JC": RegionSegments(1, 27),
