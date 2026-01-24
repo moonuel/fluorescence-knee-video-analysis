@@ -7,40 +7,73 @@ A comprehensive research tool for automated analysis of fluorescence-labeled syn
 This project addresses the need for automated analysis of fluorescence-labeled synovial fluid flow in knee joints during movement. Researchers studying osteoarthritis and joint health require quantitative measurements of fluid dynamics within the joint space, but manual analysis of video data is time-consuming and subjective.
 
 The system provides:
-- **Automated Segmentation**: Both three-part (L/M/R) and radial (N-sector) segmentation algorithms
-- **Dynamic Analysis**: Center of mass (COM) trajectory tracking across movement cycles
-- **Visualization**: Spatiotemporal heatmaps and comparative plots
-- **Batch Processing**: Automated analysis of multiple video datasets
+- **Automated Segmentation**: 
+- **Analysis Tools**: 
+- **Visualization**: 
 
-## Key Features
+## Workflows (segmentation → Excel → heatmaps → COM)
 
-- **Flexible Segmentation**:
-  - Radial segmentation with configurable N sectors (16 or 64 for high resolution)
-  - Legacy three-part segmentation (left/middle/right division)
-  - Anatomical boundary detection and circular geometry estimation
+This repository is organized as a linear pipeline. Later steps assume the outputs (file formats, naming conventions, and metadata) produced by earlier steps.
 
-- **Advanced Analysis**:
-  - Center of mass (COM) calculation from segmented intensity data
-  - Flexion-extension cycle identification and temporal synchronization
-  - Peak intensity tracking (in development)
-  - Statistical comparisons between normal and aging knee groups
+### 1) Generate segmentations (radial masks)
 
-- **Comprehensive Processing Pipeline**:
-  - Video stabilization and preprocessing
-  - Otsu thresholding with adaptive scaling
-  - Histogram matching for consistent frame processing
-  - Memory-efficient processing for large video datasets
+1. Convert raw video to centered grayscale `.npy`
+   - GUI entrypoints:
+     - [`scripts/utils/gui_process_avi.py`](scripts/utils/gui_process_avi.py)
+     - [`scripts/utils/gui_process_tif.py`](scripts/utils/gui_process_tif.py)
+   - Processing backend (AVI): [`scripts/utils/process_avi_to_npy.py`](scripts/utils/process_avi_to_npy.py)
+     - Produces grayscale `uint8` video arrays.
+     - Centers frames using [`core.radial_segmentation.centre_video()`](src/core/radial_segmentation.py:1).
 
-- **Rich Visualization**:
-  - Spatiotemporal heatmaps showing intensity distribution over time
-  - COM trajectory plots across movement cycles
-  - Multi-video comparative analysis
-  - Publication-quality figure generation
+2. Run segmentation pipeline
+   - Base workflow: [`KneeSegmentationPipeline`](src/pipelines/base.py:15)
+   - Pattern: create a new file under `scripts/segmentation/` that subclasses `KneeSegmentationPipeline` and overrides preprocessing / mask-generation methods as needed (see example [`scripts/segmentation/aging_1339_radial.py`](scripts/segmentation/aging_1339_radial.py:1)).
+   - Output location: `data/segmented/` (default; see [`default_output_dir()`](src/pipelines/base.py:128)).
+   - Output files written by [`save_results()`](src/pipelines/base.py:534):
+     - `{condition}_{video_id}_video_N{N}.npy`
+     - `{condition}_{video_id}_radial_N{N}.npy`
+     - `{condition}_{video_id}_femur_N{N}.npy`
 
-- **Extensible Architecture**:
-  - Modular Python package structure
-  - Command-line scripts for specific workflows
-  - Jupyter notebooks for exploratory analysis
+**Dependency notes**
+- The pipeline’s preview overlays anatomical region boundaries using metadata from [`get_knee_meta()`](src/config/knee_metadata.py:384). Missing metadata does not prevent segmentation, but will remove those overlays.
+- Downstream analysis assumes radial masks are label images with background `0` and segments labeled `1..N`.
+
+### 2) Generate comprehensive Excel (per-frame intensities)
+
+- Script: [`scripts/analysis/prepare_intensity_data.py`](scripts/analysis/prepare_intensity_data.py)
+- Inputs:
+  - `data/segmented/{condition}_{video_id}_radial_N{N}.npy`
+  - `data/segmented/{condition}_{video_id}_video_N{N}.npy`
+  - Metadata from [`src/config/knee_metadata.py`](src/config/knee_metadata.py) via [`get_knee_meta()`](src/config/knee_metadata.py:384) (cycles + anatomical region segment ranges).
+- Output:
+  - `data/intensities_total/{video_id}N{N}intensities.xlsx` (written by [`save_to_excel()`](scripts/analysis/prepare_intensity_data.py:216))
+
+**Dependency pitfalls**
+- [`prepare_intensity_data.py`](scripts/analysis/prepare_intensity_data.py:131) discovers/loads files using **zero-padded** IDs (e.g. `0308`) when constructing filenames (see [`main()`](scripts/analysis/prepare_intensity_data.py:319)). Ensure segmentation outputs follow the same naming convention for IDs.
+
+### 3) Generate spatiotemporal heatmaps (+ Excel)
+
+- Script: [`scripts/analysis/generate_spatiotemporal_heatmaps.py`](scripts/analysis/generate_spatiotemporal_heatmaps.py)
+- Depends on Step 2 output Excel:
+  - `data/intensities_total/{video_id}N{N}intensities.xlsx` (validated by [`validate_input_file()`](scripts/analysis/generate_spatiotemporal_heatmaps.py:103)).
+- Outputs:
+  - Heatmap Excel workbooks in `figures/spatiotemporal_maps/` containing `avg_flexion` and `avg_extension` sheets (written by [`save_results_to_excel()`](scripts/analysis/generate_spatiotemporal_heatmaps.py:384)).
+  - Matching PDFs of the heatmaps.
+
+### 4) Multi-file COM plots + statistics (from heatmap workbooks)
+
+- Script: [`scripts/visualization/plot_com_cycles_from_heatmaps.py`](scripts/visualization/plot_com_cycles_from_heatmaps.py)
+- Depends on Step 3 heatmap Excel outputs in `figures/spatiotemporal_maps/`.
+- Produces:
+  - COM PDF plots
+  - CSV summary tables (mean/sd/range and oscillation metrics)
+
+### 5) Single-cycle / DMM analysis (region-wise COM, totals, flux)
+
+- Script: [`scripts/visualization/dmm_analysis.py`](scripts/visualization/dmm_analysis.py)
+- Inputs:
+  - `data/segmented/{condition}_{id}_video_N{N}.npy` and `data/segmented/{condition}_{id}_radial_N{N}.npy` (loaded by [`load_video_data()`](scripts/visualization/dmm_analysis.py:131)).
+  - Metadata from [`get_knee_meta()`](src/config/knee_metadata.py:384) for anatomical region ranges and cycle definitions.
 
 ## Project Structure
 
@@ -63,20 +96,7 @@ The system provides:
 ## Installation
 
 ### Environment Setup
-Choose the appropriate conda environment file based on your needs:
-
-```bash
-# Latest stable environment (recommended)
-conda env create -f environment-1.3.yml
-conda activate knee-segmentation
-
-# Alternative versions
-conda env create -f environment-1.1.yml  # Previous stable
-conda env create -f environment-1.0.yml  # Initial version
-```
-
-### Package Installation
-Install the package in editable mode:
+Install the required dependencies from the provided environment files, then install the package in editable mode:
 
 ```bash
 pip install -e .
@@ -84,8 +104,7 @@ pip install -e .
 
 ### Output Locations
 - **Figures**: Generated plots saved to `figures/` directory
-- **Data Exports**: Intensity data and measurements exported to `../data/` (parent directory)
-- **Processed Videos**: NumPy arrays saved to `../data/segmented/`
+- **Data**: Raw and intermediate data stored in `data/`
 
 ## Requirements
 
@@ -97,6 +116,7 @@ pip install -e .
 - matplotlib - Plotting and visualization
 - scikit-image - Advanced image processing
 - OpenPyXL - Excel file handling
+- See environment-*.yml for full dependency list
 
 ### System Requirements
 - Windows OS (developed and tested on Windows 11)
