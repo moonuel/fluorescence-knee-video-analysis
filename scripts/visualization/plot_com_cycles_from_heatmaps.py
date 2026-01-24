@@ -1,23 +1,36 @@
-# TODO: fix this man
-"""
+"""scripts/visualization/plot_com_cycles_from_heatmaps.py
+
 Center of Mass (COM) Analysis from Pre-computed Heatmaps
 
-This module loads pre-generated spatiotemporal heatmaps from Excel files
-and plots center of mass values for flexion-extension cycles.
+This script loads pre-generated spatiotemporal heatmaps from Excel workbooks in
+`figures/spatiotemporal_maps/` and plots center-of-mass (COM) curves for
+flexion-extension cycles.
 
-Usage:
-    python PlotAllCOMSfromHeatmap.py <video_ids> <segments> <option> [--no-normalize] [--rescaled]
+New CLI (manual, filename-driven)
+--------------------------------
+The input filenames encode the processing context (e.g. total/unit, cycles,
+rescaled, etc.). This script therefore accepts Excel filenames directly.
 
-    video_ids: Single video number (e.g., 1339) or comma-separated list (e.g., 1339,308,1190)
-    segments: Number of segments (e.g., 16, 64)
-    option: "total" (normalized total intensities) or "unit" (normalized average per pixel)
-    --no-normalize: Use non-normalized heatmaps (default: normalized)
-    --rescaled: Use 50:50 rescaled heatmaps (default: original)
+Positional arguments:
+  One or more Excel *basenames* located in `figures/spatiotemporal_maps/`.
 
-Example:
-    python PlotAllCOMSfromHeatmap.py 1339 64 total
-    python PlotAllCOMSfromHeatmap.py 1339,308,1190 64 total --rescaled
-    python PlotAllCOMSfromHeatmap.py 1339 64 unit --no-normalize
+Flags:
+  --list    Print the available heatmap Excel basenames found in
+            `figures/spatiotemporal_maps/`.
+
+Examples:
+  # List available inputs
+  python scripts/visualization/plot_com_cycles_from_heatmaps.py --list
+
+  # Single file
+  python scripts/visualization/plot_com_cycles_from_heatmaps.py \
+    heatmap_total_cycles_1_2_rescaled_1339N64.xlsx
+
+  # Multiple files (can mix segment counts; plots/CSVs are produced per N group)
+  python scripts/visualization/plot_com_cycles_from_heatmaps.py \
+    heatmap_total_cycles_1_2_rescaled_1339N64.xlsx \
+    heatmap_total_cycles_1_2_rescaled_1342N64.xlsx \
+    heatmap_total_cycles_1_2_3_4_5_rescaled_308N64.xlsx
 """
 
 import numpy as np
@@ -25,8 +38,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
+import os
 import os.path
 import argparse
+import re
 from config import TYPES
 
 
@@ -42,44 +57,125 @@ OPTIONS = {
 
 
 # =============================================================================
+# INPUT FILE DISCOVERY / PARSING
+# =============================================================================
+
+HEATMAP_DIR = os.path.join("figures", "spatiotemporal_maps")
+
+
+def list_heatmap_excels() -> list[str]:
+    """List candidate heatmap Excel basenames in `figures/spatiotemporal_maps/`.
+
+    Notes:
+        - Filters out LibreOffice lockfiles like `.~lock.*`.
+        - Matches basenames of the form `heatmap_*.xlsx`.
+
+    Returns:
+        Sorted list of basenames.
+    """
+    if not os.path.isdir(HEATMAP_DIR):
+        return []
+
+    basenames = []
+    for name in os.listdir(HEATMAP_DIR):
+        if name.startswith(".~lock."):
+            continue
+        if not (name.startswith("heatmap_") and name.lower().endswith(".xlsx")):
+            continue
+        basenames.append(name)
+
+    return sorted(basenames)
+
+
+def resolve_excel_path(excel_basename: str) -> str:
+    """Resolve an Excel basename to an existing path under `figures/spatiotemporal_maps/`.
+
+    The basename must be provided exactly (case-sensitive on Linux/macOS).
+
+    Raises:
+        ValueError: If a path is supplied instead of a basename.
+        FileNotFoundError: If the resolved file does not exist.
+    """
+    # Enforce basenames-only (per spec)
+    if os.path.basename(excel_basename) != excel_basename or ("/" in excel_basename) or ("\\" in excel_basename):
+        raise ValueError(
+            "Excel inputs must be basenames located under figures/spatiotemporal_maps/ "
+            f"(got: {excel_basename!r})."
+        )
+
+    xlsx_path = os.path.join(HEATMAP_DIR, excel_basename)
+    if not os.path.isfile(xlsx_path):
+        raise FileNotFoundError(
+            f"Heatmap Excel file not found: {xlsx_path}\n"
+            "Use --list to see available heatmap workbooks."
+        )
+    return xlsx_path
+
+
+_HEATMAP_BASENAME_RE = re.compile(
+    r"^heatmap_(?P<descriptor>.+)_(?P<video_number>\d+)N(?P<segment_count>\d+)\.xlsx$",
+    flags=re.IGNORECASE,
+)
+
+
+def parse_heatmap_basename(excel_basename: str) -> dict:
+    """Parse metadata encoded in a heatmap Excel basename.
+
+    Expected pattern (minimum):
+        heatmap_<descriptor>_<video_number>N<segment_count>.xlsx
+
+    Examples:
+        heatmap_total_1339N64.xlsx
+        heatmap_total_cycles_1_2_rescaled_1339N64.xlsx
+
+    Returns:
+        dict with keys: video_number (int), segment_count (int), opt (str), descriptor (str)
+    """
+    m = _HEATMAP_BASENAME_RE.match(excel_basename)
+    if not m:
+        raise ValueError(
+            f"Invalid heatmap filename: {excel_basename!r}. Expected something like 'heatmap_..._1339N64.xlsx'."
+        )
+
+    descriptor = m.group("descriptor")
+    video_number = int(m.group("video_number"))
+    segment_count = int(m.group("segment_count"))
+
+    # Attempt to infer opt from the descriptor's first token.
+    first_token = descriptor.split("_")[0]
+    opt = first_token if first_token in OPTIONS else "unknown"
+
+    return {
+        "video_number": video_number,
+        "segment_count": segment_count,
+        "opt": opt,
+        "descriptor": descriptor,
+    }
+
+
+# =============================================================================
 # HELPER FUNCTIONS - DATA LOADING
 # =============================================================================
 
-def load_heatmap_excel(video_number: int, segment_count: int, opt: str,
-                       normalize: bool = True, rescaled: bool = False) -> tuple:
-    """
-    Load averaged flexion and extension intensity data from pre-computed heatmap Excel.
+def load_heatmap_excel_path(input_xlsx: str) -> tuple:
+    """Load averaged flexion and extension intensity data from a heatmap Excel workbook.
+
+    The workbook is expected to contain sheets:
+      - `avg_flexion`
+      - `avg_extension`
 
     Args:
-        video_number: Video identifier
-        segment_count: Number of segments
-        opt: Processing option ("total" or "unit")
-        normalize: Whether to load normalized heatmaps (default: True)
-        rescaled: Whether to load rescaled (50:50) heatmaps (default: False)
+        input_xlsx: Path to an Excel workbook.
 
     Returns:
         tuple: (avg_flex, avg_ext) - averaged intensity arrays
-
-    Raises:
-        FileNotFoundError: If the expected Excel file doesn't exist
     """
-    # Construct filename suffixes
-    norm_suffix = "_nonorm" if not normalize else ""
-    rescale_suffix = "_rescaled" if rescaled else ""
-
-    # Construct input file path
-    input_xlsx = fr"figures/spatiotemporal_maps/heatmap_{opt}{norm_suffix}{rescale_suffix}_{video_number}N{segment_count}.xlsx"
-
     if not os.path.isfile(input_xlsx):
-        raise FileNotFoundError(
-            f"Heatmap Excel file not found: {input_xlsx}\n"
-            f"You may need to run AverageNormalizeHeatMap.py first to generate it."
-        )
+        raise FileNotFoundError(f"Heatmap Excel file not found: {input_xlsx}")
 
-    # Load the averaged data from Excel
     xls = pd.ExcelFile(input_xlsx)
-    avg_flex = pd.read_excel(xls, sheet_name="avg_flexion", header=None).values
-    avg_ext = pd.read_excel(xls, sheet_name="avg_extension", header=None).values
+    avg_flex = pd.read_excel(xls, sheet_name="avg_flexion", header=0, index_col=0).values
+    avg_ext = pd.read_excel(xls, sheet_name="avg_extension", header=0, index_col=0).values
     return avg_flex, avg_ext
 
 
@@ -285,23 +381,18 @@ def set_angle_xticks(flex_len: int, ext_len: int) -> None:
 # MAIN PROCESSING FUNCTION
 # =============================================================================
 
-def process_single_video(video_number: int, segment_count: int, opt: str,
-                         normalize: bool = True, rescaled: bool = False) -> tuple:
-    """
-    Process a single video's heatmap data to compute COM series.
+def process_single_heatmap_workbook(input_xlsx: str, video_number: int) -> tuple:
+    """Process a single heatmap workbook to compute the COM series.
 
     Args:
-        video_number: Video identifier
-        segment_count: Number of segments
-        opt: Option for intensity calculation
-        normalize: Whether to use normalized heatmaps
-        rescaled: Whether to use rescaled heatmaps
+        input_xlsx: Path to a heatmap Excel workbook.
+        video_number: Video identifier (parsed from the filename).
 
     Returns:
         tuple: (com_series, video_label)
     """
     # Load averaged intensity data from heatmap Excel
-    avg_flex, avg_ext = load_heatmap_excel(video_number, segment_count, opt, normalize, rescaled)
+    avg_flex, avg_ext = load_heatmap_excel_path(input_xlsx)
 
     # Compute COM from averaged flexion and extension arrays
     com_flex = compute_com_from_intensity_array(avg_flex)
@@ -359,43 +450,45 @@ def plot_single_video_com(com_series: pd.Series, video_id: str, pdf_path: str = 
     plt.show()
 
 
-def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
-                            normalize: bool, rescaled: bool, pdf_path: str = None) -> None:
-    """
-    Plot average COM cycles for multiple videos on the same graph.
-    Temporally aligns COM series by resampling to match the longest phase durations.
+def plot_multiple_heatmaps_com(file_metas: list[dict], segment_count: int, descriptor: str, pdf_path: str = None) -> None:
+    """Plot average COM cycles for multiple heatmap workbooks on the same graph.
+
+    The series are temporally aligned by resampling to match the maximum flexion
+    and extension lengths across the provided files.
 
     Args:
-        video_ids: List of video numbers to plot
-        segment_count: Number of segments
-        opt: Option for intensity calculation
-        normalize: Whether using normalized heatmaps
-        rescaled: Whether using rescaled heatmaps
-        pdf_path: Optional path to save PDF
+        file_metas: List of dicts; each must include keys:
+            - xlsx_path
+            - basename
+            - video_number
+        segment_count: Number of segments (N) for this group.
+        descriptor: Human-readable descriptor derived from the filename(s).
+        pdf_path: Optional path to save PDF.
     """
     plt.figure(figsize=(19, 7))
 
     # Color map for multiple videos
-    cmap = plt.get_cmap('tab10', len(video_ids))
+    cmap = plt.get_cmap('tab10', len(file_metas))
 
     # First pass: process all videos and collect COM series
     all_com_series = []
     valid_video_labels = []
-    valid_indices = []
+    valid_file_metas = []
 
-    for idx, video_number in enumerate(video_ids):
+    for meta in file_metas:
+        video_number = meta["video_number"]
         try:
-            com_series, video_label = process_single_video(video_number, segment_count, opt, normalize, rescaled)
+            com_series, video_label = process_single_heatmap_workbook(meta["xlsx_path"], video_number)
             all_com_series.append(com_series)
             valid_video_labels.append(video_label)
-            valid_indices.append(idx)
+            valid_file_metas.append(meta)
         except Exception as e:
-            print(f"Error processing video {video_number}N{segment_count} ({opt}, norm={normalize}, rescaled={rescaled}): {e}")
+            print(f"Error processing workbook {meta.get('basename', meta['xlsx_path'])}: {e}")
             continue
 
     # Find maximum lengths across all videos
     if not all_com_series:
-        print("No valid videos to plot.")
+        print("No valid workbooks to plot.")
         return
 
     flex_lengths = [len(series[series.index < 0]) for series in all_com_series]
@@ -410,19 +503,25 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
     osc_rows = []
 
     # Second pass: resample and plot
-    for i, (com_series, video_label, idx) in enumerate(zip(all_com_series, valid_video_labels, valid_indices)):
-        video_number = video_ids[idx]
+    stats_rows = []
+    osc_rows = []
+
+    for i, (com_series, video_label, meta) in enumerate(zip(all_com_series, valid_video_labels, valid_file_metas)):
+        video_number = meta["video_number"]
         # Resample for temporal alignment
         aligned_com_series = resample_com_series_for_alignment(com_series, max_flex_len, max_ext_len)
 
         # Use dashed line for aging videos
         linestyle = '--' if TYPES.get(video_number, '') == "aging" else '-'
 
-        plt.plot(aligned_com_series.sort_index().index, aligned_com_series.sort_index().values,
-                label=video_label,
-                color=cmap(valid_indices[i]),
-                linewidth=2,
-                linestyle=linestyle)
+        plt.plot(
+            aligned_com_series.sort_index().index,
+            aligned_com_series.sort_index().values,
+            label=video_label,
+            color=cmap(i),
+            linewidth=2,
+            linestyle=linestyle,
+        )
 
         # Compute COM statistics on the aligned series
         stats = compute_com_stats(aligned_com_series)
@@ -452,9 +551,9 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
     set_angle_xticks(max_flex_len, max_ext_len)
 
     # Formatting
-    normalize_str = "Normalized" if normalize else "Raw"
-    rescaled_str = " (Rescaled 50:50)" if rescaled else ""
-    plt.title(f"Average position of fluorescence intensity from Heatmaps ({normalize_str}{rescaled_str}) - Multiple Videos (Temporally Aligned)")
+    plt.title(
+        f"Average position of fluorescence intensity from Heatmaps ({descriptor}) - Multiple Videos (Temporally Aligned)"
+    )
     plt.ylabel("Segment number (JC to SB)")
     plt.legend()
     plt.grid(True, alpha=0.3)
@@ -472,14 +571,8 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
     print(stats_df.to_string(index=False))
 
     # Save statistics to CSV with consistent naming
-    video_ids_str = '_'.join(map(str, video_ids))
-    norm_str = "nonorm" if not normalize else ""
-    rescale_str = "rescaled" if rescaled else ""
-    suffix = f"{norm_str}{'_' if norm_str and rescale_str else ''}{rescale_str}".strip("_")
-    if suffix:
-        suffix = f"_{suffix}"
-
-    stats_csv_path = fr"com_stats_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.csv"
+    video_ids_str = "_".join(str(m["video_number"]) for m in valid_file_metas)
+    stats_csv_path = fr"com_stats_from_heatmap_{descriptor}_{video_ids_str}_N{segment_count}.csv"
     stats_df.to_csv(stats_csv_path, index=False)
     print(f"Saved COM statistics table to: {stats_csv_path}")
 
@@ -493,7 +586,7 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
     print(osc_df.to_string(index=False))
 
     # Save oscillation indices to CSV with consistent naming
-    osc_csv_path = fr"com_osc_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.csv"
+    osc_csv_path = fr"com_osc_from_heatmap_{descriptor}_{video_ids_str}_N{segment_count}.csv"
     osc_df.to_csv(osc_csv_path, index=False)
     print(f"Saved COM oscillation index table to: {osc_csv_path}")
 
@@ -505,47 +598,58 @@ def plot_multiple_videos_com(video_ids: list, segment_count: int, opt: str,
 # MAIN ORCHESTRATION FUNCTION
 # =============================================================================
 
-def main(video_ids: list, segment_count: int, opt: str, normalize: bool, rescaled: bool) -> None:
+def _common_descriptor(file_metas: list[dict]) -> str:
+    """Return a descriptor string for a group of file metas.
+
+    If all descriptors match, that descriptor is returned; otherwise returns
+    `mixed`.
     """
-    Main orchestration function for COM heatmap analysis.
+    descriptors = [m.get("descriptor", "") for m in file_metas if m.get("descriptor")]
+    if not descriptors:
+        return "unknown"
+    if len(set(descriptors)) == 1:
+        return descriptors[0]
+    return "mixed"
+
+
+def main(excel_basenames: list[str]) -> None:
+    """Main orchestration function for COM heatmap analysis.
 
     Args:
-        video_ids: List of video numbers to process
-        segment_count: Number of segments
-        opt: Option for intensity calculation
-        normalize: Whether to use normalized heatmaps
-        rescaled: Whether to use rescaled heatmaps
+        excel_basenames: List of Excel basenames (must exist under
+            `figures/spatiotemporal_maps/`).
     """
-    multiple_videos = len(video_ids) > 1
+    # Build file metas and group by segment_count (N)
+    file_metas = []
+    for basename in excel_basenames:
+        xlsx_path = resolve_excel_path(basename)
+        meta = parse_heatmap_basename(basename)
+        meta["basename"] = basename
+        meta["xlsx_path"] = xlsx_path
+        file_metas.append(meta)
 
-    if multiple_videos:
-        # Plot multiple videos on same figure
-        video_ids_str = '_'.join(map(str, video_ids))
-        norm_str = "nonorm" if not normalize else ""
-        rescale_str = "rescaled" if rescaled else ""
-        suffix = f"{norm_str}{'_' if norm_str and rescale_str else ''}{rescale_str}".strip("_")
-        if suffix:
-            suffix = f"_{suffix}"
-        pdf_path = fr"com_from_heatmap_{opt}{suffix}_{video_ids_str}_N{segment_count}.pdf"
-        plot_multiple_videos_com(video_ids, segment_count, opt, normalize, rescaled, pdf_path=pdf_path)
-    else:
-        # Single video mode
-        video_number = video_ids[0]
+    groups: dict[int, list[dict]] = {}
+    for meta in file_metas:
+        groups.setdefault(meta["segment_count"], []).append(meta)
 
-        # Process the video
-        com_series, video_label = process_single_video(video_number, segment_count, opt, normalize, rescaled)
+    # Process each N group independently
+    for segment_count, group_metas in sorted(groups.items(), key=lambda kv: kv[0]):
+        descriptor = _common_descriptor(group_metas)
 
-        # Create extended video identifier
-        video_type = TYPES.get(video_number, "unknown")
-        video_id_extended = f"{video_number} {video_type}"
+        if len(group_metas) == 1:
+            meta = group_metas[0]
+            video_number = meta["video_number"]
+            com_series, _ = process_single_heatmap_workbook(meta["xlsx_path"], video_number)
 
-        # Plot COM cycle for current video
-        norm_str = "nonorm" if not normalize else ""
-        rescale_str = "rescaled" if rescaled else ""
-        suffix = f"{norm_str}{'_' if norm_str and rescale_str else ''}{rescale_str}".strip("_")
-        pdf_name = f"com_from_heatmap_{opt}{f'_{suffix}' if suffix else ''}_{video_number}N{segment_count}.pdf"
-        pdf_path = pdf_name
-        plot_single_video_com(com_series, video_id_extended, pdf_path=pdf_path)
+            video_type = TYPES.get(video_number, "unknown")
+            video_id_extended = f"{video_number} {video_type}"
+
+            pdf_path = f"com_from_heatmap_{descriptor}_{video_number}N{segment_count}.pdf"
+            plot_single_video_com(com_series, video_id_extended, pdf_path=pdf_path)
+        else:
+            video_ids_str = "_".join(str(m["video_number"]) for m in group_metas)
+            pdf_path = fr"com_from_heatmap_{descriptor}_{video_ids_str}_N{segment_count}.pdf"
+            plot_multiple_heatmaps_com(group_metas, segment_count, descriptor, pdf_path=pdf_path)
 
 
 # =============================================================================
@@ -554,46 +658,51 @@ def main(video_ids: list, segment_count: int, opt: str, normalize: bool, rescale
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Plot center of mass from pre-computed spatiotemporal heatmaps",
+        description="Plot center of mass from pre-computed spatiotemporal heatmaps (Excel workbooks)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"""
 Examples:
-  python {sys.argv[0]} 1339 64 total                             # Default: normalized, original
-  python {sys.argv[0]} 1339 64 total --no-normalize               # Non-normalized
-  python {sys.argv[0]} 1339,308,1190 64 total --rescaled          # Multiple videos, 50:50 rescaled
+  # List available heatmap Excel inputs
+  python {sys.argv[0]} --list
 
-Valid video types are: {list(TYPES)}
-Options for the third argument are:
-""" + "\n".join(f"  '{k}': {v}" for k, v in OPTIONS.items())
+  # Single file
+  python {sys.argv[0]} heatmap_total_1339N64.xlsx
+
+  # Multiple files (plots/CSVs are produced per N group)
+  python {sys.argv[0]} heatmap_total_cycles_1_2_rescaled_1339N64.xlsx heatmap_total_cycles_1_2_rescaled_1342N64.xlsx
+
+Directory scanned by --list / used for inputs:
+  {HEATMAP_DIR}
+""",
     )
 
-    parser.add_argument("video_ids", type=str, help="Video ID(s): single number or comma-separated list")
-    parser.add_argument("segment_count", type=int, help="Number of segments")
-    parser.add_argument("opt", choices=OPTIONS.keys(), help="Processing option")
-    parser.add_argument("--no-normalize", action="store_true",
-                       help="Use non-normalized heatmaps (default: normalized)")
-    parser.add_argument("--rescaled", action="store_true",
-                       help="Use 50:50 rescaled heatmaps (default: original)")
+    parser.add_argument(
+        "excel_files",
+        nargs="*",
+        help=(
+            "One or more heatmap Excel basenames located in figures/spatiotemporal_maps/ "
+            "(e.g., heatmap_total_1339N64.xlsx)."
+        ),
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available heatmap Excel basenames under figures/spatiotemporal_maps/ and exit.",
+    )
 
     args = parser.parse_args()
 
-    # Parse video IDs (comma-separated or single)
-    video_ids_str = args.video_ids
-    if ',' in video_ids_str:
-        video_ids = [int(vid.strip()) for vid in video_ids_str.split(',')]
-    else:
-        video_ids = [int(video_ids_str)]
+    if args.list:
+        for name in list_heatmap_excels():
+            print(name)
+        sys.exit(0)
 
-    # Set flags (default True for normalize, False for rescaled)
-    normalize = not args.no_normalize
-    rescaled = args.rescaled
+    if not args.excel_files:
+        parser.error("At least one Excel filename must be provided, or use --list.")
 
-    # Validate video IDs (warn but don't fail)
-    for vid_id in video_ids:
-        if vid_id not in TYPES:
-            print(f"Warning: Video {vid_id} not found in TYPES config, but will attempt to process anyway.")
+    main(args.excel_files)
 
-    try:
-        main(video_ids, args.segment_count, args.opt, normalize, rescaled)
-    except Exception as e:
-        print(f"Error: {e}")
+    # try:
+    #     main(args.excel_files)
+    # except Exception as e:
+    #     print(f"Error: {e}")
