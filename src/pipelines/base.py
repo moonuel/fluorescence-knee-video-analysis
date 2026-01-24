@@ -220,8 +220,8 @@ class KneeSegmentationPipeline:
             return None
 
         # Boundaries at starts of OT and SB ranges (1-based to 0-based conversion)
-        jc_ot_boundary_seg = ot.start  # boundary between JC and OT
-        ot_sb_boundary_seg = sb.start  # boundary between OT and SB
+        jc_ot_boundary_seg = ot.s  # boundary between JC and OT
+        ot_sb_boundary_seg = sb.s  # boundary between OT and SB
         return jc_ot_boundary_seg, ot_sb_boundary_seg
 
     def _show_radial_preview(self, title="Radial Segmentation Preview"):
