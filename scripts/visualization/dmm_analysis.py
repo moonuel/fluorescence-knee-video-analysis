@@ -25,6 +25,10 @@ from collections.abc import Iterable
 IMPORTANT_ANGLE_LABELS = {30, 45, 60, 75, 90, 105, 120, 135}
 
 
+#################################################
+# HELPER FUNCTIONS
+#################################################
+
 def construct_filename(analysis_type: str, meta: 'KneeVideoMeta', normalization: str, cycles: str, modifiers: List[str], extension: str = "png") -> str:
     """Construct a standardized filename for saved figures.
 
@@ -276,6 +280,11 @@ def compute_intensity_data(video: np.ndarray,
     total_sums, total_nonzero = dp.compute_sums_nonzeros(masks, video)
     segment_labels = np.unique(masks[masks > 0]).astype(int)
     return total_sums, total_nonzero, segment_labels
+
+
+#################################################
+# HELPER FUNCTIONS
+#################################################
 
 
 def split_three_parts_indexwise(total_sums: np.ndarray,
@@ -1149,35 +1158,35 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
     print(f"✅ Excel export saved to: {output_path}")
 
     
-def main(condition, id, nsegs, 
-         cycle_indices=None, phase="both", 
-         mode="angle", n_interp_samples=525, 
-         metrics=None, normalize=True, preview=False,
+def main(knee_cond, id, nsegs, 
+         cycle_idxs=None, phase="both", 
+         processing_mode="angle", n_interp_samples=525, 
+         metrics=None, is_norm=True, preview=False,
          export_xlsx: bool = False, export_path: str | None = None):
     
     # Set default processing
-    if cycle_indices is None:
-        cycle_indices = [1]
+    if cycle_idxs is None:
+        cycle_idxs = [1]
     if metrics is None:
         metrics = ["com"]
 
     # Create normalization label for plots and console output
-    norm_label = "norm" if normalize else "raw"
-    print(f"Loading video: {condition} {id} (N{nsegs})")
-    print(f"Processing cycles: {cycle_indices} in {mode} mode")
+    norm_label = "norm" if is_norm else "raw"
+    print(f"Loading video: {knee_cond} {id} (N{nsegs})")
+    print(f"Processing cycles: {cycle_idxs} in {processing_mode} mode")
     print(f"Computing metrics: {metrics}")
     print(f"Normalization: {norm_label}")
 
     # Get metadata
-    meta = get_knee_meta(condition, int(id), int(nsegs))
+    knee_meta = get_knee_meta(knee_cond, int(id), int(nsegs))
 
     # New angle-based mode with interpolation and contiguous plotting
     # Load video and masks
-    video, masks = load_video_data(condition, id, nsegs)
+    video, masks = load_video_data(knee_cond, id, nsegs)
 
     # Draw segment boundaries on video
     if preview: 
-        video_with_boundaries = draw_segment_boundaries(video, masks, meta)
+        video_with_boundaries = draw_segment_boundaries(video, masks, knee_meta)
         video_with_boundaries = views.draw_outer_radial_mask_boundary( # Add outer knee boundary
             video_with_boundaries, masks, intensity=255, thickness=1
         )
@@ -1187,24 +1196,24 @@ def main(condition, id, nsegs,
     total_sums, total_nonzero, segment_labels = compute_intensity_data(video, masks)
     
     # Apply normalization if requested
-    if normalize:
+    if is_norm:
         total_sums = normalize_intensity_per_frame_2d(total_sums)
 
     # Split into three anatomical parts
     region_ranges = [ # Get anatomical regions from metadata
         RegionRange(name, reg.s, reg.e)
-        for name, reg in meta.regions.items()]
+        for name, reg in knee_meta.regions.items()]
 
     # Build angle axis for all cycles
     cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
-        cycle_indices, meta, phase, n_interp_samples
+        cycle_idxs, knee_meta, phase, n_interp_samples
     )
 
     # Interpolate all metrics into angle domain for all cycles
     # Structure: [{cycle_idx, cycle, legend_label, x_positions, angles, metrics: {metric_name: {series_name: array}}}, ...]
     all_cycle_data = [] # TODO: export total_sums to excel and manually check frame-wise diffs 
-    for i, cycle_idx in enumerate(cycle_indices):
-        cycle = meta.get_cycle(cycle_idx)
+    for i, cycle_idx in enumerate(cycle_idxs):
+        cycle = knee_meta.get_cycle(cycle_idx)
         
         # Extract cycle
         flex_data = total_sums[:, cycle.flex.s:cycle.flex.e + 1]
@@ -1266,7 +1275,7 @@ def main(condition, id, nsegs,
         })
 
     # Plot each requested metric
-    video_title = f"{condition} {id} (N{nsegs})"
+    video_title = f"{knee_cond} {id} (N{nsegs})"
     for metric in metrics:
         # Convert to tuple format expected by plotting functions
         all_metric_data = [
@@ -1288,7 +1297,7 @@ def main(condition, id, nsegs,
             #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
             #     )
             #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_coms_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, meta)
+            plot_intra_region_coms_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta)
         elif metric == "total":
             # if export_xlsx:
             #     out_path = (
@@ -1297,9 +1306,9 @@ def main(condition, id, nsegs,
             #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
             #     )
             #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_totals_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, meta)
+            plot_intra_region_totals_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta)
         elif metric == "flux":
-            plot_boundary_flux_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, meta)
+            plot_boundary_flux_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta)
 
 
 if __name__ == "__main__":
