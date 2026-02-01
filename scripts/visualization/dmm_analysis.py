@@ -19,6 +19,7 @@ from config.knee_metadata import get_knee_meta, Cycle
 import sys
 import argparse
 from collections.abc import Iterable
+import scipy
 
 # Angles to show on x-axis (others will have blank labels)
 # IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
@@ -388,8 +389,18 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
 
     # Compute boundary flux if requested (on raw frame data)
     if "flux" in metrics and "SB" in metric_data["flux"] and "JC" in metric_data["flux"]:
-        I_SB = metric_data["flux"]["SB"]
+        I_SB = metric_data["flux"]["SB"] # Temporarily stored total sums
         I_JC = metric_data["flux"]["JC"]
+
+        # Smooth the intensity data
+        b, a = scipy.signal.butter(1, 0.25, btype='low', analog=False) 
+        I_SB = scipy.signal.filtfilt(b, a, I_SB)
+        I_JC = scipy.signal.filtfilt(b, a, I_JC)
+
+        # Version with moving average
+        # I_SB = pd.Series(I_SB).rolling(window=5, center=True, min_periods=1).mean().to_numpy()
+        # I_JC = pd.Series(I_JC).rolling(window=5, center=True, min_periods=1).mean().to_numpy()
+
         flux_data = compute_boundary_flux(I_SB, I_JC)
         metric_data["flux"] = flux_data # Overwrite with actual flux data
 
@@ -1211,7 +1222,7 @@ def main(knee_cond, id, nsegs,
 
     # Interpolate all metrics into angle domain for all cycles
     # Structure: [{cycle_idx, cycle, legend_label, x_positions, angles, metrics: {metric_name: {series_name: array}}}, ...]
-    all_cycle_data = [] # TODO: export total_sums to excel and manually check frame-wise diffs 
+    all_cycle_data = [] 
     for i, cycle_idx in enumerate(cycle_idxs):
         cycle = knee_meta.get_cycle(cycle_idx)
         
