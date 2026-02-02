@@ -30,6 +30,51 @@ IMPORTANT_ANGLE_LABELS = {30, 45, 60, 75, 90, 105, 120, 135}
 # HELPER FUNCTIONS
 #################################################
 
+def parse_cycles_arg(cycles_arg: str) -> Tuple[List[int | None], str]:
+    """Parse `--cycles` CLI argument.
+
+    Accepts comma-separated 1-based indices, plus placeholders (`_`, `x`, `X`) that
+    reserve a blank cycle slot in the angle axis.
+
+    Returns
+    -------
+    tokens : List[int | None]
+        Ordered tokens, where ints are 0-based cycle indices and None is a blank slot.
+    cycles_str : str
+        Normalized string used for filenames, e.g. "cycles_1,_,3".
+    """
+    tokens: List[int | None] = []
+    rendered: List[str] = []
+
+    if cycles_arg is None:
+        return [0], "cycles_1"
+
+    parts = [p.strip() for p in str(cycles_arg).split(',') if p.strip() != ""]
+    if not parts:
+        return [0], "cycles_1"
+
+    for part in parts:
+        if part in {"_", "x", "X"}:
+            tokens.append(None)
+            rendered.append("_")
+            continue
+
+        try:
+            idx_1_based = int(part)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid token in --cycles: {part!r}. Use 1-based integers or one of: _, x, X"
+            ) from e
+
+        if idx_1_based < 1:
+            raise ValueError(f"Cycle indices in --cycles must be >= 1, got {idx_1_based}")
+
+        tokens.append(idx_1_based - 1)
+        rendered.append(str(idx_1_based))
+
+    return tokens, "cycles_" + ",".join(rendered)
+
+
 def construct_filename(analysis_type: str, meta: 'KneeVideoMeta', normalization: str, cycles: str, modifiers: List[str], extension: str = "png") -> str:
     """Construct a standardized filename for saved figures.
 
@@ -532,7 +577,7 @@ def interpolate_series_to_angle(series,
     return interpolated, angles
 
 
-def build_angle_axis_for_cycles(cycle_indices: List[int],
+def build_angle_axis_for_cycles(cycle_indices: List[int | None],
                                meta: 'KneeVideoMeta',
                                phase: str,
                                n_interp_samples: int
@@ -541,8 +586,8 @@ def build_angle_axis_for_cycles(cycle_indices: List[int],
 
     Parameters
     ----------
-    cycle_indices : List[int]
-        Cycle indices to include.
+    cycle_indices : List[int | None]
+        Cycle indices to include (0-based). Use None to insert a blank cycle slot.
     meta : KneeVideoMeta
         Metadata for this knee.
     phase : str
@@ -564,7 +609,7 @@ def build_angle_axis_for_cycles(cycle_indices: List[int],
     cycle_lengths = []
     current_offset = 0
 
-    for cycle_idx in cycle_indices:
+    for _cycle_idx in cycle_indices:
         if phase == "flexion":
             # Only flexion phase: 30° -> 135°
             _, angles = interpolate_series_to_angle(
@@ -669,8 +714,9 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
                                       n_interp_samples: int,
                                       video_title: str,
                                       norm_label: str,
-                                      meta: 'KneeVideoMeta'
-                                      ) -> None:
+                                      meta: 'KneeVideoMeta',
+                                      blocks: List[Dict],
+                                      cycles_str: str) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs angle for multiple cycles.
 
     Parameters
@@ -699,11 +745,17 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
     cycle_colors = plt.cm.tab10(range(len(unique_cycles)))
     color_map = dict(zip(sorted(unique_cycles), cycle_colors))
 
-    # Build x-axis ticks
-    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_cycle_data]
+    # Build x-axis ticks (use full layout, including placeholder blocks)
+    x_positions_list = [b["x_positions"] for b in blocks]
     all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
 
     for ax, name in zip(axes, region_order):
+        # Shade placeholder blocks (behind plot elements)
+        for b in blocks:
+            if b.get("kind") == "blank":
+                xs = b["x_positions"]
+                ax.axvspan(xs[0], xs[-1], facecolor="0.9", edgecolor="none", alpha=0.6, zorder=-10)
+
         # Track which cycles have been labeled to avoid duplicate legend entries
         labeled_cycles = set()
 
@@ -719,33 +771,29 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
 
             ax.plot(x_positions, com, label=label, color=color)
 
-        # Add cycle demarcation lines
-        # Black lines: boundaries between cycles
-        # Gray lines: flex/ext transitions within each cycle
-        for i, (cycle_com_data, x_positions, angles, legend_label, cycle) in enumerate(all_cycle_data):
-            # Black line at start of each cycle (except if it's the first cycle's start)
-            if i > 0:  # Not the first cycle
-                cycle_start = x_positions[0]
-                ax.axvline(cycle_start, color='black', linestyle='-', linewidth=1)
+        # Add block demarcation lines
+        # Black lines: boundaries between blocks (cycles and blanks)
+        # Gray lines: flex/ext transitions within each block
+        for i, b in enumerate(blocks):
+            if i > 0:
+                ax.axvline(b["x_positions"][0], color='black', linestyle='-', linewidth=1)
 
-        # Black line at end of last cycle
-        last_cycle_end = all_cycle_data[-1][1][-1]
-        ax.axvline(last_cycle_end, color='black', linestyle='-', linewidth=1)
+        if blocks:
+            ax.axvline(blocks[-1]["x_positions"][-1], color='black', linestyle='-', linewidth=1)
 
-        # Gray lines at flex/ext transitions (only for "both" phase)
         if phase == "both":
-            for cycle_com_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-                transition_line = x_positions[n_interp_samples-1]
+            for b in blocks:
+                transition_line = b["x_positions"][n_interp_samples - 1]
                 ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
 
         ax.set_ylabel(f"{name} COM")
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region COM")
 
-    # Set x-axis limits to eliminate empty space
-    if all_cycle_data:
-        min_x = min(x_positions[0] for _, x_positions, _, _, _ in all_cycle_data)
-        max_x = max(x_positions[-1] for _, x_positions, _, _, _ in all_cycle_data)
+    # Set x-axis limits to eliminate empty space (include placeholder blocks)
+    if blocks:
+        min_x = min(b["x_positions"][0] for b in blocks)
+        max_x = max(b["x_positions"][-1] for b in blocks)
         for ax in axes:
             ax.set_xlim(min_x, max_x)
 
@@ -780,7 +828,6 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
     axes[0].legend(loc="best")
 
     # Save figure
-    cycles_str = "cycles_" + ",".join([str(n + 1) for n in cycle_indices])
     filename = construct_filename("intra_region_coms", meta, norm_label, cycles_str, ["angle_based"])
     save_path = Path("figures") / filename
     save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -798,8 +845,9 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
                                    n_interp_samples: int,
                                    video_title: str,
                                    norm_label: str,
-                                   meta: 'KneeVideoMeta'
-                                   ) -> None:
+                                   meta: 'KneeVideoMeta',
+                                   blocks: List[Dict],
+                                   cycles_str: str) -> None:
     """Create single subplot of boundary flux vs angle for multiple cycles.
 
     Parameters
@@ -835,9 +883,26 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     for i, cycle_key in enumerate(sorted(unique_cycles)):
         cycle_line_styles[cycle_key] = line_styles[i % len(line_styles)]
 
-    # Build x-axis ticks
-    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_flux_data]
+    # Shade placeholder blocks (behind plot elements)
+    for b in blocks:
+        if b.get("kind") == "blank":
+            xs = b["x_positions"]
+            ax.axvspan(xs[0], xs[-1], facecolor="0.9", edgecolor="none", alpha=0.6, zorder=-10)
+
+    # Build x-axis ticks (use full layout, including placeholder blocks)
+    x_positions_list = [b["x_positions"] for b in blocks]
     all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
+
+    # Block demarcation lines
+    for i, b in enumerate(blocks):
+        if i > 0:
+            ax.axvline(b["x_positions"][0], color='black', linestyle='-', linewidth=1)
+    if blocks:
+        ax.axvline(blocks[-1]["x_positions"][-1], color='black', linestyle='-', linewidth=1)
+    if phase == "both":
+        for b in blocks:
+            transition_line = b["x_positions"][n_interp_samples - 1]
+            ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
 
     # Track which (cycle, boundary) combinations have been labeled
     labeled_entries = set()
@@ -869,28 +934,6 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
             
             ax.plot(x_positions, flux_series, label=label, color=color, linestyle=line_style, alpha=0.8)
 
-    # Add cycle demarcation lines
-    for i, (flux_data, x_positions, angles, legend_label, cycle) in enumerate(all_flux_data):
-        if i > 0:
-            cycle_start = x_positions[0]
-            ax.axvline(cycle_start, color='black', linestyle='-', linewidth=1, alpha=0.5)
-    
-    # Black line at end of last cycle
-    last_cycle_end = all_flux_data[-1][1][-1]
-    ax.axvline(last_cycle_end, color='black', linestyle='-', linewidth=1, alpha=0.5)
-    
-    # Gray lines at flex/ext transitions (only for "both" phase)
-    if phase == "both":
-        for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
-            transition_line = x_positions[n_interp_samples-1]
-            ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1, alpha=0.5)
-
-    # Set x-axis limits
-    if all_flux_data:
-        min_x = min(x_positions[0] for _, x_positions, _, _, _ in all_flux_data)
-        max_x = max(x_positions[-1] for _, x_positions, _, _, _ in all_flux_data)
-        ax.set_xlim(min_x, max_x)
-
     # Set x-axis ticks and labels
     if all_tick_positions:
         ax.set_xticks(all_tick_positions)
@@ -903,8 +946,13 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best", fontsize=8)
 
+    # Set x-axis limits to eliminate empty space (include placeholder blocks)
+    if blocks:
+        min_x = min(b["x_positions"][0] for b in blocks)
+        max_x = max(b["x_positions"][-1] for b in blocks)
+        ax.set_xlim(min_x, max_x)
+
     # Save figure
-    cycles_str = "cycles_" + ",".join([str(n + 1) for n in cycle_indices])
     filename = construct_filename("boundary_flux", meta, norm_label, cycles_str, ["angle_based"])
     save_path = Path("figures") / filename
     save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -920,8 +968,9 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
                                         n_interp_samples: int,
                                         video_title: str,
                                         norm_label: str,
-                                        meta: 'KneeVideoMeta'
-                                        ) -> None:
+                                        meta: 'KneeVideoMeta',
+                                        blocks: List[Dict],
+                                        cycles_str: str) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region total intensity vs angle for multiple cycles.
 
     Parameters
@@ -950,11 +999,17 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     cycle_colors = plt.cm.tab10(range(len(unique_cycles)))
     color_map = dict(zip(sorted(unique_cycles), cycle_colors))
 
-    # Build x-axis ticks
-    x_positions_list = [x_positions for _, x_positions, _, _, _ in all_cycle_data]
+    # Build x-axis ticks (use full layout, including placeholder blocks)
+    x_positions_list = [b["x_positions"] for b in blocks]
     all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
 
     for ax, name in zip(axes, region_order):
+        # Shade placeholder blocks (behind plot elements)
+        for b in blocks:
+            if b.get("kind") == "blank":
+                xs = b["x_positions"]
+                ax.axvspan(xs[0], xs[-1], facecolor="0.9", edgecolor="none", alpha=0.6, zorder=-10)
+
         # Track which cycles have been labeled to avoid duplicate legend entries
         labeled_cycles = set()
 
@@ -970,33 +1025,29 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
 
             ax.plot(x_positions, total, label=label, color=color)
 
-        # Add cycle demarcation lines
-        # Black lines: boundaries between cycles
-        # Gray lines: flex/ext transitions within each cycle
-        for i, (cycle_total_data, x_positions, angles, legend_label, cycle) in enumerate(all_cycle_data):
-            # Black line at start of each cycle (except if it's the first cycle's start)
-            if i > 0:  # Not the first cycle
-                cycle_start = x_positions[0]
-                ax.axvline(cycle_start, color='black', linestyle='-', linewidth=1)
+        # Add block demarcation lines
+        # Black lines: boundaries between blocks (cycles and blanks)
+        # Gray lines: flex/ext transitions within each block
+        for i, b in enumerate(blocks):
+            if i > 0:
+                ax.axvline(b["x_positions"][0], color='black', linestyle='-', linewidth=1)
 
-        # Black line at end of last cycle
-        last_cycle_end = all_cycle_data[-1][1][-1]
-        ax.axvline(last_cycle_end, color='black', linestyle='-', linewidth=1)
+        if blocks:
+            ax.axvline(blocks[-1]["x_positions"][-1], color='black', linestyle='-', linewidth=1)
 
-        # Gray lines at flex/ext transitions (only for "both" phase)
         if phase == "both":
-            for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-                transition_line = x_positions[n_interp_samples-1]
+            for b in blocks:
+                transition_line = b["x_positions"][n_interp_samples - 1]
                 ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
 
         ax.set_ylabel(f"{name} Total Intensity")
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region Total Intensity")
 
-    # Set x-axis limits to eliminate empty space
-    if all_cycle_data:
-        min_x = min(x_positions[0] for _, x_positions, _, _, _ in all_cycle_data)
-        max_x = max(x_positions[-1] for _, x_positions, _, _, _ in all_cycle_data)
+    # Set x-axis limits to eliminate empty space (include placeholder blocks)
+    if blocks:
+        min_x = min(b["x_positions"][0] for b in blocks)
+        max_x = max(b["x_positions"][-1] for b in blocks)
         for ax in axes:
             ax.set_xlim(min_x, max_x)
 
@@ -1031,7 +1082,6 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     axes[0].legend(loc="best")
 
     # Save figure
-    cycles_str = "cycles_" + ",".join([str(n + 1) for n in cycle_indices])
     filename = construct_filename("intra_region_totals", meta, norm_label, cycles_str, ["angle_based"])
     save_path = Path("figures") / filename
     save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1170,16 +1220,21 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
 
     
 def main(knee_cond, id, nsegs, 
-         cycle_idxs=None, phase="both", 
+         cycle_idxs: List[int | None] | None = None, phase="both", 
          processing_mode="angle", n_interp_samples=525, 
          metrics=None, is_norm=True, preview=False,
-         export_xlsx: bool = False, export_path: str | None = None):
+         export_xlsx: bool = False, export_path: str | None = None,
+         cycles_str: str | None = None):
     
     # Set default processing
     if cycle_idxs is None:
-        cycle_idxs = [1]
+        cycle_idxs = [0]
     if metrics is None:
         metrics = ["com"]
+
+    if cycles_str is None:
+        rendered = ["_" if c is None else str(int(c) + 1) for c in cycle_idxs]
+        cycles_str = "cycles_" + ",".join(rendered)
 
     # Create normalization label for plots and console output
     norm_label = "norm" if is_norm else "raw"
@@ -1215,15 +1270,33 @@ def main(knee_cond, id, nsegs,
         RegionRange(name, reg.s, reg.e)
         for name, reg in knee_meta.regions.items()]
 
-    # Build angle axis for all cycles
+    # Build angle axis for all blocks (cycles and placeholders)
     cycle_x_offsets, cycle_angles, cycle_lengths = build_angle_axis_for_cycles(
         cycle_idxs, knee_meta, phase, n_interp_samples
     )
+
+    # Build layout blocks in token order; metrics are computed only for real cycles.
+    blocks: List[Dict] = []
 
     # Interpolate all metrics into angle domain for all cycles
     # Structure: [{cycle_idx, cycle, legend_label, x_positions, angles, metrics: {metric_name: {series_name: array}}}, ...]
     all_cycle_data = [] 
     for i, cycle_idx in enumerate(cycle_idxs):
+        if cycle_idx is None:
+            blocks.append({
+                "kind": "blank",
+                "x_positions": cycle_x_offsets[i],
+                "angles": cycle_angles[i],
+            })
+            continue
+
+        blocks.append({
+            "kind": "cycle",
+            "cycle_idx": cycle_idx,
+            "x_positions": cycle_x_offsets[i],
+            "angles": cycle_angles[i],
+        })
+
         cycle = knee_meta.get_cycle(cycle_idx)
         
         # Extract cycle
@@ -1308,7 +1381,10 @@ def main(knee_cond, id, nsegs,
             #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
             #     )
             #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_coms_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta)
+            plot_intra_region_coms_angle_mode(
+                all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta,
+                blocks=blocks, cycles_str=cycles_str,
+            )
         elif metric == "total":
             # if export_xlsx:
             #     out_path = (
@@ -1317,9 +1393,15 @@ def main(knee_cond, id, nsegs,
             #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
             #     )
             #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_totals_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta)
+            plot_intra_region_totals_angle_mode(
+                all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta,
+                blocks=blocks, cycles_str=cycles_str,
+            )
         elif metric == "flux":
-            plot_boundary_flux_angle_mode(all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta)
+            plot_boundary_flux_angle_mode(
+                all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta,
+                blocks=blocks, cycles_str=cycles_str,
+            )
 
 
 if __name__ == "__main__":
@@ -1329,8 +1411,14 @@ if __name__ == "__main__":
     parser.add_argument("condition", help="Condition (e.g., normal, aging, dmm-0w)")
     parser.add_argument("id", help="Video ID")
     parser.add_argument("nsegs", help="Number of segments")
-    parser.add_argument("--cycles", default="1",
-                       help="Comma-separated 1-based cycle indices (default: 1)")
+    parser.add_argument(
+        "--cycles",
+        default="1",
+        help=(
+            "Comma-separated 1-based cycle indices. Supports placeholders '_'/'x'/'X' to insert blank cycle slots "
+            "for alignment. Example: --cycles 1,_,3"
+        ),
+    )
     parser.add_argument("phase", nargs='?', default="both",
                        choices=["flexion", "extension", "both"],
                        help="Phase to plot (default: both)")
@@ -1377,13 +1465,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    cycle_indices = [int(x.strip()) - 1 for x in args.cycles.split(',')]  # Convert 1-based user input to 0-based internal
+    cycle_tokens, cycles_str = parse_cycles_arg(args.cycles)
     metrics = [x.strip() for x in args.metric.split(',')]
     main(
         args.condition,
         args.id,
         args.nsegs,
-        cycle_indices,
+        cycle_tokens,
         args.phase,
         args.mode,
         args.n_interp_samples,
@@ -1392,4 +1480,5 @@ if __name__ == "__main__":
         args.preview,
         export_xlsx=args.export_xlsx,
         export_path=args.export_path,
+        cycles_str=cycles_str,
     )
