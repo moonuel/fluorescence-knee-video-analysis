@@ -382,7 +382,7 @@ KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = {
 
 
 def get_knee_meta(condition: str, video_id: int, n_segments: int) -> KneeVideoMeta:
-    key = (condition, video_id, n_segments)
+    key = (condition, int(video_id), n_segments)
     try:
         return KNEE_VIDEOS[key]
     except KeyError:

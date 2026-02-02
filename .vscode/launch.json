@@ -11,7 +11,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["normal", "--metric", "flux,com,total", "--no-preview", "0308", "64", "1"]
+            "args": ["normal", "0308", "64", "--cycles", "1", "--metric", "flux", "--no-normalize", "--no-preview", "--flux-smoothing", "butter:0.25", "--flux-show-unsmoothed"]
         }
     ]
 }
