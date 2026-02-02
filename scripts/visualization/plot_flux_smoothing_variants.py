@@ -11,9 +11,9 @@ Variants (run the script multiple times)
 1) Low-pass Butterworth filters with cutoff in {0.1, 0.25, 0.5}
 2) Rolling average with window in {2, 5, 10}
 
-Example invocation (as requested)
+Example invocation
 --------------------------------
-python scripts/visualization/plot_flux_smoothing_variants.py --metric flux --no-normalize --no-preview normal 0308 64 --cycles 1 --variant butter:0.25
+python scripts/visualization/plot_flux_smoothing_variants.py --metric flux --scaling raw --no-preview normal 0308 64 --cycles 1 --variant butter:0.25
 """
 
 from __future__ import annotations
@@ -160,10 +160,11 @@ def plot_flux_overlay(
     xticks, xticklabels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
 
     fig, ax = plt.subplots(figsize=(14, 4))
-    ax.plot(x, y_raw_sb, linestyle=":", linewidth=1.5, label="SB->OT raw")
-    ax.plot(x, y_sm_sb, linestyle="-", linewidth=2.0, label="SB->OT smoothed")
-    ax.plot(x, y_raw_jc, linestyle=":", linewidth=1.5, label="OT->JC raw")
-    ax.plot(x, y_sm_jc, linestyle="-", linewidth=2.0, label="OT->JC smoothed")
+    ax.plot(x, y_raw_sb, linestyle=":", linewidth=1.5, label="SB->OT raw", color="tab:red")
+    ax.plot(x, y_sm_sb, linestyle="-", linewidth=2.0, label="SB->OT smoothed", color="tab:red")
+    ax.plot(x, y_raw_jc, linestyle=":", linewidth=1.5, label="OT->JC raw", color="tab:blue")
+    ax.plot(x, y_sm_jc, linestyle="-", linewidth=2.0, label="OT->JC smoothed", color="tab:blue")
+    ax.axhline(0, color="0.5", linestyle="--", linewidth=1.0, zorder=0)
 
     ax.set_title(title)
     ax.set_xlabel("Angle (deg)")
@@ -190,8 +191,18 @@ def main() -> None:
     ap.add_argument("--cycles", default=None)
     ap.add_argument("--phase", default="both", choices=["flexion", "extension", "both"])
     ap.add_argument("--n-interp-samples", default=60, type=int)
-    ap.add_argument("--no-normalize", action="store_true")
     ap.add_argument("--no-preview", action="store_true")
+    ap.add_argument(
+        "--scaling",
+        default="raw",
+        choices=["raw", "norm", "rel"],
+        help=(
+            "Intensity scaling mode: "
+            "raw = no normalization (equivalent to the old --no-normalize), "
+            "norm = per-frame normalization (equivalent to --normalize), "
+            "rel = relative (percentaged) regional intensities per frame, i.e. region_sum / total_knee_sum."
+        ),
+    )
     ap.add_argument(
         "--variant",
         required=True,
@@ -212,11 +223,19 @@ def main() -> None:
     video, masks = load_video_data(args.condition, args.video_id, args.n_segments)
     total_sums, _total_nonzero, _segment_labels = compute_intensity_data(video, masks)
 
-    if not args.no_normalize:
-        total_sums = normalize_intensity_per_frame_2d(total_sums)
-        normalization = "normalized"
-    else:
+    if args.scaling == "raw":
+        # Equivalent to the old --no-normalize flag.
         normalization = "raw"
+    elif args.scaling == "norm":
+        # Equivalent to "normalize" (the previous default when --no-normalize was absent).
+        total_sums = normalize_intensity_per_frame_2d(total_sums)
+        normalization = "norm"
+    elif args.scaling == "rel":
+        # Relative intensities (percentaged) are applied later, after splitting into regions.
+        normalization = "rel"
+    else:
+        # Defensive (argparse choices should prevent this).
+        raise ValueError(f"Unexpected --scaling value: {args.scaling!r}")
 
     # Split into regions, then take totals for SB and JC (same logic as dmm_analysis compute_region_metrics)
     # Region metadata is stored on meta.regions (with .s/.e in 1-based indices)
@@ -229,6 +248,16 @@ def main() -> None:
 
     I_SB = region_arrays["SB"].sum(axis=0)
     I_JC = region_arrays["JC"].sum(axis=0)
+
+    if args.scaling == "rel":
+        # MATLAB equivalent:
+        #   SRI = sum(RI, 2)
+        #   pSRI_SB = SRI_SB ./ SRI
+        #   pSRI_JC = SRI_JC ./ SRI
+        # Here, per-frame "RI" corresponds to per-segment intensities; SRI is total knee brightness per frame.
+        I_total = total_sums.sum(axis=0).astype(float)
+        I_SB = np.divide(I_SB.astype(float), I_total, out=np.zeros_like(I_total, dtype=float), where=I_total != 0)
+        I_JC = np.divide(I_JC.astype(float), I_total, out=np.zeros_like(I_total, dtype=float), where=I_total != 0)
 
     flux_raw, flux_smoothed = compute_flux_unsmoothed_and_smoothed(I_SB, I_JC, variant)
 
@@ -243,7 +272,10 @@ def main() -> None:
     )
     save_path = str((meta.figures_dir / fname)) if hasattr(meta, "figures_dir") else str(fname)
 
-    title = f"Flux smoothing comparison ({variant.label}) | {args.condition}_{args.video_id} N{args.n_segments}"
+    title = (
+        f"Flux smoothing comparison ({variant.label}) | scaling={args.scaling} | "
+        f"{args.condition}_{args.video_id} N{args.n_segments}"
+    )
     plot_flux_overlay(
         flux_raw=flux_raw,
         flux_smoothed=flux_smoothed,
