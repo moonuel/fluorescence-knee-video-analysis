@@ -438,7 +438,7 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
         I_JC = metric_data["flux"]["JC"]
 
         # Smooth the intensity data
-        b, a = scipy.signal.butter(1, 0.25, btype='low', analog=False) 
+        b, a = scipy.signal.butter(1, 0.50, btype='low', analog=False) 
         I_SB = scipy.signal.filtfilt(b, a, I_SB)
         I_JC = scipy.signal.filtfilt(b, a, I_JC)
 
@@ -907,6 +907,11 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     # Track which (cycle, boundary) combinations have been labeled
     labeled_entries = set()
 
+    # Display convention:
+    # - raw/norm: plot in native units
+    # - rel: stored as fractions in [0, 1] but displayed as percentages
+    rel_display_scale = 100.0 if norm_label == "rel" else 1.0
+
     for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
         cycle_num = legend_label.split()[1]
         cycle_key = f"Cycle {cycle_num}"
@@ -920,12 +925,18 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
         for boundary_name in ['SB->OT', 'OT->JC']:
             flux_series = flux_data[boundary_name]
             color = boundary_colors[boundary_name]
+
+            # For relative scaling, display as percentages
+            flux_series = rel_display_scale * flux_series
             
             # Create label with scalar metrics
             label_key = (cycle_key, boundary_name)
             if label_key not in labeled_entries:
                 if total_f is not None and net_f is not None:
-                    label = f"{legend_label} {boundary_name} (total={total_f:.1f}, net={net_f:.1f})"
+                    label = (
+                        f"{legend_label} {boundary_name} (total={(rel_display_scale * total_f):.1f}, "
+                        f"net={(rel_display_scale * net_f):.1f})"
+                    )
                 else:
                     label = f"{legend_label} {boundary_name}"
                 labeled_entries.add(label_key)
@@ -941,8 +952,16 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
 
     ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
     ax.set_xlabel("Knee Angle (°)")
-    ax.set_ylabel("Boundary Flux (signed)")
-    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {norm_label} intensities)")
+    if norm_label == "rel":
+        ax.set_ylabel("Boundary Flux (signed, % points)")
+        ax.set_title(
+            f"{video_title}: Boundary Flux for selected cycles (angle-based, based on relative intensities)"
+        )
+    else:
+        ax.set_ylabel("Boundary Flux (signed)")
+        ax.set_title(
+            f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {norm_label} intensities)"
+        )
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best", fontsize=8)
 
@@ -1013,8 +1032,15 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         # Track which cycles have been labeled to avoid duplicate legend entries
         labeled_cycles = set()
 
+        # Display convention:
+        # - raw/norm: plot in native units
+        # - rel: stored as fractions in [0, 1] but displayed as percentages
+        rel_display_scale = 100.0 if norm_label == "rel" else 1.0
+
         for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
             total = cycle_total_data[name]
+            if norm_label == "rel":
+                total = rel_display_scale * total
             cycle_num = legend_label.split()[1]
             cycle_key = f"Cycle {cycle_num}"
             color = color_map[cycle_key]
@@ -1040,7 +1066,10 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
                 transition_line = b["x_positions"][n_interp_samples - 1]
                 ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
 
-        ax.set_ylabel(f"{name} Total Intensity")
+        if norm_label == "rel":
+            ax.set_ylabel(f"{name} Total Intensity (%)")
+        else:
+            ax.set_ylabel(f"{name} Total Intensity")
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region Total Intensity")
 
@@ -1076,7 +1105,14 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
             ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {norm_label} intensities)")
+    if norm_label == "rel":
+        fig.suptitle(
+            f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on relative intensities)"
+        )
+    else:
+        fig.suptitle(
+            f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {norm_label} intensities)"
+        )
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -1096,7 +1132,7 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
                     meta: 'KneeVideoMeta',
                     phase: str,
                     metric: str,
-                    normalize: bool,
+                    scaling: str,
                     n_interp_samples: int,
                     output_path: Path) -> None:
     """Export the plotted data to an Excel workbook with multiple sheets.
@@ -1111,8 +1147,8 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
         "flexion", "extension", or "both".
     metric : str
         "com" or "total".
-    normalize : bool
-        Whether intensities were normalized.
+    scaling : str
+        Scaling mode used (raw | norm | rel).
     n_interp_samples : int
         Number of interpolation samples per phase.
     output_path : Path
@@ -1129,7 +1165,7 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
         "mode": "angle",
         "phase": phase,
         "metric": metric,
-        "normalize": normalize,
+        "scaling": scaling,
         "n_interp_samples": n_interp_samples,
         "important_angle_labels": ",".join(str(a) for a in sorted(IMPORTANT_ANGLE_LABELS)),
         "cycles_requested": ",".join(str(cycle_num) for cycle_num in range(1, len(all_cycle_data) + 1))
@@ -1219,10 +1255,10 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
     print(f"✅ Excel export saved to: {output_path}")
 
     
-def main(knee_cond, id, nsegs, 
-         cycle_idxs: List[int | None] | None = None, phase="both", 
-         processing_mode="angle", n_interp_samples=525, 
-         metrics=None, is_norm=True, preview=False,
+def main(knee_cond, id, nsegs,
+         cycle_idxs: List[int | None] | None = None, phase="both",
+         processing_mode="angle", n_interp_samples=525,
+         metrics=None, scaling: str = "raw", preview=False,
          export_xlsx: bool = False, export_path: str | None = None,
          cycles_str: str | None = None):
     
@@ -1236,12 +1272,12 @@ def main(knee_cond, id, nsegs,
         rendered = ["_" if c is None else str(int(c) + 1) for c in cycle_idxs]
         cycles_str = "cycles_" + ",".join(rendered)
 
-    # Create normalization label for plots and console output
-    norm_label = "norm" if is_norm else "raw"
+    # Create scaling label for plots and console output
+    norm_label = str(scaling)
     print(f"Loading video: {knee_cond} {id} (N{nsegs})")
     print(f"Processing cycles: {cycle_idxs} in {processing_mode} mode")
     print(f"Computing metrics: {metrics}")
-    print(f"Normalization: {norm_label}")
+    print(f"Scaling: {norm_label}")
 
     # Get metadata
     knee_meta = get_knee_meta(knee_cond, int(id), int(nsegs))
@@ -1261,9 +1297,28 @@ def main(knee_cond, id, nsegs,
     # Compute intensity data
     total_sums, total_nonzero, segment_labels = compute_intensity_data(video, masks)
     
-    # Apply normalization if requested
-    if is_norm:
+    # Apply scaling (raw | norm | rel)
+    if scaling == "raw":
+        pass
+    elif scaling == "norm":
         total_sums = normalize_intensity_per_frame_2d(total_sums)
+    elif scaling == "rel":
+        # MATLAB equivalent:
+        #   SRI = sum(RI, 2)          % total brightness of entire knee (per frame)
+        #   pSRI_* = SRI_* ./ SRI     % per-frame region fraction of knee
+        # Here `total_sums` is (n_segments, n_frames), so the knee total is sum over segments (axis=0).
+        total_sums = total_sums.astype(float, copy=False)
+        knee_total_per_frame = total_sums.sum(axis=0)
+
+        denom = knee_total_per_frame.reshape(1, -1)
+        total_sums = np.divide(
+            total_sums,
+            denom,
+            out=np.zeros_like(total_sums, dtype=float),
+            where=denom != 0,
+        )
+    else:
+        raise ValueError(f"Unknown scaling mode: {scaling!r}. Expected one of: raw, norm, rel")
 
     # Split into three anatomical parts
     region_ranges = [ # Get anatomical regions from metadata
@@ -1424,8 +1479,8 @@ if __name__ == "__main__":
                        help="Phase to plot (default: both)")
     parser.add_argument("--mode", choices=["angle"], default="angle", # TODO: retire and use angle mode always
                        help="Plotting mode: angle (rescaled, contiguous)")
-    parser.add_argument("--metric", default="com",
-                       help="Comma-separated metrics to plot: com,total,flux (default: com)")
+    parser.add_argument("--metric", default="total",
+                       help="Comma-separated metrics to plot: total,com,flux (default: total)")
     parser.add_argument("--n-interp-samples", type=int, default=525,
                        help="Number of interpolation samples per phase in angle mode (default: 525)")
 
@@ -1439,17 +1494,17 @@ if __name__ == "__main__":
         help="Optional output .xlsx path (default: figures/dmm_analysis_exports/...)"
     )
 
-    # Normalization toggle (default True)
-    norm_group = parser.add_mutually_exclusive_group()
-    norm_group.add_argument(
-        "--normalize", dest="normalize", action="store_true",
-        help="Enable per-frame intensity normalization (default)"
+    parser.add_argument(
+        "--scaling",
+        default="raw",
+        choices=["raw", "norm", "rel"],
+        help=(
+            "Intensity scaling mode: "
+            "raw = no normalization (equivalent to the old --no-normalize), "
+            "norm = per-frame normalization (equivalent to --normalize), "
+            "rel = relative (percentaged) regional intensities per frame, i.e. region_sum / total_knee_sum."
+        ),
     )
-    norm_group.add_argument(
-        "--no-normalize", dest="normalize", action="store_false",
-        help="Disable per-frame intensity normalization"
-    )
-    parser.set_defaults(normalize=True)
 
     # Preview toggle (default True)
     preview_group = parser.add_mutually_exclusive_group()
@@ -1476,7 +1531,7 @@ if __name__ == "__main__":
         args.mode,
         args.n_interp_samples,
         metrics,
-        args.normalize,
+        args.scaling,
         args.preview,
         export_xlsx=args.export_xlsx,
         export_path=args.export_path,
