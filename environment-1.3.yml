@@ -14,6 +14,7 @@ dependencies:
   - scikit-learn
   - tifffile
   - ipykernel # Added in 1.3
+  - scipy # Added in... 1.3...
   - pip:
     - knee-segmentation==0.1 # To be installed manually via: pip install -e .
 
