@@ -22,3 +22,4 @@ temp/*
 
 .clinerules
 memory-bank/
+*.csv
