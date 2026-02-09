@@ -969,8 +969,8 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
             if label_key not in labeled_entries:
                 if total_f is not None and net_f is not None:
                     label = (
-                        f"{legend_label} {boundary_name} (total={total_f:.1f}, "
-                        f"net={net_f:.1f})"
+                        f"{legend_label} {boundary_name} (total={total_f:.3f}, "
+                        f"net={net_f:.3f})"
                     )
                 else:
                     label = f"{legend_label} {boundary_name}"
