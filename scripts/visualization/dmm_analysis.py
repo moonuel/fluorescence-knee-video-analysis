@@ -438,13 +438,9 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
         I_JC = metric_data["flux"]["JC"]
 
         # Smooth the intensity data
-        b, a = scipy.signal.butter(1, 0.25, btype='low', analog=False) 
+        b, a = scipy.signal.butter(1, 0.50, btype='low', analog=False) 
         I_SB = scipy.signal.filtfilt(b, a, I_SB)
         I_JC = scipy.signal.filtfilt(b, a, I_JC)
-
-        # Version with moving average
-        # I_SB = pd.Series(I_SB).rolling(window=5, center=True, min_periods=1).mean().to_numpy()
-        # I_JC = pd.Series(I_JC).rolling(window=5, center=True, min_periods=1).mean().to_numpy()
 
         flux_data = compute_boundary_flux(I_SB, I_JC)
         metric_data["flux"] = flux_data # Overwrite with actual flux data
