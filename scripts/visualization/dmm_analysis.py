@@ -7,7 +7,7 @@ over a specified frame range.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Literal
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -18,6 +18,7 @@ from core import data_processing as dp
 from config.knee_metadata import get_knee_meta, Cycle
 import sys
 import argparse
+import warnings
 from collections.abc import Iterable
 import scipy
 
@@ -300,6 +301,44 @@ def normalize_intensity_per_frame_2d(total_sums: np.ndarray) -> np.ndarray:
             norm_intensity[:, frame_idx] = 0
 
     return norm_intensity
+
+
+IntensityScaling = Literal["raw", "norm", "rel"]
+
+
+def apply_intensity_scaling(total_sums: np.ndarray, scaling: IntensityScaling) -> np.ndarray:
+    """Apply an intensity scaling mode to per-segment intensities.
+
+    Parameters
+    ----------
+    total_sums : np.ndarray
+        Shape (n_segments, n_frames). Each column is a frame.
+    scaling : {"raw", "norm", "rel"}
+        - raw: no scaling
+        - norm: per-frame min-max normalization (0..100), via
+          [`normalize_intensity_per_frame_2d()`](scripts/visualization/dmm_analysis.py:278)
+        - rel: per-frame relative intensities: segment_intensity / total_knee_intensity
+
+    Notes
+    -----
+    Applying `rel` at the segment-matrix level preserves regional totals:
+      sum(region_segments / total) == region_sum / total.
+    """
+    if scaling == "raw":
+        return total_sums
+
+    if scaling == "norm":
+        return normalize_intensity_per_frame_2d(total_sums)
+
+    if scaling == "rel":
+        x = total_sums.astype(float, copy=False)
+        totals = x.sum(axis=0).astype(float, copy=False)  # (n_frames,)
+        out = np.zeros_like(x, dtype=float)
+        # Divide each column by its per-frame total (avoid div-by-zero).
+        np.divide(x, totals[None, :], out=out, where=totals[None, :] != 0)
+        return out
+
+    raise ValueError(f"Unexpected scaling mode: {scaling!r}")
 
 
 def compute_intensity_data(video: np.ndarray,
@@ -709,7 +748,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
                                       phase: str,
                                       n_interp_samples: int,
                                       video_title: str,
-                                      norm_label: str,
+                                      scaling_label: str,
                                       meta: 'KneeVideoMeta',
                                       blocks: List[Dict],
                                       cycles_str: str) -> None:
@@ -725,8 +764,8 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
         Number of samples per phase used for interpolation.
     video_title : str
         Title for the plot.
-    norm_label : str
-        Label indicating normalization status.
+    scaling_label : str
+        Label indicating intensity scaling mode (raw|norm|rel).
     meta : KneeVideoMeta
         Video metadata.
     """
@@ -818,13 +857,13 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
             ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {norm_label} intensities)")
+    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {scaling_label} intensities)")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
 
     # Save figure
-    filename = construct_filename("intra_region_coms", meta, norm_label, cycles_str, ["angle_based"])
+    filename = construct_filename("intra_region_coms", meta, scaling_label, cycles_str, ["angle_based"])
     save_path = Path("figures") / filename
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -840,7 +879,7 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
                                    phase: str,
                                    n_interp_samples: int,
                                    video_title: str,
-                                   norm_label: str,
+                                   scaling_label: str,
                                    meta: 'KneeVideoMeta',
                                    blocks: List[Dict],
                                    cycles_str: str) -> None:
@@ -857,8 +896,8 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
         Number of samples per phase used for interpolation.
     video_title : str
         Title for the plot.
-    norm_label : str
-        Label indicating normalization status.
+    scaling_label : str
+        Label indicating intensity scaling mode (raw|norm|rel).
     meta : KneeVideoMeta
         Video metadata.
     """
@@ -938,7 +977,7 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
     ax.set_xlabel("Knee Angle (°)")
     ax.set_ylabel("Boundary Flux (signed)")
-    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {norm_label} intensities)")
+    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {scaling_label} intensities)")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best", fontsize=8)
 
@@ -949,7 +988,7 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
         ax.set_xlim(min_x, max_x)
 
     # Save figure
-    filename = construct_filename("boundary_flux", meta, norm_label, cycles_str, ["angle_based"])
+    filename = construct_filename("boundary_flux", meta, scaling_label, cycles_str, ["angle_based"])
     save_path = Path("figures") / filename
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -963,7 +1002,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
                                         phase: str,
                                         n_interp_samples: int,
                                         video_title: str,
-                                        norm_label: str,
+                                        scaling_label: str,
                                         meta: 'KneeVideoMeta',
                                         blocks: List[Dict],
                                         cycles_str: str) -> None:
@@ -979,8 +1018,8 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         Number of samples per phase used for interpolation.
     video_title : str
         Title for the plot.
-    norm_label : str
-        Label indicating normalization status.
+    scaling_label : str
+        Label indicating intensity scaling mode (raw|norm|rel).
     meta : KneeVideoMeta
         Video metadata.
     """
@@ -1072,13 +1111,13 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
             ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {norm_label} intensities)")
+    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {scaling_label} intensities)")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
 
     # Save figure
-    filename = construct_filename("intra_region_totals", meta, norm_label, cycles_str, ["angle_based"])
+    filename = construct_filename("intra_region_totals", meta, scaling_label, cycles_str, ["angle_based"])
     save_path = Path("figures") / filename
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -1092,7 +1131,7 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
                     meta: 'KneeVideoMeta',
                     phase: str,
                     metric: str,
-                    normalize: bool,
+                    scaling: IntensityScaling,
                     n_interp_samples: int,
                     output_path: Path) -> None:
     """Export the plotted data to an Excel workbook with multiple sheets.
@@ -1107,8 +1146,8 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
         "flexion", "extension", or "both".
     metric : str
         "com" or "total".
-    normalize : bool
-        Whether intensities were normalized.
+    scaling : {"raw", "norm", "rel"}
+        Intensity scaling mode used for this run.
     n_interp_samples : int
         Number of interpolation samples per phase.
     output_path : Path
@@ -1125,7 +1164,7 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
         "mode": "angle",
         "phase": phase,
         "metric": metric,
-        "normalize": normalize,
+        "scaling": scaling,
         "n_interp_samples": n_interp_samples,
         "important_angle_labels": ",".join(str(a) for a in sorted(IMPORTANT_ANGLE_LABELS)),
         "cycles_requested": ",".join(str(cycle_num) for cycle_num in range(1, len(all_cycle_data) + 1))
@@ -1218,9 +1257,10 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
 def main(knee_cond, id, nsegs, 
          cycle_idxs: List[int | None] | None = None, phase="both", 
          processing_mode="angle", n_interp_samples=525, 
-         metrics=None, is_norm=True, preview=False,
+         metrics=None, is_norm: bool = True, preview: bool = False,
          export_xlsx: bool = False, export_path: str | None = None,
-         cycles_str: str | None = None):
+         cycles_str: str | None = None,
+         scaling: IntensityScaling | None = None):
     
     # Set default processing
     if cycle_idxs is None:
@@ -1232,12 +1272,15 @@ def main(knee_cond, id, nsegs,
         rendered = ["_" if c is None else str(int(c) + 1) for c in cycle_idxs]
         cycles_str = "cycles_" + ",".join(rendered)
 
-    # Create normalization label for plots and console output
-    norm_label = "norm" if is_norm else "raw"
+    # Resolve scaling.
+    # - New interface: scaling in {raw,norm,rel}
+    # - Back-compat (one release): `is_norm` bool maps to {norm,raw}.
+    effective_scaling: IntensityScaling = scaling if scaling is not None else ("norm" if is_norm else "raw")
+    scaling_label = effective_scaling
     print(f"Loading video: {knee_cond} {id} (N{nsegs})")
     print(f"Processing cycles: {cycle_idxs} in {processing_mode} mode")
     print(f"Computing metrics: {metrics}")
-    print(f"Normalization: {norm_label}")
+    print(f"Scaling: {scaling_label}")
 
     # Get metadata
     knee_meta = get_knee_meta(knee_cond, int(id), int(nsegs))
@@ -1256,10 +1299,9 @@ def main(knee_cond, id, nsegs,
 
     # Compute intensity data
     total_sums, total_nonzero, segment_labels = compute_intensity_data(video, masks)
-    
-    # Apply normalization if requested
-    if is_norm:
-        total_sums = normalize_intensity_per_frame_2d(total_sums)
+
+    # Apply scaling exactly once, before cycle extraction.
+    total_sums = apply_intensity_scaling(total_sums, effective_scaling)
 
     # Split into three anatomical parts
     region_ranges = [ # Get anatomical regions from metadata
@@ -1378,7 +1420,7 @@ def main(knee_cond, id, nsegs,
             #     )
             #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
             plot_intra_region_coms_angle_mode(
-                all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta,
+                all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
                 blocks=blocks, cycles_str=cycles_str,
             )
         elif metric == "total":
@@ -1390,14 +1432,46 @@ def main(knee_cond, id, nsegs,
             #     )
             #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
             plot_intra_region_totals_angle_mode(
-                all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta,
+                all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
                 blocks=blocks, cycles_str=cycles_str,
             )
         elif metric == "flux":
             plot_boundary_flux_angle_mode(
-                all_metric_data, phase, n_interp_samples, video_title, norm_label, knee_meta,
+                all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
                 blocks=blocks, cycles_str=cycles_str,
             )
+
+
+def resolve_scaling_from_args(
+    scaling: str | None,
+    normalize_flag: bool | None,
+) -> IntensityScaling:
+    """Resolve effective scaling from new `--scaling` and legacy normalize flags.
+
+    Precedence/behavior (deprecation window):
+    - If `--scaling` is provided, it wins; legacy flags are ignored with a warning.
+    - Else if legacy flags are used, map them to {norm,raw} with a warning.
+    - Else default to raw.
+    """
+    if scaling is not None:
+        if normalize_flag is not None:
+            warnings.warn(
+                "Both --scaling and --normalize/--no-normalize were provided. "
+                "--scaling takes precedence; legacy flags are ignored (deprecated).",
+                category=DeprecationWarning,
+                stacklevel=2,
+            )
+        return scaling  # type: ignore[return-value]
+
+    if normalize_flag is not None:
+        warnings.warn(
+            "--normalize/--no-normalize are deprecated; use --scaling {raw,norm,rel} instead.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        return "norm" if normalize_flag else "raw"
+
+    return "raw"
 
 
 if __name__ == "__main__":
@@ -1420,10 +1494,23 @@ if __name__ == "__main__":
                        help="Phase to plot (default: both)")
     parser.add_argument("--mode", choices=["angle"], default="angle", # TODO: retire and use angle mode always
                        help="Plotting mode: angle (rescaled, contiguous)")
-    parser.add_argument("--metric", default="com",
-                       help="Comma-separated metrics to plot: com,total,flux (default: com)")
+    parser.add_argument("--metric", default="total",
+                       help="Comma-separated metrics to plot: com,total,flux (default: total)")
     parser.add_argument("--n-interp-samples", type=int, default=525,
                        help="Number of interpolation samples per phase in angle mode (default: 525)")
+
+    parser.add_argument(
+        "--scaling",
+        default=None,
+        choices=["raw", "norm", "rel"],
+        help=(
+            "Intensity scaling mode: "
+            "raw = no normalization (equivalent to the old --no-normalize), "
+            "norm = per-frame normalization (equivalent to --normalize), "
+            "rel = relative per-frame intensities, i.e. segment_intensity / total_knee_intensity. "
+            "Default: raw."
+        ),
+    )
 
     # Excel export
     parser.add_argument(
@@ -1439,13 +1526,14 @@ if __name__ == "__main__":
     norm_group = parser.add_mutually_exclusive_group()
     norm_group.add_argument(
         "--normalize", dest="normalize", action="store_true",
-        help="Enable per-frame intensity normalization (default)"
+        default=None,
+        help="[DEPRECATED] Enable per-frame intensity normalization (use --scaling norm)"
     )
     norm_group.add_argument(
         "--no-normalize", dest="normalize", action="store_false",
-        help="Disable per-frame intensity normalization"
+        default=None,
+        help="[DEPRECATED] Disable per-frame intensity normalization (use --scaling raw)"
     )
-    parser.set_defaults(normalize=True)
 
     # Preview toggle (default True)
     preview_group = parser.add_mutually_exclusive_group()
@@ -1461,6 +1549,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    scaling = resolve_scaling_from_args(args.scaling, args.normalize)
+
     cycle_tokens, cycles_str = parse_cycles_arg(args.cycles)
     metrics = [x.strip() for x in args.metric.split(',')]
     main(
@@ -1472,9 +1562,10 @@ if __name__ == "__main__":
         args.mode,
         args.n_interp_samples,
         metrics,
-        args.normalize,
+        True,  # deprecated is_norm; ignored when scaling is provided
         args.preview,
         export_xlsx=args.export_xlsx,
         export_path=args.export_path,
         cycles_str=cycles_str,
+        scaling=scaling,
     )
