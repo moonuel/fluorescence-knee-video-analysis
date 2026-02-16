@@ -276,35 +276,7 @@ def draw_segment_boundaries(video: np.ndarray, radial_regions: np.ndarray, meta)
     return overlay
 
 
-def normalize_intensity_per_frame_2d(total_sums: np.ndarray) -> np.ndarray:
-    """
-    Normalize intensity values per frame (column-wise) to 0–100 scale.
-
-    This mirrors the normalization logic from generate_spatiotemporal_heatmaps.py,
-    applied to the (n_segments, n_frames) array where each column is a frame.
-
-    Args:
-        total_sums: Array with shape (n_segments, n_frames) containing raw intensities
-
-    Returns:
-        Normalized array with same shape, values scaled 0–100 per frame
-    """
-    norm_intensity = total_sums.astype(float).copy()
-    n_segments, n_frames = norm_intensity.shape
-
-    for frame_idx in range(n_frames):
-        frame_data = norm_intensity[:, frame_idx]
-        min_val, max_val = frame_data.min(), frame_data.max()
-        if max_val > min_val:
-            norm_intensity[:, frame_idx] = 100 * (frame_data - min_val) / (max_val - min_val)
-        else:
-            norm_intensity[:, frame_idx] = 0
-
-    return norm_intensity
-
-
 IntensityScaling = Literal["raw", "norm", "rel"]
-
 
 def apply_intensity_scaling(total_sums: np.ndarray, scaling: IntensityScaling) -> np.ndarray:
     """Apply an intensity scaling mode to per-segment intensities.
@@ -328,15 +300,26 @@ def apply_intensity_scaling(total_sums: np.ndarray, scaling: IntensityScaling) -
         return total_sums
 
     if scaling == "norm":
-        return normalize_intensity_per_frame_2d(total_sums)
+        norm_intensity = total_sums.astype(float)
+        n_segments, n_frames = norm_intensity.shape
+
+        for frame_idx in range(n_frames):
+            frame_data = norm_intensity[:, frame_idx]
+            min_val, max_val = frame_data.min(), frame_data.max()
+            if max_val > min_val:
+                norm_intensity[:, frame_idx] = 100 * (frame_data - min_val) / (max_val - min_val)
+            else:
+                norm_intensity[:, frame_idx] = 0
+
+        return norm_intensity
 
     if scaling == "rel":
         x = total_sums.astype(float, copy=False)
         totals = x.sum(axis=0).astype(float, copy=False)  # (n_frames,)
-        out = np.zeros_like(x, dtype=float)
+        rel_intensity = np.zeros_like(x, dtype=float)
         # Divide each column by its per-frame total (avoid div-by-zero).
-        np.divide(x, totals[None, :], out=out, where=totals[None, :] != 0)
-        return out
+        np.divide(x, totals[None, :], out=rel_intensity, where=totals[None, :] != 0)
+        return rel_intensity
 
     raise ValueError(f"Unexpected scaling mode: {scaling!r}")
 
@@ -430,7 +413,7 @@ def compute_centre_of_mass_region(region_sums: np.ndarray,
 
 
 def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
-                           metrics: List[str],
+                           metric: str,
                            region_ranges: List[RegionRange] = None) -> Dict[str, Dict[str, np.ndarray]]:
     """Return time series for requested metrics, grouped by metric type.
 
@@ -438,8 +421,8 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
     ----------
     region_arrays : Dict[str, np.ndarray]
         {region_name: region_sums}, each with shape (N_region, n_frames).
-    metrics : List[str]
-        List of metrics to compute: "com", "total", and/or "flux".
+    metric : str
+        Metric to compute: "com", "total", and/or "flux".
     region_ranges : List[RegionRange], optional
         List of region definitions. If provided and "com" is in metrics,
         COM values will be shifted from local to global segment indices.
@@ -452,19 +435,20 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
         - For "flux": series_name is transition (e.g., "SB->OT", "OT->JC")
           plus "total_flux" and "net_flux" scalars.
     """
-    metric_data = {m: {} for m in metrics}
+
+    metric_data = {metric: {}}
 
     # Compute com and total for each region
     for region_name, region_sums in region_arrays.items():
-        if "com" in metrics:
+        if metric == "com":
             metric_data["com"][region_name] = compute_centre_of_mass_region(region_sums)
-        if "total" in metrics:
+        if metric == "total":
             metric_data["total"][region_name] = region_sums.sum(axis=0)
-        if "flux" in metrics:
+        if metric == "flux":
             metric_data["flux"][region_name] = region_sums.sum(axis=0) # Temporarily store total sums for flux computations
 
     # Fix COM y-axis: shift indices to from local (1..N_region) to global segment indices
-    if region_ranges is not None and "com" in metrics:
+    if region_ranges is not None and "com" in metric:
         region_start_indices = {r.name: r.start_idx for r in region_ranges}
         for region_name in metric_data["com"]:
             start_1_based = region_start_indices[region_name]
@@ -472,14 +456,14 @@ def compute_region_metrics(region_arrays: Dict[str, np.ndarray],
             metric_data["com"][region_name] = metric_data["com"][region_name] + offset
 
     # Compute boundary flux if requested (on raw frame data)
-    if "flux" in metrics and "SB" in metric_data["flux"] and "JC" in metric_data["flux"]:
+    if "flux" in metric and "SB" in metric_data["flux"] and "JC" in metric_data["flux"]:
         I_SB = metric_data["flux"]["SB"] # Temporarily stored total sums
         I_JC = metric_data["flux"]["JC"]
 
         # Smooth the intensity data
-        b, a = scipy.signal.butter(1, 0.50, btype='low', analog=False) 
-        I_SB = scipy.signal.filtfilt(b, a, I_SB)
-        I_JC = scipy.signal.filtfilt(b, a, I_JC)
+        # b, a = scipy.signal.butter(1, 0.50, btype='low', analog=False) 
+        # I_SB = scipy.signal.filtfilt(b, a, I_SB)
+        # I_JC = scipy.signal.filtfilt(b, a, I_JC)
 
         flux_data = compute_boundary_flux(I_SB, I_JC)
         metric_data["flux"] = flux_data # Overwrite with actual flux data
@@ -1275,33 +1259,27 @@ def export_to_excel(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray
     print(f"✅ Excel export saved to: {output_path}")
 
     
-def main(knee_cond, id, nsegs, 
-         cycle_idxs: List[int | None] | None = None, phase="both", 
-         processing_mode="angle", n_interp_samples=525, 
-         metrics=None, is_norm: bool = True, preview: bool = False,
-         export_xlsx: bool = False, export_path: str | None = None,
-         cycles_str: str | None = None,
-         scaling: IntensityScaling | None = None):
-    
-    # Set default processing
-    if cycle_idxs is None:
-        cycle_idxs = [0]
-    if metrics is None:
-        metrics = ["com"]
+def main(
+    knee_cond: str,
+    id: str,
+    nsegs: str,
+    cycle_idxs: List[int],
+    phase: str,
+    processing_mode: str,
+    n_interp_samples: int,
+    metric: List[str],
+    preview: bool,
+    export_xlsx: bool,
+    export_path: str,
+    cycles_str: str,
+    scaling: IntensityScaling,
+    averaged: bool
+):
 
-    if cycles_str is None:
-        rendered = ["_" if c is None else str(int(c) + 1) for c in cycle_idxs]
-        cycles_str = "cycles_" + ",".join(rendered)
-
-    # Resolve scaling.
-    # - New interface: scaling in {raw,norm,rel}
-    # - Back-compat (one release): `is_norm` bool maps to {norm,raw}.
-    effective_scaling: IntensityScaling = scaling if scaling is not None else ("norm" if is_norm else "raw")
-    scaling_label = effective_scaling
     print(f"Loading video: {knee_cond} {id} (N{nsegs})")
     print(f"Processing cycles: {cycle_idxs} in {processing_mode} mode")
-    print(f"Computing metrics: {metrics}")
-    print(f"Scaling: {scaling_label}")
+    print(f"Computing metric: {metric}")
+    print(f"Scaling: {scaling}")
 
     # Get metadata
     knee_meta = get_knee_meta(knee_cond, int(id), int(nsegs))
@@ -1318,11 +1296,13 @@ def main(knee_cond, id, nsegs,
         )
         views.show_frames([video_with_boundaries, (masks*(255//64))], "Validate data with segment boundaries")
 
+    "1. Total intensities"
     # Compute intensity data
     total_sums, total_nonzero, segment_labels = compute_intensity_data(video, masks)
 
+    "2. Intensity scaling"
     # Apply scaling exactly once, before cycle extraction.
-    total_sums = apply_intensity_scaling(total_sums, effective_scaling)
+    total_sums = apply_intensity_scaling(total_sums, scaling)
 
     # Split into three anatomical parts
     region_ranges = [ # Get anatomical regions from metadata
@@ -1362,45 +1342,45 @@ def main(knee_cond, id, nsegs,
         flex_data = total_sums[:, cycle.flex.s:cycle.flex.e + 1]
         ext_data = total_sums[:, cycle.ext.s:cycle.ext.e + 1]
 
+        "3. Split into three regions"
         # Split cycle into anatomical regions
         flex_regions = split_three_parts_indexwise(flex_data, region_ranges)
         ext_regions = split_three_parts_indexwise(ext_data, region_ranges)
 
+        "4. Compute metrics"
         # Compute metrics over cycle 
-        flex_metrics_data = compute_region_metrics(flex_regions, metrics, region_ranges)
-        ext_metrics_data = compute_region_metrics(ext_regions, metrics, region_ranges)
+        flex_metrics_data = compute_region_metrics(flex_regions, metric, region_ranges)
+        ext_metrics_data = compute_region_metrics(ext_regions, metric, region_ranges)
         # Returns dict of format {"metric": {region_name: array}}
         
         # Interpolate metrics into angle domain
         flex_metrics_interp = {}
         ext_metrics_interp = {}
-        for metric in metrics:
-            # Interpolate flex metrics
-            flex_interpolated = {}
-            for series_name, data in flex_metrics_data[metric].items():
-                interp, _ = interpolate_series_to_angle(data, n_interp_samples, 30, 135)
-                flex_interpolated[series_name] = interp
-            flex_metrics_interp[metric] = flex_interpolated
 
-            # Interpolate ext metrics
-            ext_interpolated = {}
-            for series_name, data in ext_metrics_data[metric].items():
-                interp, _ = interpolate_series_to_angle(data, n_interp_samples, 135, 30)
-                ext_interpolated[series_name] = interp
-            ext_metrics_interp[metric] = ext_interpolated
+        # Interpolate flex metrics
+        flex_interpolated = {}
+        for series_name, data in flex_metrics_data[metric].items():
+            interp, _ = interpolate_series_to_angle(data, n_interp_samples, 30, 135)
+            flex_interpolated[series_name] = interp
+        flex_metrics_interp[metric] = flex_interpolated
+
+        # Interpolate ext metrics
+        ext_interpolated = {}
+        for series_name, data in ext_metrics_data[metric].items():
+            interp, _ = interpolate_series_to_angle(data, n_interp_samples, 135, 30)
+            ext_interpolated[series_name] = interp
+        ext_metrics_interp[metric] = ext_interpolated
 
         # Concatenate flex and ext metrics
-        cycle_metrics = {}
-        for metric in metrics:
-            cycle_metrics[metric] = {}
-            for series_name in flex_metrics_interp[metric]:
-                flex_data = flex_metrics_interp[metric][series_name]
-                ext_data = ext_metrics_interp[metric][series_name]
-                if isinstance(flex_data, Iterable) and isinstance(ext_data, Iterable):
-                    cycle_metrics[metric][series_name] = np.concatenate([flex_data, ext_data])
-                else:
-                    # For scalars, keep as is (e.g., total_flux, net_flux for flux metric)
-                    cycle_metrics[metric][series_name] = flex_data  # Assuming flex and ext are the same or handle separately if needed
+        cycle_metrics = {metric: {}}
+        for series_name in flex_metrics_interp[metric]:
+            flex_data = flex_metrics_interp[metric][series_name]
+            ext_data = ext_metrics_interp[metric][series_name]
+            if isinstance(flex_data, Iterable) and isinstance(ext_data, Iterable):
+                cycle_metrics[metric][series_name] = np.concatenate([flex_data, ext_data])
+            else:
+                # For scalars, keep as is (e.g., total_flux, net_flux for flux metric)
+                cycle_metrics[metric][series_name] = flex_data  # Assuming flex and ext are the same or handle separately if needed
 
         # Create legend label
         if phase == "both":
@@ -1419,110 +1399,77 @@ def main(knee_cond, id, nsegs,
 
     # Plot each requested metric
     video_title = f"{knee_cond} {id} (N{nsegs})"
-    for metric in metrics:
-        # Convert to tuple format expected by plotting functions
-        all_metric_data = [
-            (
-                cycle_data["metrics"][metric],
-                cycle_data["x_positions"],
-                cycle_data["angles"],
-                cycle_data["legend_label"],
-                cycle_data["cycle"]
-            )
-            for cycle_data in all_cycle_data
-        ]
-        
-        if metric == "com":
-            # if export_xlsx:
-            #     out_path = (
-            #         Path(export_path)
-            #         if export_path
-            #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
-            #     )
-            #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_coms_angle_mode(
-                all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
-                blocks=blocks, cycles_str=cycles_str,
-            )
-        elif metric == "total":
-            # if export_xlsx:
-            #     out_path = (
-            #         Path(export_path)
-            #         if export_path
-            #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
-            #     )
-            #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
-            plot_intra_region_totals_angle_mode(
-                all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
-                blocks=blocks, cycles_str=cycles_str,
-            )
-        elif metric == "flux":
-            plot_boundary_flux_angle_mode(
-                all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
-                blocks=blocks, cycles_str=cycles_str,
-            )
-
-
-def resolve_scaling_from_args(
-    scaling: str | None,
-    normalize_flag: bool | None,
-) -> IntensityScaling:
-    """Resolve effective scaling from new `--scaling` and legacy normalize flags.
-
-    Precedence/behavior (deprecation window):
-    - If `--scaling` is provided, it wins; legacy flags are ignored with a warning.
-    - Else if legacy flags are used, map them to {norm,raw} with a warning.
-    - Else default to raw.
-    """
-    if scaling is not None:
-        if normalize_flag is not None:
-            warnings.warn(
-                "Both --scaling and --normalize/--no-normalize were provided. "
-                "--scaling takes precedence; legacy flags are ignored (deprecated).",
-                category=DeprecationWarning,
-                stacklevel=2,
-            )
-        return scaling  # type: ignore[return-value]
-
-    if normalize_flag is not None:
-        warnings.warn(
-            "--normalize/--no-normalize are deprecated; use --scaling {raw,norm,rel} instead.",
-            category=DeprecationWarning,
-            stacklevel=2,
+    
+    # Convert to tuple format expected by plotting functions
+    all_metric_data = [
+        (
+            cycle_data["metrics"][metric],
+            cycle_data["x_positions"],
+            cycle_data["angles"],
+            cycle_data["legend_label"],
+            cycle_data["cycle"]
         )
-        return "norm" if normalize_flag else "raw"
+        for cycle_data in all_cycle_data
+    ]
+    
+    if metric == "com":
+        # if export_xlsx:
+        #     out_path = (
+        #         Path(export_path)
+        #         if export_path
+        #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+        #     )
+        #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
+        plot_intra_region_coms_angle_mode(
+            all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
+            blocks=blocks, cycles_str=cycles_str,
+        )
+    elif metric == "total":
+        # if export_xlsx:
+        #     out_path = (
+        #         Path(export_path)
+        #         if export_path
+        #         else Path("figures") / "dmm_analysis_exports" / f"dmm_analysis_{meta.condition}_{meta.video_id}_N{meta.n_segments}_{metric}_{phase}.xlsx"
+        #     )
+        #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
+        plot_intra_region_totals_angle_mode(
+            all_metric_data, phase, n_interp_samples, video_title, scaling, knee_meta,
+            blocks=blocks, cycles_str=cycles_str,
+        )
+    elif metric == "flux":
+        plot_boundary_flux_angle_mode(
+            all_metric_data, phase, n_interp_samples, video_title, scaling, knee_meta,
+            blocks=blocks, cycles_str=cycles_str,
+        )
 
-    return "raw"
 
-
-if __name__ == "__main__":
-    import argparse
+def create_parser() -> argparse.ArgumentParser:
+    """
+    Create an argument parser for the script.
+    """
 
     parser = argparse.ArgumentParser(description="DMM knee video analysis")
+
+    # Positional arguments
     parser.add_argument("condition", help="Condition (e.g., normal, aging, dmm-0w)")
     parser.add_argument("id", help="Video ID")
     parser.add_argument("nsegs", help="Number of segments")
-    parser.add_argument(
-        "--cycles",
-        default="1",
-        help=(
-            "Comma-separated 1-based cycle indices. Supports placeholders '_'/'x'/'X' to insert blank cycle slots "
-            "for alignment. Example: --cycles 1,_,3"
-        ),
-    )
+
+    # Optional arguments
+    parser.add_argument("--cycles", default="1",
+                        help=("Comma-separated 1-based cycle indices. "
+                        "Supports placeholders '_'/'x'/'X' to insert blank cycle slots "
+                        "for alignment. Default: 1. Example: --cycles 1,_,3 "),)
     parser.add_argument("phase", nargs='?', default="both",
                        choices=["flexion", "extension", "both"],
                        help="Phase to plot (default: both)")
     parser.add_argument("--mode", choices=["angle"], default="angle", # TODO: retire and use angle mode always
                        help="Plotting mode: angle (rescaled, contiguous)")
     parser.add_argument("--metric", default="total",
-                       help="Comma-separated metrics to plot: com,total,flux (default: total)")
+                       help="Comma-separated metrics to plot: com,total,flux. Default: total")
     parser.add_argument("--n-interp-samples", type=int, default=525,
-                       help="Number of interpolation samples per phase in angle mode (default: 525)")
-
-    parser.add_argument(
-        "--scaling",
-        default=None,
+                       help="Number of interpolation samples per phase in angle mode. Default: 525")
+    parser.add_argument("--scaling", default='raw',
         choices=["raw", "norm", "rel"],
         help=(
             "Intensity scaling mode: "
@@ -1532,28 +1479,16 @@ if __name__ == "__main__":
             "Default: raw."
         ),
     )
+    parser.add_argument("--averaged", action="store_true",
+        help="Plot averaged curves (angle mode only)",
+    )
 
     # Excel export
-    parser.add_argument(
-        "--export-xlsx", action="store_true",
+    parser.add_argument("--export-xlsx", action="store_true",
         help="Export plotted data (angle mode) to an Excel workbook"
     )
-    parser.add_argument(
-        "--export-path", default=None,
+    parser.add_argument("--export-path", default=None,
         help="Optional output .xlsx path (default: figures/dmm_analysis_exports/...)"
-    )
-
-    # Normalization toggle (default True)
-    norm_group = parser.add_mutually_exclusive_group()
-    norm_group.add_argument(
-        "--normalize", dest="normalize", action="store_true",
-        default=None,
-        help="[DEPRECATED] Enable per-frame intensity normalization (use --scaling norm)"
-    )
-    norm_group.add_argument(
-        "--no-normalize", dest="normalize", action="store_false",
-        default=None,
-        help="[DEPRECATED] Disable per-frame intensity normalization (use --scaling raw)"
     )
 
     # Preview toggle (default True)
@@ -1568,12 +1503,14 @@ if __name__ == "__main__":
     )
     parser.set_defaults(preview=True)
 
+    return parser
+
+if __name__ == "__main__":
+
+    parser = create_parser()
     args = parser.parse_args()
-
-    scaling = resolve_scaling_from_args(args.scaling, args.normalize)
-
     cycle_tokens, cycles_str = parse_cycles_arg(args.cycles)
-    metrics = [x.strip() for x in args.metric.split(',')]
+    
     main(
         args.condition,
         args.id,
@@ -1582,11 +1519,11 @@ if __name__ == "__main__":
         args.phase,
         args.mode,
         args.n_interp_samples,
-        metrics,
-        True,  # deprecated is_norm; ignored when scaling is provided
+        args.metric,
         args.preview,
-        export_xlsx=args.export_xlsx,
-        export_path=args.export_path,
-        cycles_str=cycles_str,
-        scaling=scaling,
+        args.export_xlsx,
+        args.export_path,
+        cycles_str,
+        args.scaling,
+        args.averaged,
     )
