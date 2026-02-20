@@ -46,6 +46,8 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
+import matplotlib.pyplot as plt
+
 # =============================================================================
 # TYPE DEFINITIONS
 # =============================================================================
@@ -999,6 +1001,7 @@ def plot_metric_angle_domain(
     video_data: List[Tuple[VideoSpec, np.ndarray, np.ndarray]],
     metric: MetricType,
     phase: PhaseType,
+    scaling: ScalingType,
     n_interp_samples: int,
     out_path: Optional[Path],
     show: bool,
@@ -1009,12 +1012,109 @@ def plot_metric_angle_domain(
         video_data: List of (VideoSpec, metric_flex, metric_ext) tuples.
         metric: Metric type being plotted.
         phase: Phase to plot.
+        scaling: Scaling to apply.
         n_interp_samples: Number of interpolation samples per phase.
         out_path: Path to save PDF, or None.
         show: Whether to display interactively.
     """
-    # TODO: Implement angle-domain plotting
-    raise NotImplementedError("plot_metric_angle_domain not yet implemented")
+    def _interp_1d(y: np.ndarray, angle_start: float, angle_end: float) -> Tuple[np.ndarray, np.ndarray]:
+        """Interpolate a 1D series to n_interp_samples over an angle range."""
+        if y.size == 0:
+            angles = np.linspace(angle_start, angle_end, n_interp_samples)
+            return angles, np.full((n_interp_samples,), np.nan, dtype=float)
+
+        y = np.asarray(y, dtype=float)
+        x_old = np.linspace(0.0, 1.0, num=y.shape[0])
+        x_new = np.linspace(0.0, 1.0, num=n_interp_samples)
+        angles = np.linspace(angle_start, angle_end, num=n_interp_samples)
+
+        mask = np.isfinite(y)
+        if mask.sum() < 2:
+            return angles, np.full((n_interp_samples,), np.nan, dtype=float)
+
+        y_new = np.interp(x_new, x_old[mask], y[mask])
+        return angles, y_new
+
+    def _interp_2d_by_row(y2: np.ndarray, angle_start: float, angle_end: float) -> Tuple[np.ndarray, np.ndarray]:
+        """Interpolate a 2D (K x T) series to (K x n_interp_samples)."""
+        if y2.size == 0:
+            angles = np.linspace(angle_start, angle_end, n_interp_samples)
+            return angles, np.full((y2.shape[0] if y2.ndim == 2 else 0, n_interp_samples), np.nan, dtype=float)
+
+        y2 = np.asarray(y2, dtype=float)
+        k, _t = y2.shape
+        out = np.full((k, n_interp_samples), np.nan, dtype=float)
+        angles = np.linspace(angle_start, angle_end, num=n_interp_samples)
+        for i in range(k):
+            _, out_i = _interp_1d(y2[i, :], angle_start, angle_end)
+            out[i, :] = out_i
+        return angles, out
+
+    def _plot_series(ax: plt.Axes, x: np.ndarray, y: np.ndarray, label: str, **kwargs) -> None:
+        y = np.asarray(y, dtype=float)
+        m = np.isfinite(y)
+        if m.any():
+            ax.plot(x[m], y[m], label=label, **kwargs)
+
+    # Angle ticks and labels: fixed set required by task
+    tick_angles = np.array([30, 45, 60, 75, 90, 105, 120, 135], dtype=float)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.grid(True, alpha=0.3)
+
+    # Metric-specific labeling
+    if metric == "com":
+        y_label = "COM (segment index)"
+        title_metric = "Center of Mass"
+    elif metric == "total":
+        y_label = "Total intensity"
+        title_metric = "Total Intensity"
+    else:
+        y_label = "Flux"
+        title_metric = "Boundary Flux"
+
+    # Deterministic ordering: plot in input order
+    for spec, metric_flex, metric_ext in video_data:
+        base_label = spec.label or spec.base
+
+        if metric != "flux":
+            if phase in ("flexion", "both"):
+                x_f, y_f = _interp_1d(metric_flex, 30, 135)
+                _plot_series(ax, x_f, y_f, label=f"{base_label} flex", linestyle="-", linewidth=2)
+
+            if phase in ("extension", "both"):
+                x_e, y_e = _interp_1d(metric_ext, 135, 30)
+                _plot_series(ax, x_e, y_e, label=f"{base_label} ext", linestyle="--", linewidth=2)
+
+        else:
+            # flux metric is stored as 2xT: [SB->OT; OT->JC]
+            if phase in ("flexion", "both"):
+                x_f, y2_f = _interp_2d_by_row(metric_flex, 30, 135)
+                _plot_series(ax, x_f, y2_f[0, :], label=f"{base_label} flex SB->OT", linestyle="-", linewidth=2)
+                _plot_series(ax, x_f, y2_f[1, :], label=f"{base_label} flex OT->JC", linestyle=":", linewidth=2)
+
+            if phase in ("extension", "both"):
+                x_e, y2_e = _interp_2d_by_row(metric_ext, 135, 30)
+                _plot_series(ax, x_e + 105, y2_e[0, :], label=f"{base_label} ext SB->OT", linestyle="--", linewidth=2)
+                _plot_series(ax, x_e + 105, y2_e[1, :], label=f"{base_label} ext OT->JC", linestyle="-.", linewidth=2)
+
+    ax.set_xlabel("Knee Angle (°)")
+    ax.set_ylabel(y_label)
+    ax.set_title(f"Averaged {title_metric} vs Knee Angle ({phase}, scaling={scaling})")
+
+    ax.set_xticks(tick_angles)
+    ax.set_xticklabels([f"{int(a)}°" for a in tick_angles])
+
+    ax.legend(loc="best", frameon=True)
+
+    if out_path is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_path, bbox_inches="tight")
+
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 def plot_metric_frame_domain(
@@ -1204,8 +1304,7 @@ def main() -> int:
                     raise ValueError(f"Flux series length mismatch: {a.shape} vs {b.shape}")
                 return np.vstack([a, b]).astype(float, copy=False)
 
-            metric_flex = _stack_flux(flux_sb_ot_flex, flux_ot_jc_flex)
-            metric_ext = _stack_flux(flux_sb_ot_ext, flux_ot_jc_ext)
+            metric_flex, metric_ext = _stack_flux(flux_sb_ot_flex, flux_ot_jc_flex), _stack_flux(flux_sb_ot_ext, flux_ot_jc_ext)
         else:
             raise ValueError(f"Unexpected metric: {args.metric!r}")
 
@@ -1214,8 +1313,26 @@ def main() -> int:
         # Debug prints for pipeline progress (until plotting is implemented)
         print(f"    Metric='{args.metric}': flex shape={metric_flex.shape}, ext shape={metric_ext.shape}")
 
-    print("\nPipeline not yet implemented. Exiting.")
-    return 0
+    # 6. Plot
+    out_path: Optional[Path]
+    if args.save:
+        out_path = args.out_dir / f"{out_stem}.pdf"
+    else:
+        out_path = None
+
+    if args.x_domain == "angle":
+        plot_metric_angle_domain(
+            video_data=video_metric_data,
+            metric=args.metric,
+            phase=args.phase,
+            scaling=args.scaling,
+            n_interp_samples=args.n_interp_samples,
+            out_path=out_path,
+            show=args.show,
+        )
+        return 0
+
+    raise NotImplementedError("Only --x-domain angle is implemented for plotting")
 
 
 if __name__ == "__main__":
