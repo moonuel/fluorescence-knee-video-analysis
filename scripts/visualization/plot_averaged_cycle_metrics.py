@@ -1017,38 +1017,34 @@ def plot_metric_angle_domain(
         out_path: Path to save PDF, or None.
         show: Whether to display interactively.
     """
-    def _interp_1d(y: np.ndarray, angle_start: float, angle_end: float) -> Tuple[np.ndarray, np.ndarray]:
-        """Interpolate a 1D series to n_interp_samples over an angle range."""
+    def _interp_1d(y: np.ndarray) -> np.ndarray:
+        """Interpolate a 1D series to n_interp_samples over normalized x in [0, 1]."""
         if y.size == 0:
-            angles = np.linspace(angle_start, angle_end, n_interp_samples)
-            return angles, np.full((n_interp_samples,), np.nan, dtype=float)
+            return np.full((n_interp_samples,), np.nan, dtype=float)
 
         y = np.asarray(y, dtype=float)
         x_old = np.linspace(0.0, 1.0, num=y.shape[0])
         x_new = np.linspace(0.0, 1.0, num=n_interp_samples)
-        angles = np.linspace(angle_start, angle_end, num=n_interp_samples)
 
         mask = np.isfinite(y)
         if mask.sum() < 2:
-            return angles, np.full((n_interp_samples,), np.nan, dtype=float)
+            return np.full((n_interp_samples,), np.nan, dtype=float)
 
         y_new = np.interp(x_new, x_old[mask], y[mask])
-        return angles, y_new
+        return y_new
 
-    def _interp_2d_by_row(y2: np.ndarray, angle_start: float, angle_end: float) -> Tuple[np.ndarray, np.ndarray]:
-        """Interpolate a 2D (K x T) series to (K x n_interp_samples)."""
+    def _interp_2d_by_row(y2: np.ndarray) -> np.ndarray:
+        """Interpolate a 2D (K x T) series to (K x n_interp_samples) over normalized x in [0, 1]."""
         if y2.size == 0:
-            angles = np.linspace(angle_start, angle_end, n_interp_samples)
-            return angles, np.full((y2.shape[0] if y2.ndim == 2 else 0, n_interp_samples), np.nan, dtype=float)
+            return np.full((y2.shape[0] if y2.ndim == 2 else 0, n_interp_samples), np.nan, dtype=float)
 
         y2 = np.asarray(y2, dtype=float)
         k, _t = y2.shape
         out = np.full((k, n_interp_samples), np.nan, dtype=float)
-        angles = np.linspace(angle_start, angle_end, num=n_interp_samples)
         for i in range(k):
-            _, out_i = _interp_1d(y2[i, :], angle_start, angle_end)
+            out_i = _interp_1d(y2[i, :])
             out[i, :] = out_i
-        return angles, out
+        return out
 
     def _plot_series(ax: plt.Axes, x: np.ndarray, y: np.ndarray, label: str, **kwargs) -> None:
         y = np.asarray(y, dtype=float)
@@ -1056,8 +1052,20 @@ def plot_metric_angle_domain(
         if m.any():
             ax.plot(x[m], y[m], label=label, **kwargs)
 
-    # Angle ticks and labels: fixed set required by task
-    tick_angles = np.array([30, 45, 60, 75, 90, 105, 120, 135], dtype=float)
+    # Plot in sample-index domain so we can label 30→135→30 explicitly.
+    # If both phases are drawn, we concatenate flexion and extension on one axis:
+    #   flexion indices:   0 .. n_interp_samples-1
+    #   extension indices: n_interp_samples .. 2*n_interp_samples-1
+    x_flex = np.arange(n_interp_samples, dtype=float)
+    x_ext = np.arange(n_interp_samples, 2 * n_interp_samples, dtype=float)
+
+    tick_angles = np.arange(30.0, 135.0 + 0.5 * 15.0, 15.0, dtype=float)  # 30..135 inclusive
+    tick_labels = [f"{int(a)}°" for a in tick_angles]
+
+    # Tick positions derived from the assumption that each phase spans n_interp_samples points
+    # uniformly from 30..135 (flex) and 135..30 (ext).
+    flex_tick_pos = (tick_angles - 30.0) / (135.0 - 30.0) * (n_interp_samples - 1)
+    ext_tick_pos = n_interp_samples + (135.0 - tick_angles) / (135.0 - 30.0) * (n_interp_samples - 1)
 
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.grid(True, alpha=0.3)
@@ -1079,31 +1087,65 @@ def plot_metric_angle_domain(
 
         if metric != "flux":
             if phase in ("flexion", "both"):
-                x_f, y_f = _interp_1d(metric_flex, 30, 135)
-                _plot_series(ax, x_f, y_f, label=f"{base_label} flex", linestyle="-", linewidth=2)
+                y_f = _interp_1d(metric_flex)
+                _plot_series(ax, x_flex, y_f, label=f"{base_label} flex", linestyle="-", linewidth=2)
 
             if phase in ("extension", "both"):
-                x_e, y_e = _interp_1d(metric_ext, 135, 30)
-                _plot_series(ax, x_e, y_e, label=f"{base_label} ext", linestyle="--", linewidth=2)
+                y_e = _interp_1d(metric_ext)
+                _plot_series(ax, x_ext if phase == "both" else x_flex, y_e, label=f"{base_label} ext", linestyle="--", linewidth=2)
 
         else:
             # flux metric is stored as 2xT: [SB->OT; OT->JC]
             if phase in ("flexion", "both"):
-                x_f, y2_f = _interp_2d_by_row(metric_flex, 30, 135)
-                _plot_series(ax, x_f, y2_f[0, :], label=f"{base_label} flex SB->OT", linestyle="-", linewidth=2)
-                _plot_series(ax, x_f, y2_f[1, :], label=f"{base_label} flex OT->JC", linestyle=":", linewidth=2)
+                y2_f = _interp_2d_by_row(metric_flex)
+                _plot_series(ax, x_flex, y2_f[0, :], label=f"{base_label} flex SB->OT", linestyle="-", linewidth=2)
+                _plot_series(ax, x_flex, y2_f[1, :], label=f"{base_label} flex OT->JC", linestyle=":", linewidth=2)
 
             if phase in ("extension", "both"):
-                x_e, y2_e = _interp_2d_by_row(metric_ext, 135, 30)
-                _plot_series(ax, x_e + 105, y2_e[0, :], label=f"{base_label} ext SB->OT", linestyle="--", linewidth=2)
-                _plot_series(ax, x_e + 105, y2_e[1, :], label=f"{base_label} ext OT->JC", linestyle="-.", linewidth=2)
+                y2_e = _interp_2d_by_row(metric_ext)
+                x_plot = x_ext if phase == "both" else x_flex
+                _plot_series(ax, x_plot, y2_e[0, :], label=f"{base_label} ext SB->OT", linestyle="--", linewidth=2)
+                _plot_series(ax, x_plot, y2_e[1, :], label=f"{base_label} ext OT->JC", linestyle="-.", linewidth=2)
 
     ax.set_xlabel("Knee Angle (°)")
     ax.set_ylabel(y_label)
     ax.set_title(f"Averaged {title_metric} vs Knee Angle ({phase}, scaling={scaling})")
 
-    ax.set_xticks(tick_angles)
-    ax.set_xticklabels([f"{int(a)}°" for a in tick_angles])
+    if phase == "flexion":
+        ax.set_xlim(0, n_interp_samples - 1)
+        ax.set_xticks(flex_tick_pos)
+        ax.set_xticklabels(tick_labels)
+    elif phase == "extension":
+        ax.set_xlim(0, n_interp_samples - 1)
+        ax.set_xticks((135.0 - tick_angles) / (135.0 - 30.0) * (n_interp_samples - 1))
+        ax.set_xticklabels(tick_labels)
+    else:
+        ax.set_xlim(0, 2 * n_interp_samples - 1)
+        ax.set_xticks(np.concatenate([flex_tick_pos, ext_tick_pos]))
+        ax.set_xticklabels(tick_labels + tick_labels)
+        ax.axvline(n_interp_samples - 0.5, color="k", alpha=0.15, linewidth=1)
+
+        # Visual cue for phase halves
+        ax.text(
+            0.25,
+            0.98,
+            "flex",
+            transform=ax.transAxes,
+            ha="center",
+            va="top",
+            fontsize=9,
+            alpha=0.7,
+        )
+        ax.text(
+            0.75,
+            0.98,
+            "ext",
+            transform=ax.transAxes,
+            ha="center",
+            va="top",
+            fontsize=9,
+            alpha=0.7,
+        )
 
     ax.legend(loc="best", frameon=True)
 
