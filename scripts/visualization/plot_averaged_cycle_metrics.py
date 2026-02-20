@@ -1116,13 +1116,15 @@ def plot_metric_angle_domain(
 
         else:
             # flux metric is stored as 2xT: [SB->OT; OT->JC]
+            # Keep one color per dataset, but distinguish the two flux components by linestyle.
+            # SB->OT: solid, OT->JC: dashed (same color).
             if phase in ("flexion", "both"):
                 y2_f = _interp_2d_by_row(metric_flex)
                 _plot_series(
                     ax,
                     x_flex,
                     y2_f[0, :],
-                    label=base_label,
+                    label=f"{base_label} SB->OT",
                     linestyle="-",
                     linewidth=2,
                     color=color,
@@ -1131,8 +1133,8 @@ def plot_metric_angle_domain(
                     ax,
                     x_flex,
                     y2_f[1, :],
-                    label="_nolegend_",
-                    linestyle="-",
+                    label=f"{base_label} OT->JC",
+                    linestyle=(0, (4, 2)),
                     linewidth=2,
                     color=color,
                 )
@@ -1154,7 +1156,7 @@ def plot_metric_angle_domain(
                     x_plot,
                     y2_e[1, :],
                     label="_nolegend_",
-                    linestyle="-",
+                    linestyle=(0, (4, 2)),
                     linewidth=2,
                     color=color,
                 )
