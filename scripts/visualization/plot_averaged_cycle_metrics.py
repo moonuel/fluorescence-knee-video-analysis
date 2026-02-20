@@ -1082,30 +1082,82 @@ def plot_metric_angle_domain(
         title_metric = "Boundary Flux"
 
     # Deterministic ordering: plot in input order
-    for spec, metric_flex, metric_ext in video_data:
+    # Use Matplotlib's default color cycle, but keep a single color per dataset
+    # (i.e., flexion + extension share the same color).
+    color_cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+    for i, (spec, metric_flex, metric_ext) in enumerate(video_data):
+        color = color_cycle[i % len(color_cycle)] if color_cycle else None
         base_label = spec.label or spec.base
 
         if metric != "flux":
             if phase in ("flexion", "both"):
                 y_f = _interp_1d(metric_flex)
-                _plot_series(ax, x_flex, y_f, label=f"{base_label} flex", linestyle="-", linewidth=2)
+                _plot_series(
+                    ax,
+                    x_flex,
+                    y_f,
+                    label=base_label,
+                    linestyle="-",
+                    linewidth=2,
+                    color=color,
+                )
 
             if phase in ("extension", "both"):
                 y_e = _interp_1d(metric_ext)
-                _plot_series(ax, x_ext if phase == "both" else x_flex, y_e, label=f"{base_label} ext", linestyle="--", linewidth=2)
+                _plot_series(
+                    ax,
+                    x_ext if phase == "both" else x_flex,
+                    y_e,
+                    label="_nolegend_",
+                    linestyle="-",
+                    linewidth=2,
+                    color=color,
+                )
 
         else:
             # flux metric is stored as 2xT: [SB->OT; OT->JC]
             if phase in ("flexion", "both"):
                 y2_f = _interp_2d_by_row(metric_flex)
-                _plot_series(ax, x_flex, y2_f[0, :], label=f"{base_label} flex SB->OT", linestyle="-", linewidth=2)
-                _plot_series(ax, x_flex, y2_f[1, :], label=f"{base_label} flex OT->JC", linestyle=":", linewidth=2)
+                _plot_series(
+                    ax,
+                    x_flex,
+                    y2_f[0, :],
+                    label=base_label,
+                    linestyle="-",
+                    linewidth=2,
+                    color=color,
+                )
+                _plot_series(
+                    ax,
+                    x_flex,
+                    y2_f[1, :],
+                    label="_nolegend_",
+                    linestyle="-",
+                    linewidth=2,
+                    color=color,
+                )
 
             if phase in ("extension", "both"):
                 y2_e = _interp_2d_by_row(metric_ext)
                 x_plot = x_ext if phase == "both" else x_flex
-                _plot_series(ax, x_plot, y2_e[0, :], label=f"{base_label} ext SB->OT", linestyle="--", linewidth=2)
-                _plot_series(ax, x_plot, y2_e[1, :], label=f"{base_label} ext OT->JC", linestyle="-.", linewidth=2)
+                _plot_series(
+                    ax,
+                    x_plot,
+                    y2_e[0, :],
+                    label="_nolegend_",
+                    linestyle="-",
+                    linewidth=2,
+                    color=color,
+                )
+                _plot_series(
+                    ax,
+                    x_plot,
+                    y2_e[1, :],
+                    label="_nolegend_",
+                    linestyle="-",
+                    linewidth=2,
+                    color=color,
+                )
 
     ax.set_xlabel("Knee Angle (°)")
     ax.set_ylabel(y_label)
