@@ -35,6 +35,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import sys
@@ -494,8 +495,140 @@ def load_workbook(spec: VideoSpec, source: SourceType) -> WorkbookData:
         FileNotFoundError: If required sheets are missing.
         ValueError: If data is malformed.
     """
-    # TODO: Implement workbook loading
-    raise NotImplementedError("load_workbook not yet implemented")
+    def _require_columns(df: pd.DataFrame, cols: List[str], sheet: str) -> None:
+        missing = [c for c in cols if c not in df.columns]
+        if missing:
+            raise ValueError(
+                f"Malformed sheet {sheet!r} in workbook {path}: missing columns {missing}. "
+                f"Found columns: {list(df.columns)}"
+            )
+
+    def _clean_cycle_sheet(df_raw: pd.DataFrame, sheet: str) -> pd.DataFrame:
+        """Return DataFrame with integer columns ['start','end'].
+
+        Handles legacy formats where the sheet may have:
+        - a header row with 'Start'/'End'
+        - three columns: cycle/index, start, end
+        - extra blank rows/columns
+        """
+        if df_raw.empty:
+            raise ValueError(f"Sheet {sheet!r} in workbook {path} is empty")
+
+        df = df_raw.copy()
+        df = df.dropna(how="all")
+        if df.empty:
+            raise ValueError(f"Sheet {sheet!r} in workbook {path} has no data")
+
+        # If the first row looks like a header, drop it.
+        first_row = df.iloc[0, :].astype(str).str.lower()
+        if ("start" in first_row.values) and ("end" in first_row.values):
+            df = df.iloc[1:, :]
+
+        # Keep first 3 columns max: [cycle?], start, end
+        df = df.iloc[:, 0:3]
+
+        # Coerce start/end from 2nd/3rd columns.
+        start = pd.to_numeric(df.iloc[:, 1], errors="coerce")
+        end = pd.to_numeric(df.iloc[:, 2], errors="coerce")
+        out = pd.DataFrame({"start": start, "end": end}).dropna(how="any")
+        out["start"] = out["start"].astype(int)
+        out["end"] = out["end"].astype(int)
+
+        if out.empty:
+            raise ValueError(
+                f"Sheet {sheet!r} in workbook {path} has no valid (start,end) rows after cleaning"
+            )
+        return out.reset_index(drop=True)
+
+    # Resolve workbook path
+    path = spec.resolved_path or resolve_video_spec_path(spec)
+    if not path.is_file():
+        raise FileNotFoundError(f"Workbook not found: {path}")
+
+    intensity_sheet = (
+        SHEET_SEGMENT_INTENSITIES if source == "raw" else SHEET_SEGMENT_INTENSITIES_BGSUB
+    )
+
+    try:
+        xls = pd.ExcelFile(path)
+    except Exception as e:
+        raise ValueError(f"Failed to open workbook {path}: {e}") from e
+
+    required_sheets = [
+        intensity_sheet,
+        SHEET_FLEXION_FRAMES,
+        SHEET_EXTENSION_FRAMES,
+        SHEET_ANATOMICAL_REGIONS,
+    ]
+    missing_sheets = [s for s in required_sheets if s not in xls.sheet_names]
+    if missing_sheets:
+        raise FileNotFoundError(
+            f"Workbook {path} is missing required sheets: {missing_sheets}. "
+            f"Available: {xls.sheet_names}"
+        )
+
+    # Intensities: written by prepare_intensity_data.py via DataFrame.to_excel(index=True)
+    # so we expect headers in row 1 and an index column.
+    df_int = pd.read_excel(xls, sheet_name=intensity_sheet, header=0, index_col=0)
+    # Some legacy workbooks may include non-numeric columns; coerce and fill.
+    df_int = df_int.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    intensities = df_int.to_numpy(dtype=float)
+
+    # Cycles: read raw then clean to (start,end)
+    df_flex_raw = pd.read_excel(xls, sheet_name=SHEET_FLEXION_FRAMES, header=None)
+    df_ext_raw = pd.read_excel(xls, sheet_name=SHEET_EXTENSION_FRAMES, header=None)
+    flexion_cycles = _clean_cycle_sheet(df_flex_raw, SHEET_FLEXION_FRAMES)
+    extension_cycles = _clean_cycle_sheet(df_ext_raw, SHEET_EXTENSION_FRAMES)
+
+    # Anatomical regions: expected columns Region, Start, End
+    anatomical_regions = pd.read_excel(xls, sheet_name=SHEET_ANATOMICAL_REGIONS, header=0)
+    anatomical_regions.columns = [str(c).strip() for c in anatomical_regions.columns]
+    # Normalize likely variants.
+    colmap: Dict[str, str] = {}
+    for c in anatomical_regions.columns:
+        cl = c.lower()
+        if cl == "region":
+            colmap[c] = "Region"
+        elif cl == "start":
+            colmap[c] = "Start"
+        elif cl == "end":
+            colmap[c] = "End"
+    anatomical_regions = anatomical_regions.rename(columns=colmap)
+    _require_columns(anatomical_regions, ["Region", "Start", "End"], SHEET_ANATOMICAL_REGIONS)
+    anatomical_regions = anatomical_regions.dropna(subset=["Region", "Start", "End"]).copy()
+    anatomical_regions["Start"] = pd.to_numeric(anatomical_regions["Start"], errors="coerce")
+    anatomical_regions["End"] = pd.to_numeric(anatomical_regions["End"], errors="coerce")
+    anatomical_regions = anatomical_regions.dropna(subset=["Start", "End"]).copy()
+    anatomical_regions["Start"] = anatomical_regions["Start"].astype(int)
+    anatomical_regions["End"] = anatomical_regions["End"].astype(int)
+
+    # Infer identifiers / validate n_segments
+    n_segments = int(df_int.shape[1])
+    if spec.n_segments is not None and int(spec.n_segments) != n_segments:
+        raise ValueError(
+            f"Segment count mismatch for {path.name}: spec has N={spec.n_segments}, "
+            f"but sheet {intensity_sheet!r} has {n_segments} columns"
+        )
+
+    video_id = spec.video_id
+    if video_id is None:
+        m = re.search(r"(\d+)N(\d+)", path.name, re.IGNORECASE)
+        if m:
+            video_id = int(m.group(1))
+    if video_id is None:
+        raise ValueError(
+            f"Could not infer video_id from VIDEO_SPEC {spec.base!r} or workbook name {path.name!r}"
+        )
+
+    return WorkbookData(
+        path=path,
+        video_id=int(video_id),
+        n_segments=n_segments,
+        intensities=intensities,
+        flexion_cycles=flexion_cycles,
+        extension_cycles=extension_cycles,
+        anatomical_regions=anatomical_regions.reset_index(drop=True),
+    )
 
 
 def validate_cycles(spec: VideoSpec, workbook: WorkbookData) -> None:
@@ -689,7 +822,7 @@ def build_output_filename(
     x_domain: XDomainType,
     scaling: ScalingType,
     source: SourceType,
-    n_segments: int,
+    video_specs: List[VideoSpec],
 ) -> str:
     """Build output filename from parameters.
 
@@ -699,12 +832,41 @@ def build_output_filename(
         x_domain: X-axis domain.
         scaling: Scaling mode.
         source: Data source.
-        n_segments: Segment count (for grouping).
+        video_specs: Video specifications included in the plot.
 
     Returns:
         Filename stem (without extension).
     """
-    return f"{metric}_{phase}_{x_domain}_scaling-{scaling}_source-{source}_N{n_segments}"
+
+    def _video_token(spec: VideoSpec) -> str:
+        """Readable identifier for a video in a multi-video plot.
+
+        Prefer a canonical `<video_id:04d>N<n_segments>` token when possible.
+        """
+        if spec.video_id is not None and spec.n_segments is not None:
+            return f"{int(spec.video_id):04d}N{int(spec.n_segments)}"
+        # Fallback: strip extension.
+        return re.sub(r"\.xlsx$", "", spec.base, flags=re.IGNORECASE)
+
+    # Fully explicit list of videos.
+    tokens = [_video_token(s) for s in video_specs]
+    videos_part = "videos-" + "_".join(tokens)
+
+    # Short stable tag to disambiguate runs that have the same set of videos but
+    # differ in cycles, labels, order, or other spec-level settings.
+    def _canonical_spec_string(spec: VideoSpec) -> str:
+        cycles = "all" if spec.cycles is None else ",".join(str(i) for i in spec.cycles)
+        label = "" if spec.label is None else spec.label
+        return f"base={spec.base}|cycles={cycles}|label={label}"
+
+    payload = "||".join(_canonical_spec_string(s) for s in video_specs)
+    tag6 = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:6]
+
+    # Partition ordering: averaged -> metric -> (plot parameters) -> (dataset partition)
+    return (
+        f"averaged_{metric}_{x_domain}_{phase}_scaling-{scaling}_source-{source}_"
+        f"{videos_part}_tag{tag6}"
+    )
 
 
 # =============================================================================
@@ -754,6 +916,17 @@ def main() -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
+    # One output per invocation (combined multi-video plot)
+    out_stem = build_output_filename(
+        metric=args.metric,
+        phase=args.phase,
+        x_domain=args.x_domain,
+        scaling=args.scaling,
+        source=args.source,
+        video_specs=args.video_specs,
+    )
+    print(f"\nOutput: {out_stem}.pdf")
+
     # Process each item
     for spec in args.video_specs:
         print(f"\nProcessing {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
@@ -767,20 +940,13 @@ def main() -> int:
         # 5. Compute metric
         # 6. Plot
 
+        workbook = load_workbook(spec, "raw")
+
         # for spec in specs:
         #     print(f"  - {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
         #     print(f"    Resolved: {spec.resolved_path}")
 
-        # Build output filename
-        out_stem = build_output_filename(
-            metric=args.metric,
-            phase=args.phase,
-            x_domain=args.x_domain,
-            scaling=args.scaling,
-            source=args.source,
-            n_segments=spec.n_segments,
-        )
-        print(f"  Output: {out_stem}.pdf")
+        # (Output filename is printed once per invocation above.)
 
     print("\nPipeline not yet implemented. Exiting.")
     return 0
