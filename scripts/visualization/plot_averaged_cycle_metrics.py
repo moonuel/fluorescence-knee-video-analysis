@@ -724,8 +724,33 @@ def apply_intensity_scaling(intensities: np.ndarray, scaling: ScalingType) -> np
     Returns:
         Scaled intensity array.
     """
-    # TODO: Implement scaling (reuse logic from dmm_analysis.py)
-    raise NotImplementedError("apply_intensity_scaling not yet implemented")
+    if scaling == "raw":
+        return intensities
+
+    x = intensities.astype(float, copy=False)
+
+    if scaling == "norm":
+        # Per-frame min-max scaling to 0..100.
+        # Frame axis is 0, segment axis is 1.
+        mins = np.min(x, axis=1)
+        maxs = np.max(x, axis=1)
+        denom = (maxs - mins)
+
+        out = np.zeros_like(x, dtype=float)
+        # (x - min) / (max-min) * 100, with safe handling when denom==0
+        np.subtract(x, mins[:, None], out=out)
+        np.divide(out, denom[:, None], out=out, where=denom[:, None] != 0)
+        out *= 100.0
+        return out
+
+    if scaling == "rel":
+        # Per-frame relative intensity: segment_intensity / total_knee_intensity(frame)
+        totals = np.sum(x, axis=1)
+        out = np.zeros_like(x, dtype=float)
+        np.divide(x, totals[:, None], out=out, where=totals[:, None] != 0)
+        return out
+
+    raise ValueError(f"Unknown scaling mode: {scaling!r}")
 
 
 # =============================================================================
@@ -761,8 +786,35 @@ def extract_cycles(
     Returns:
         CycleData with extracted matrices.
     """
-    # TODO: Implement cycle extraction
-    raise NotImplementedError("extract_cycles not yet implemented")
+    n_frames, n_segments = intensities.shape
+
+    def _extract_from(df_cycles: pd.DataFrame, idxs: List[int]) -> List[np.ndarray]:
+        mats: List[np.ndarray] = []
+        for cyc in idxs:
+            row = df_cycles.iloc[cyc - 1]
+            start = int(row["start"])  # 1-based inclusive
+            end = int(row["end"])      # 1-based inclusive
+
+            # Convert to python slice [start-1, end)
+            s0 = start - 1
+            e0 = end
+            if s0 < 0 or e0 > n_frames:
+                raise ValueError(
+                    f"Cycle frame range out of bounds: cycle={cyc}, start={start}, end={end}, "
+                    f"n_frames={n_frames}"
+                )
+
+            seg_by_frame = intensities[s0:e0, :]           # (L, n_segments)
+            mats.append(seg_by_frame.T.copy())             # (n_segments, L)
+        return mats
+
+    flex_idxs = cycle_indices if cycle_indices is not None else list(range(1, len(flexion_cycles) + 1))
+    ext_idxs = cycle_indices if cycle_indices is not None else list(range(1, len(extension_cycles) + 1))
+
+    return CycleData(
+        flex_mats=_extract_from(flexion_cycles, flex_idxs) if len(flexion_cycles) else [],
+        ext_mats=_extract_from(extension_cycles, ext_idxs) if len(extension_cycles) else [],
+    )
 
 
 def average_cycles(cycle_data: CycleData) -> Tuple[np.ndarray, np.ndarray]:
@@ -776,8 +828,41 @@ def average_cycles(cycle_data: CycleData) -> Tuple[np.ndarray, np.ndarray]:
     Returns:
         Tuple of (avg_flex, avg_ext) matrices.
     """
-    # TODO: Implement cycle averaging with resampling
-    raise NotImplementedError("average_cycles not yet implemented")
+    def _resample_and_average(mats: List[np.ndarray]) -> np.ndarray:
+        if not mats:
+            # Caller may be plotting a single phase; represent missing phase as empty.
+            return np.zeros((0, 0), dtype=float)
+
+        n_segments = int(mats[0].shape[0])
+        if any(m.shape[0] != n_segments for m in mats):
+            raise ValueError("Inconsistent n_segments across cycles")
+
+        lengths = [int(m.shape[1]) for m in mats]
+        l_max = max(lengths)
+        if l_max <= 0:
+            raise ValueError("Encountered cycle with non-positive length")
+
+        x_new = np.linspace(0.0, 1.0, l_max)
+        resampled = np.zeros((len(mats), n_segments, l_max), dtype=float)
+
+        for i, m in enumerate(mats):
+            l_i = int(m.shape[1])
+            if l_i == l_max:
+                resampled[i] = m
+                continue
+            if l_i < 2:
+                # Degenerate: repeat the single value.
+                resampled[i] = np.repeat(m, repeats=l_max, axis=1)
+                continue
+            x_old = np.linspace(0.0, 1.0, l_i)
+            for s in range(n_segments):
+                resampled[i, s, :] = np.interp(x_new, x_old, m[s, :])
+
+        return np.mean(resampled, axis=0)
+
+    avg_flex = _resample_and_average(cycle_data.flex_mats)
+    avg_ext = _resample_and_average(cycle_data.ext_mats)
+    return avg_flex, avg_ext
 
 
 # =============================================================================
@@ -1005,14 +1090,29 @@ def main() -> int:
         # 5. Compute metric
         # 6. Plot
 
+        # 1. Load workbooks
         workbook = load_workbook(spec, args.source)
+        
+        # 2. Validate cycles
         validate_cycles(spec, workbook, args.phase)
 
-        # for spec in specs:
-        #     print(f"  - {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
-        #     print(f"    Resolved: {spec.resolved_path}")
+        # 3. Apply scaling
+        scaled = apply_intensity_scaling(workbook.intensities, args.scaling)
 
-        # (Output filename is printed once per invocation above.)
+        # 4. Extract and average cycles
+        cycle_data = extract_cycles(
+            intensities=scaled,
+            flexion_cycles=workbook.flexion_cycles,
+            extension_cycles=workbook.extension_cycles,
+            cycle_indices=spec.cycles,
+        )
+        avg_flex, avg_ext = average_cycles(cycle_data)
+
+        # Debug prints for pipeline progress (until metrics/plotting are implemented)
+        if args.phase in ("flexion", "both"):
+            print(f"    Averaged flexion shape: {avg_flex.shape}")
+        if args.phase in ("extension", "both"):
+            print(f"    Averaged extension shape: {avg_ext.shape}")
 
     print("\nPipeline not yet implemented. Exiting.")
     return 0
