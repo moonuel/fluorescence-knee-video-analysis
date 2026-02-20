@@ -879,8 +879,23 @@ def compute_com(avg_flex: np.ndarray, avg_ext: np.ndarray) -> Tuple[np.ndarray, 
     Returns:
         Tuple of (com_flex, com_ext) arrays.
     """
-    # TODO: Implement COM computation
-    raise NotImplementedError("compute_com not yet implemented")
+    def _com(avg: np.ndarray) -> np.ndarray:
+        # avg: (n_segments, n_frames)
+        if avg.size == 0:
+            return np.asarray([], dtype=float)
+        n_segments, _ = avg.shape
+        positions = np.arange(1, n_segments + 1, dtype=float)[:, None]  # (n_segments, 1)
+        weighted = (positions * avg).sum(axis=0)
+        totals = avg.sum(axis=0)
+        com = np.divide(
+            weighted,
+            totals,
+            out=np.full_like(weighted, np.nan, dtype=float),
+            where=totals != 0,
+        )
+        return com
+
+    return _com(avg_flex), _com(avg_ext)
 
 
 def compute_total(avg_flex: np.ndarray, avg_ext: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -893,8 +908,12 @@ def compute_total(avg_flex: np.ndarray, avg_ext: np.ndarray) -> Tuple[np.ndarray
     Returns:
         Tuple of (total_flex, total_ext) arrays.
     """
-    # TODO: Implement total intensity computation
-    raise NotImplementedError("compute_total not yet implemented")
+    def _total(avg: np.ndarray) -> np.ndarray:
+        if avg.size == 0:
+            return np.asarray([], dtype=float)
+        return avg.sum(axis=0).astype(float, copy=False)
+
+    return _total(avg_flex), _total(avg_ext)
 
 
 def compute_flux(
@@ -910,10 +929,66 @@ def compute_flux(
         anatomical_regions: DataFrame with region boundaries.
 
     Returns:
-        Tuple of ((flux_jc_ot_flex, flux_jc_ot_ext), (flux_ot_sb_flex, flux_ot_sb_ext)).
+        Tuple of ((flux_sb_ot_flex, flux_sb_ot_ext), (flux_ot_jc_flex, flux_ot_jc_ext)).
     """
-    # TODO: Implement flux computation (reuse logic from dmm_analysis.py)
-    raise NotImplementedError("compute_flux not yet implemented")
+    # Interpret anatomical_regions as 1-based inclusive segment index ranges.
+    # Expected regions: JC, OT, SB (case-insensitive).
+    df = anatomical_regions.copy()
+    df["Region"] = df["Region"].astype(str)
+
+    def _get_range(name: str) -> Tuple[int, int]:
+        m = df[df["Region"].str.upper() == name.upper()]
+        if m.empty:
+            raise ValueError(
+                f"Missing region {name!r} in Anatomical Regions sheet. "
+                f"Found: {sorted(df['Region'].str.upper().unique().tolist())}"
+            )
+        row = m.iloc[0]
+        s = int(row["Start"])
+        e = int(row["End"])
+        if s < 1 or e < 1 or s > e:
+            raise ValueError(f"Invalid range for region {name!r}: Start={s}, End={e}")
+        return s, e
+
+    jc_s, jc_e = _get_range("JC")
+    ot_s, ot_e = _get_range("OT")
+    sb_s, sb_e = _get_range("SB")
+
+    def _region_totals(avg: np.ndarray, s: int, e: int) -> np.ndarray:
+        if avg.size == 0:
+            return np.asarray([], dtype=float)
+        n_segments = int(avg.shape[0])
+        if e > n_segments:
+            raise ValueError(
+                f"Region range out of bounds for n_segments={n_segments}: Start={s}, End={e}"
+            )
+        return avg[s - 1 : e, :].sum(axis=0).astype(float, copy=False)
+
+    def _boundary_fluxes(avg: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Return (flux_sb_ot, flux_ot_jc) for a single phase.
+
+        Convention (mirrors dmm_analysis.py):
+        - SB->OT boundary: flux_sb_ot(t) = I_SB(t) - I_SB(t+1)
+        - OT->JC boundary: flux_ot_jc(t) = I_JC(t+1) - I_JC(t)
+
+        Both yield arrays of length (n_frames-1).
+        """
+        if avg.size == 0:
+            return np.asarray([], dtype=float), np.asarray([], dtype=float)
+        I_JC = _region_totals(avg, jc_s, jc_e)
+        I_SB = _region_totals(avg, sb_s, sb_e)
+        if I_JC.size < 2 or I_SB.size < 2:
+            return np.asarray([], dtype=float), np.asarray([], dtype=float)
+        flux_sb_ot = I_SB[:-1] - I_SB[1:]
+        flux_ot_jc = I_JC[1:] - I_JC[:-1]
+        return flux_sb_ot, flux_ot_jc
+
+    flux_sb_ot_flex, flux_ot_jc_flex = _boundary_fluxes(avg_flex)
+    flux_sb_ot_ext, flux_ot_jc_ext = _boundary_fluxes(avg_ext)
+    return (
+        (flux_sb_ot_flex, flux_sb_ot_ext),
+        (flux_ot_jc_flex, flux_ot_jc_ext),
+    )
 
 
 # =============================================================================
@@ -1077,6 +1152,9 @@ def main() -> int:
     )
     print(f"\nOutput: {out_stem}.pdf")
 
+    # Accumulate computed metric series for plotting (one entry per video)
+    video_metric_data: List[Tuple[VideoSpec, np.ndarray, np.ndarray]] = []
+
     # Process each item
     for spec in args.video_specs:
         print(f"\nProcessing {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
@@ -1108,11 +1186,33 @@ def main() -> int:
         )
         avg_flex, avg_ext = average_cycles(cycle_data)
 
-        # Debug prints for pipeline progress (until metrics/plotting are implemented)
-        if args.phase in ("flexion", "both"):
-            print(f"    Averaged flexion shape: {avg_flex.shape}")
-        if args.phase in ("extension", "both"):
-            print(f"    Averaged extension shape: {avg_ext.shape}")
+        # 5. Compute metric
+        if args.metric == "com":
+            metric_flex, metric_ext = compute_com(avg_flex, avg_ext)
+        elif args.metric == "total":
+            metric_flex, metric_ext = compute_total(avg_flex, avg_ext)
+        elif args.metric == "flux":
+            (flux_sb_ot_flex, flux_sb_ot_ext), (flux_ot_jc_flex, flux_ot_jc_ext) = compute_flux(
+                avg_flex, avg_ext, workbook.anatomical_regions
+            )
+
+            def _stack_flux(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+                # Represent flux as 2xT: [SB->OT; OT->JC] (matches dmm_analysis.py naming)
+                if a.size == 0 and b.size == 0:
+                    return np.zeros((2, 0), dtype=float)
+                if a.shape != b.shape:
+                    raise ValueError(f"Flux series length mismatch: {a.shape} vs {b.shape}")
+                return np.vstack([a, b]).astype(float, copy=False)
+
+            metric_flex = _stack_flux(flux_sb_ot_flex, flux_ot_jc_flex)
+            metric_ext = _stack_flux(flux_sb_ot_ext, flux_ot_jc_ext)
+        else:
+            raise ValueError(f"Unexpected metric: {args.metric!r}")
+
+        video_metric_data.append((spec, metric_flex, metric_ext))
+
+        # Debug prints for pipeline progress (until plotting is implemented)
+        print(f"    Metric='{args.metric}': flex shape={metric_flex.shape}, ext shape={metric_ext.shape}")
 
     print("\nPipeline not yet implemented. Exiting.")
     return 0
