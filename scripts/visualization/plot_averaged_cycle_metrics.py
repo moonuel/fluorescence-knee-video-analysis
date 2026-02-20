@@ -631,18 +631,83 @@ def load_workbook(spec: VideoSpec, source: SourceType) -> WorkbookData:
     )
 
 
-def validate_cycles(spec: VideoSpec, workbook: WorkbookData) -> None:
-    """Validate that requested cycle indices are in range.
+def validate_cycles(spec: VideoSpec, workbook: WorkbookData, phase: PhaseType) -> None:
+    """Validate that requested cycle indices are in range and frame intervals are valid.
+
+    Cycle indices are interpreted as 1-based (matching the CLI and typical worksheet labeling).
+    Frame intervals are expected to be 1-based inclusive, as written by
+    scripts/analysis/prepare_intensity_data.py.
 
     Args:
         spec: VideoSpec with cycles to validate.
         workbook: Loaded workbook data.
+        phase: Phase selection controlling which cycle tables are required.
 
     Raises:
-        ValueError: If any cycle index is out of range.
+        ValueError: If any requested cycle index is out of range for the required phase(s),
+            or if any referenced start/end frame is out of bounds.
     """
-    # TODO: Implement cycle validation
-    raise NotImplementedError("validate_cycles not yet implemented")
+    if spec.cycles is None:
+        return
+
+    n_flex = int(len(workbook.flexion_cycles))
+    n_ext = int(len(workbook.extension_cycles))
+    n_frames = int(workbook.intensities.shape[0])
+
+    if phase == "flexion":
+        max_cycle = n_flex
+    elif phase == "extension":
+        max_cycle = n_ext
+    else:
+        # For paired plots/metrics, require that a cycle exists in both phases.
+        max_cycle = min(n_flex, n_ext)
+
+    if max_cycle <= 0:
+        raise ValueError(
+            f"No cycles available for {spec.base!r} (phase={phase}). "
+            f"flexion_cycles={n_flex}, extension_cycles={n_ext}"
+        )
+
+    bad = [c for c in spec.cycles if c < 1 or c > max_cycle]
+    if bad:
+        raise ValueError(
+            f"Requested cycle indices out of range for {spec.base!r} (phase={phase}). "
+            f"Requested={spec.cycles}, valid=1..{max_cycle}. "
+            f"(flexion_cycles={n_flex}, extension_cycles={n_ext})"
+        )
+
+    def _check_intervals(df: pd.DataFrame, sheet_name: str, cyc_idxs: List[int]) -> None:
+        for cyc in cyc_idxs:
+            row = df.iloc[cyc - 1]
+            try:
+                start = int(row["start"])
+                end = int(row["end"])
+            except Exception as e:
+                raise ValueError(
+                    f"Malformed cycle row for {spec.base!r} in sheet {sheet_name!r}: "
+                    f"cycle={cyc}, row={row.to_dict()}"
+                ) from e
+
+            if start < 1 or end < 1:
+                raise ValueError(
+                    f"Invalid (start,end) in {sheet_name!r} for {spec.base!r}: "
+                    f"cycle={cyc}, start={start}, end={end} (must be >= 1)"
+                )
+            if start > end:
+                raise ValueError(
+                    f"Invalid (start,end) in {sheet_name!r} for {spec.base!r}: "
+                    f"cycle={cyc}, start={start} > end={end}"
+                )
+            if end > n_frames:
+                raise ValueError(
+                    f"Cycle frames out of bounds for {spec.base!r}: sheet={sheet_name!r}, "
+                    f"cycle={cyc}, end={end} exceeds n_frames={n_frames}"
+                )
+
+    if phase in ("flexion", "both"):
+        _check_intervals(workbook.flexion_cycles, SHEET_FLEXION_FRAMES, spec.cycles)
+    if phase in ("extension", "both"):
+        _check_intervals(workbook.extension_cycles, SHEET_EXTENSION_FRAMES, spec.cycles)
 
 
 # =============================================================================
@@ -940,7 +1005,8 @@ def main() -> int:
         # 5. Compute metric
         # 6. Plot
 
-        workbook = load_workbook(spec, "raw")
+        workbook = load_workbook(spec, args.source)
+        validate_cycles(spec, workbook, args.phase)
 
         # for spec in specs:
         #     print(f"  - {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
