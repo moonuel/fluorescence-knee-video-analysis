@@ -754,17 +754,10 @@ def main() -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
-    # Group by segment count
-    groups: Dict[int, List[VideoSpec]] = {}
+    # Process each item
     for spec in args.video_specs:
-        if spec.n_segments is None:
-            print(f"Error: Could not determine segment count for {spec.base!r}", file=sys.stderr)
-            return 1
-        groups.setdefault(spec.n_segments, []).append(spec)
-
-    # Process each group
-    for n_segs, specs in groups.items():
-        print(f"\nProcessing N={n_segs} group ({len(specs)} video(s))...")
+        print(f"\nProcessing {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
+        print(f"    Resolved: {spec.resolved_path}")
 
         # TODO: Implement full pipeline:
         # 1. Load workbooks
@@ -774,9 +767,9 @@ def main() -> int:
         # 5. Compute metric
         # 6. Plot
 
-        for spec in specs:
-            print(f"  - {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
-            print(f"    Resolved: {spec.resolved_path}")
+        # for spec in specs:
+        #     print(f"  - {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
+        #     print(f"    Resolved: {spec.resolved_path}")
 
         # Build output filename
         out_stem = build_output_filename(
@@ -785,7 +778,7 @@ def main() -> int:
             x_domain=args.x_domain,
             scaling=args.scaling,
             source=args.source,
-            n_segments=n_segs,
+            n_segments=spec.n_segments,
         )
         print(f"  Output: {out_stem}.pdf")
 
