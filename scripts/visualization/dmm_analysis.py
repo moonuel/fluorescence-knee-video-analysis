@@ -1,8 +1,8 @@
 """
-DMM knee video analysis: Compute intra-region center of mass (COM) within anatomical segments.
+DMM knee video analysis: Compute Regional center of mass (COM) within anatomical segments.
 
 This script loads DMM video and radial mask data, computes total pixel intensities per radial segment,
-partitions the data into three anatomical regions (JC, OT, SB), and plots the intra-region COM
+partitions the data into three anatomical regions (JC, OT, SB), and plots the Regional COM
 over a specified frame range.
 """
 
@@ -410,7 +410,7 @@ def split_three_parts_indexwise(total_sums: np.ndarray,
 
 def compute_centre_of_mass_region(region_sums: np.ndarray,
                                   positions: np.ndarray | None = None) -> np.ndarray:
-    """Compute intra-region COM per frame using specified position coordinates.
+    """Compute Regional COM per frame using specified position coordinates.
 
     Parameters
     ----------
@@ -769,7 +769,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
                                       figsize: tuple[float, float] | None = None,
                                       title: str | None = None,
                                       ylim: tuple[float, float] | None = None) -> None:
-    """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs angle for multiple cycles.
+    """Create 3 stacked subplots (SB, OT, JC) of Regional COM vs angle for multiple cycles.
 
     Parameters
     ----------
@@ -840,7 +840,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
 
         ax.set_ylabel(f"{name} COM")
         ax.grid(True, alpha=0.3)
-        ax.set_title(f"{name} Intra-region COM")
+        ax.set_title(f"{name} Regional COM")
 
         if ylim is not None:
             ax.set_ylim(ylim)
@@ -881,7 +881,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
         fig.suptitle(title)
     else:
         fig.suptitle(
-            f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {scaling_label} intensities)"
+            f"{video_title}: Regional COM for selected cycles (angle-based, based on {scaling_label} intensities)"
         )
 
     # Place legend on the top subplot (SB)
@@ -1056,7 +1056,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
                                         figsize: tuple[float, float] | None = None,
                                         title: str | None = None,
                                         ylim: tuple[float, float] | None = None) -> None:
-    """Create 3 stacked subplots (SB, OT, JC) of intra-region total intensity vs angle for multiple cycles.
+    """Create 3 stacked subplots (SB, OT, JC) of Regional total intensity vs angle for multiple cycles.
 
     Parameters
     ----------
@@ -1137,7 +1137,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         # else:
         ax.set_ylabel(f"{name} Total Intensity")
         ax.grid(True, alpha=0.3)
-        ax.set_title(f"{name} Intra-region Total Intensity")
+        ax.set_title(f"{name} Regional Total Intensity")
 
         if ylim is not None:
             ax.set_ylim(ylim)
@@ -1155,7 +1155,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         fig.suptitle(title)
     else:
         fig.suptitle(
-            f"{video_title}: Intra-region total intensity for selected cycles (angle-based, based on {scaling_label} intensities)"
+            f"{video_title}: Regional total intensity for selected cycles (angle-based, based on {scaling_label} intensities)"
         )
 
     # Filter x-axis labels to reduce visual clutter: keep only specific angles
@@ -1183,7 +1183,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
             ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region Total Intensity for selected cycles (angle-based, based on {scaling_label} intensities)")
+    fig.suptitle(f"{video_title}: Regional Total Intensity for selected cycles (angle-based, based on {scaling_label} intensities)")
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -1195,7 +1195,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     print(f"Saved figure to {save_path}")
 
-    plt.tight_layout()
+    # plt.tight_layout()
     plt.show()
 
 
