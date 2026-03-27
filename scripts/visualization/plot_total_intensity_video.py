@@ -35,6 +35,49 @@ import pandas as pd
 
 import matplotlib
 import matplotlib.pyplot as plt
+import mplcursors
+
+IntensityScaling = str  # Literal-like: {"raw","norm","rel"}
+
+
+def apply_intensity_scaling(intensities: np.ndarray, scaling: IntensityScaling) -> np.ndarray:
+    """Apply an intensity scaling mode to per-segment intensities.
+
+    Ported from [`apply_intensity_scaling()`](scripts/visualization/dmm_analysis.py:281),
+    adapted to this script's array layout.
+
+    Parameters
+    ----------
+    intensities:
+        Shape (n_frames, n_segments).
+    scaling: {"raw", "norm", "rel"}
+        - raw: no scaling
+        - norm: per-frame min-max normalization (0..100)
+        - rel: per-frame relative intensities: segment_intensity / total_knee_intensity
+    """
+    scaling = str(scaling).lower().strip()
+    if scaling == "raw":
+        return intensities
+
+    x = intensities.astype(float, copy=False)
+
+    if scaling == "norm":
+        out = x.copy()
+        mins = out.min(axis=1)
+        maxs = out.max(axis=1)
+        den = maxs - mins
+        valid = den > 0
+        out[valid] = 100.0 * (out[valid] - mins[valid, None]) / den[valid, None]
+        out[~valid] = 0.0
+        return out
+
+    if scaling == "rel":
+        totals = x.sum(axis=1)  # (n_frames,)
+        out = np.zeros_like(x, dtype=float)
+        np.divide(x, totals[:, None], out=out, where=totals[:, None] != 0)
+        return out
+
+    raise ValueError(f"Unexpected scaling mode: {scaling!r}")
 
 
 # =============================================================================
@@ -297,18 +340,73 @@ def _cycle_span_frames(workbook: WorkbookData, cycle_idx_1based: int) -> Tuple[i
     return s, e
 
 
+def _split_three_parts_indexwise(
+    data: np.ndarray,
+    region_ranges: Dict[str, Tuple[int, int]],
+) -> Dict[str, np.ndarray]:
+    """Split segmentwise data into anatomical regions using index ranges.
+
+    This mirrors the pattern in [`scripts/visualization/dmm_analysis.py`](scripts/visualization/dmm_analysis.py:1345)
+    where cycle data is split into regions indexwise before computing per-region metrics.
+    """
+    if data.ndim != 2:
+        raise ValueError(f"Expected 2D array (n_frames, n_segments), got shape={data.shape}")
+
+    n_segments = int(data.shape[1])
+    out: Dict[str, np.ndarray] = {}
+    for region_name, (s, e) in region_ranges.items():
+        if s < 0 or e < 0 or s > e or e > n_segments:
+            raise ValueError(
+                f"Invalid region range for {region_name!r}: ({s},{e}) with n_segments={n_segments}"
+            )
+        out[region_name] = data[:, s:e]
+    return out
+
+
+def _compute_region_intensities(
+    intensities: np.ndarray,
+    *,
+    region_ranges: Dict[str, Tuple[int, int]],
+) -> Dict[str, np.ndarray]:
+    """Per-frame intensity for each region (sum over segments in that region)."""
+    regions = _split_three_parts_indexwise(intensities, region_ranges)
+    return {k: np.sum(v, axis=1) for k, v in regions.items()}
+
+
 def plot_total_intensity(
     *,
     spec: VideoSpec,
     workbook: WorkbookData,
     source: str,
+    scaling: str,
     subplot_dims: Optional[Tuple[int, int]],
     out_path: Optional[Path],
     show: bool,
+    regions: bool,
+    no_total: bool,
 ) -> None:
-    intens = workbook.intensities
+    intens = apply_intensity_scaling(workbook.intensities, scaling)
     n_frames, n_segments = intens.shape
     total = np.sum(intens, axis=1)
+
+    region_series: Optional[Dict[str, np.ndarray]] = None
+    if regions:
+        # If no explicit anatomical mapping is available in this script, split the segment axis
+        # into three contiguous parts (indexwise), matching the intent of dmm_analysis.
+        i1 = n_segments // 3
+        i2 = (2 * n_segments) // 3
+        region_ranges = {
+            "SB": (i2, n_segments),
+            "OT": (i1, i2),
+            "JC": (0, i1),
+        }
+        region_series = _compute_region_intensities(intens, region_ranges=region_ranges)
+
+    if no_total and region_series is None:
+        raise ValueError(
+            "--no-total omits the total intensity curve; with --regions disabled there would be nothing to plot. "
+            "Enable --regions or omit --no-total."
+        )
 
     cycles_label: str
     if spec.cycles is None:
@@ -333,7 +431,15 @@ def plot_total_intensity(
 
     # Main plot
     x = np.arange(n_frames, dtype=int)
-    ax_main.plot(x, total, lw=1.6, color="C0")
+    if not no_total:
+        ax_main.plot(x, total, lw=1.6, color="C0", label="total")
+    if region_series is not None:
+        for i, (name, y) in enumerate(region_series.items()):
+            ax_main.plot(x, y, lw=1.1, alpha=0.9, color=f"C{i+1}", label=name)
+        ax_main.legend(loc="upper right", fontsize=9, frameon=True)
+    elif not no_total:
+        # Keep legend behavior minimal: only show legend when the total curve is labeled.
+        ax_main.legend(loc="upper right", fontsize=9, frameon=True)
     ax_main.set_xlabel("Frame index")
     ax_main.set_ylabel("Total intensity (sum over segments)")
     ax_main.grid(True, alpha=0.25)
@@ -397,7 +503,8 @@ def plot_total_intensity(
                 e = min(n_frames - 1, int(end))
                 xs = np.arange(s, e + 1, dtype=int)
                 ys = total[s : e + 1]
-                ax.plot(xs, ys, lw=1.2, color="C0")
+                if not no_total:
+                    ax.plot(xs, ys, lw=1.2, color="C0")
                 ax.set_title(f"Cycle {cyc}: frames {s}-{e}", fontsize=9)
                 ax.grid(True, alpha=0.2)
                 ax.tick_params(labelsize=8)
@@ -415,6 +522,7 @@ def plot_total_intensity(
         print(f"Saved: {out_path}")
 
     if show:
+        mplcursors.cursor(multiple=True)
         plt.show()
     else:
         plt.close(fig)
@@ -430,10 +538,13 @@ class CliArgs:
     video_spec: Optional[VideoSpec]
     list_mode: bool
     source: str
+    scaling: str
     out_dir: Path
     save: bool
     show: bool
     subplot_dims: Optional[Tuple[int, int]]
+    regions: bool
+    no_total: bool
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -465,10 +576,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Data source sheet to use. (default: raw)",
     )
     p.add_argument(
+        "--scaling",
+        choices=["raw", "norm", "rel"],
+        default="raw",
+        help="Intensity scaling applied after loading the workbook. (default: raw)",
+    )
+    p.add_argument(
         "--subplot-dims",
         type=str,
         default=None,
         help="When cycles are specified, create per-cycle subplots in an RxC grid, e.g. '2,3' or '2x3'.",
+    )
+    p.add_argument(
+        "--regions",
+        action="store_true",
+        help="Also plot per-region intensity traces in the main plot (3 indexwise regions).",
+    )
+    p.add_argument(
+        "--no-total",
+        action="store_true",
+        help=(
+            "Omit the total intensity curve. If used without --regions, nothing would be plotted and the script exits "
+            "with an error."
+        ),
     )
     p.add_argument(
         "--out-dir",
@@ -515,10 +645,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> CliArgs:
             video_spec=None,
             list_mode=True,
             source=a.source,
+            scaling=a.scaling,
             out_dir=a.out_dir,
             save=a.save,
             show=a.show,
             subplot_dims=dims,
+            regions=bool(a.regions),
+            no_total=bool(a.no_total),
         )
 
     if not a.video_spec:
@@ -531,10 +664,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> CliArgs:
         video_spec=spec,
         list_mode=False,
         source=a.source,
+        scaling=a.scaling,
         out_dir=a.out_dir,
         save=a.save,
         show=a.show,
         subplot_dims=dims,
+        regions=bool(a.regions),
+        no_total=bool(a.no_total),
     )
 
 
@@ -576,9 +712,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         spec=spec,
         workbook=wb,
         source=args.source,
+        scaling=args.scaling,
         subplot_dims=args.subplot_dims,
         out_path=out_path,
         show=args.show,
+        regions=args.regions,
+        no_total=args.no_total,
     )
     return 0
 
