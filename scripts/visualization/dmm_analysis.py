@@ -21,6 +21,36 @@ import argparse
 import warnings
 from collections.abc import Iterable
 import scipy
+import mplcursors
+
+
+def _parse_pair_of_floats(text: str, *, name: str) -> tuple[float, float]:
+    """Parse a CLI argument in the form "A,B" into a (A, B) float tuple.
+
+    Used for `--figsize` and `--ylim`.
+    """
+    raw = "" if text is None else str(text).strip()
+    parts = [p.strip() for p in raw.split(",")]
+    if len(parts) != 2 or any(p == "" for p in parts):
+        raise argparse.ArgumentTypeError(
+            f"{name} must be a single value in the form 'A,B' (e.g., '12,4'). Got: {text!r}"
+        )
+    try:
+        a = float(parts[0])
+        b = float(parts[1])
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(
+            f"{name} must contain numeric values in the form 'A,B' (e.g., '12,4'). Got: {text!r}"
+        ) from e
+    return (a, b)
+
+
+def parse_figsize_arg(text: str) -> tuple[float, float]:
+    return _parse_pair_of_floats(text, name="--figsize")
+
+
+def parse_ylim_arg(text: str) -> tuple[float, float]:
+    return _parse_pair_of_floats(text, name="--ylim")
 
 # Angles to show on x-axis (others will have blank labels)
 # IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
@@ -735,7 +765,10 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
                                       scaling_label: str,
                                       meta: 'KneeVideoMeta',
                                       blocks: List[Dict],
-                                      cycles_str: str) -> None:
+                                      cycles_str: str,
+                                      figsize: tuple[float, float] | None = None,
+                                      title: str | None = None,
+                                      ylim: tuple[float, float] | None = None) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region COM vs angle for multiple cycles.
 
     Parameters
@@ -753,7 +786,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
     meta : KneeVideoMeta
         Video metadata.
     """
-    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(15, 10))
+    fig, axes = plt.subplots(3, 1, sharex=True, figsize=figsize or (15, 10))
     region_order = ["SB", "OT", "JC"]  # top to bottom
 
     # Create color map for consistent cycle coloring
@@ -809,6 +842,9 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region COM")
 
+        if ylim is not None:
+            ax.set_ylim(ylim)
+
     # Set x-axis limits to eliminate empty space (include placeholder blocks)
     if blocks:
         min_x = min(b["x_positions"][0] for b in blocks)
@@ -841,7 +877,12 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
             ax.set_xticklabels(filtered_tick_labels)
 
     axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {scaling_label} intensities)")
+    if title is not None:
+        fig.suptitle(title)
+    else:
+        fig.suptitle(
+            f"{video_title}: Intra-region COM for selected cycles (angle-based, based on {scaling_label} intensities)"
+        )
 
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
@@ -866,7 +907,10 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
                                    scaling_label: str,
                                    meta: 'KneeVideoMeta',
                                    blocks: List[Dict],
-                                   cycles_str: str) -> None:
+                                   cycles_str: str,
+                                   figsize: tuple[float, float] | None = None,
+                                   title: str | None = None,
+                                   ylim: tuple[float, float] | None = None) -> None:
     """Create single subplot of boundary flux vs angle for multiple cycles.
 
     Parameters
@@ -885,7 +929,7 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     meta : KneeVideoMeta
         Video metadata.
     """
-    fig, ax = plt.subplots(1, 1, figsize=(15, 6))
+    fig, ax = plt.subplots(1, 1, figsize=figsize or (15, 6))
 
     # Fixed colors for boundaries
     boundary_colors = {'SB->OT': 'blue', 'OT->JC': 'red'}
@@ -972,9 +1016,17 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
     ax.set_xlabel("Knee Angle (°)")
     ax.set_ylabel("Boundary Flux (signed)")
-    ax.set_title(f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {scaling_label} intensities)")
+    if title is not None:
+        ax.set_title(title)
+    else:
+        ax.set_title(
+            f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {scaling_label} intensities)"
+        )
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best", fontsize=8)
+
+    if ylim is not None:
+        ax.set_ylim(ylim)
 
     # Set x-axis limits to eliminate empty space (include placeholder blocks)
     if blocks:
@@ -1000,7 +1052,10 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
                                         scaling_label: str,
                                         meta: 'KneeVideoMeta',
                                         blocks: List[Dict],
-                                        cycles_str: str) -> None:
+                                        cycles_str: str,
+                                        figsize: tuple[float, float] | None = None,
+                                        title: str | None = None,
+                                        ylim: tuple[float, float] | None = None) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of intra-region total intensity vs angle for multiple cycles.
 
     Parameters
@@ -1018,7 +1073,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     meta : KneeVideoMeta
         Video metadata.
     """
-    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(15, 10))
+    fig, axes = plt.subplots(3, 1, sharex=True, figsize=figsize or (15, 10))
     region_order = ["SB", "OT", "JC"]  # top to bottom
 
     # Create color map for consistent cycle coloring
@@ -1084,12 +1139,24 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Intra-region Total Intensity")
 
+        if ylim is not None:
+            ax.set_ylim(ylim)
+
     # Set x-axis limits to eliminate empty space (include placeholder blocks)
     if blocks:
         min_x = min(b["x_positions"][0] for b in blocks)
         max_x = max(b["x_positions"][-1] for b in blocks)
         for ax in axes:
             ax.set_xlim(min_x, max_x)
+
+    axes[-1].set_xlabel("Knee Angle (°)")
+
+    if title is not None:
+        fig.suptitle(title)
+    else:
+        fig.suptitle(
+            f"{video_title}: Intra-region total intensity for selected cycles (angle-based, based on {scaling_label} intensities)"
+        )
 
     # Filter x-axis labels to reduce visual clutter: keep only specific angles
     filtered_tick_labels = []
@@ -1273,7 +1340,10 @@ def main(
     export_path: str,
     cycles_str: str,
     scaling: IntensityScaling,
-    averaged: bool
+    averaged: bool,
+    figsize: tuple[float, float] | None = None,
+    title: str | None = None,
+    ylim: tuple[float, float] | None = None,
 ):
 
     print(f"Loading video: {knee_cond} {id} (N{nsegs})")
@@ -1421,8 +1491,9 @@ def main(
         #     )
         #     export_to_excel(all_metric_data, meta, phase, metric, normalize, n_interp_samples, out_path)
         plot_intra_region_coms_angle_mode(
-            all_metric_data, phase, n_interp_samples, video_title, scaling_label, knee_meta,
+            all_metric_data, phase, n_interp_samples, video_title, scaling, knee_meta,
             blocks=blocks, cycles_str=cycles_str,
+            figsize=figsize, title=title, ylim=ylim,
         )
     elif metric == "total":
         # if export_xlsx:
@@ -1435,11 +1506,13 @@ def main(
         plot_intra_region_totals_angle_mode(
             all_metric_data, phase, n_interp_samples, video_title, scaling, knee_meta,
             blocks=blocks, cycles_str=cycles_str,
+            figsize=figsize, title=title, ylim=ylim,
         )
     elif metric == "flux":
         plot_boundary_flux_angle_mode(
             all_metric_data, phase, n_interp_samples, video_title, scaling, knee_meta,
             blocks=blocks, cycles_str=cycles_str,
+            figsize=figsize, title=title, ylim=ylim,
         )
 
 
@@ -1448,7 +1521,14 @@ def create_parser() -> argparse.ArgumentParser:
     Create an argument parser for the script.
     """
 
-    parser = argparse.ArgumentParser(description="DMM knee video analysis")
+    parser = argparse.ArgumentParser(
+        description="DMM knee video analysis",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python scripts/visualization/dmm_analysis.py dmm-0w 1195 64 both \\\n+            --metric total --figsize 12,4 --title \"My Plot\" --ylim 0,100\n"
+        ),
+    )
 
     # Positional arguments
     parser.add_argument("condition", help="Condition (e.g., normal, aging, dmm-0w)")
@@ -1481,6 +1561,26 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--averaged", action="store_true",
         help="Plot averaged curves (angle mode only)",
+    )
+
+    # Plot tuning
+    parser.add_argument(
+        "--figsize",
+        type=parse_figsize_arg,
+        default=None,
+        help="Matplotlib figure size in inches, as W,H (e.g., 12,4). (default: unchanged)",
+    )
+    parser.add_argument(
+        "--title",
+        type=str,
+        default=None,
+        help="Plot title text. Use shell quoting for spaces. (default: unchanged)",
+    )
+    parser.add_argument(
+        "--ylim",
+        type=parse_ylim_arg,
+        default=None,
+        help="Y-axis limits as YMIN,YMAX (e.g., 0,100). (default: unchanged)",
     )
 
     # Excel export
@@ -1526,4 +1626,7 @@ if __name__ == "__main__":
         cycles_str,
         args.scaling,
         args.averaged,
+        args.figsize,
+        args.title,
+        args.ylim,
     )

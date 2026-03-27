@@ -48,6 +48,256 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
+
+def _parse_pair_of_floats(text: str, *, name: str) -> tuple[float, float]:
+    """Parse a CLI argument in the form "A,B" into a (A, B) float tuple.
+
+    Used for `--figsize` and `--ylim`.
+    """
+    raw = "" if text is None else str(text).strip()
+    parts = [p.strip() for p in raw.split(",")]
+    if len(parts) != 2 or any(p == "" for p in parts):
+        raise argparse.ArgumentTypeError(
+            f"{name} must be a single value in the form 'A,B' (e.g., '12,4'). Got: {text!r}"
+        )
+    try:
+        a = float(parts[0])
+        b = float(parts[1])
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(
+            f"{name} must contain numeric values in the form 'A,B' (e.g., '12,4'). Got: {text!r}"
+        ) from e
+    return (a, b)
+
+
+def parse_figsize_arg(text: str) -> tuple[float, float]:
+    return _parse_pair_of_floats(text, name="--figsize")
+
+
+def parse_ylim_arg(text: str) -> tuple[float, float]:
+    return _parse_pair_of_floats(text, name="--ylim")
+
+
+# =============================================================================
+# COM SUMMARY STATISTICS (ported from plot_com_cycles_from_heatmaps.py)
+# =============================================================================
+
+def compute_com_stats(com_series: pd.Series) -> Dict[str, float]:
+    """Compute mean, sample SD, and excursion range of COM values.
+
+    NaN values are ignored.
+
+    Args:
+        com_series: Series of COM values.
+
+    Returns:
+        Dict with keys: mean, sd, range.
+    """
+    values = com_series.values.astype(float)
+    values = values[~np.isnan(values)]
+
+    if len(values) == 0:
+        return {"mean": np.nan, "sd": np.nan, "range": np.nan}
+
+    mean_val = float(np.mean(values))
+    sd_val = float(np.std(values, ddof=1))
+    range_val = float(np.max(values) - np.min(values))
+
+    return {"mean": mean_val, "sd": sd_val, "range": range_val}
+
+
+def compute_oscillation_indices(com_series: pd.Series) -> Dict[str, float]:
+    """Compute mean absolute frame-to-frame COM change for full/flex/ext.
+
+    The input is expected to be indexed so that flexion samples have negative
+    indices and extension samples have non-negative indices; the function sorts
+    by index and splits accordingly.
+
+    NaN values are ignored.
+
+    Args:
+        com_series: Series of COM values (sorted by index).
+
+    Returns:
+        Dict with keys: osc_full, osc_flex, osc_ext.
+    """
+    com_series = com_series.sort_index()
+
+    flex_series = com_series[com_series.index < 0]
+    ext_series = com_series[com_series.index >= 0]
+
+    def _osc(values: np.ndarray) -> float:
+        values = values.astype(float)
+        values = values[~np.isnan(values)]
+        if values.size < 2:
+            return np.nan
+        diffs = np.diff(values)
+        diffs = diffs[~np.isnan(diffs)]
+        if diffs.size == 0:
+            return np.nan
+        return float(np.mean(np.abs(diffs)))
+
+    osc_full = _osc(com_series.values)
+    osc_flex = _osc(flex_series.values)
+    osc_ext = _osc(ext_series.values)
+
+    return {"osc_full": osc_full, "osc_flex": osc_flex, "osc_ext": osc_ext}
+
+
+def build_signed_com_series(metric_flex: np.ndarray, metric_ext: np.ndarray, *, name: str) -> pd.Series:
+    """Build a COM `pd.Series` with a signed integer index.
+
+    Flexion samples are indexed as negative integers and extension samples as
+    non-negative integers. This convention allows `compute_oscillation_indices()`
+    to split flexion/extension by the index sign.
+    """
+
+    flex = np.asarray(metric_flex, dtype=float)
+    ext = np.asarray(metric_ext, dtype=float)
+
+    # index: flexion -> negative, extension -> non-negative
+    flex_idx = np.arange(-flex.size, 0, dtype=int)
+    ext_idx = np.arange(0, ext.size, dtype=int)
+
+    return pd.Series(
+        data=np.concatenate([flex, ext], axis=0),
+        index=np.concatenate([flex_idx, ext_idx], axis=0),
+        name=name,
+        dtype=float,
+    )
+
+
+def append_com_stats_rows(
+    com_stats_rows: list[dict[str, object]],
+    *,
+    spec,
+    metric_flex: np.ndarray,
+    metric_ext: np.ndarray,
+) -> None:
+    """Append COM statistics rows for raw and 50/50-rescaled curves."""
+
+    cycles_label = "all" if spec.cycles is None else ",".join(str(i) for i in spec.cycles)
+    video_label = (
+        f"{int(spec.video_id):04d}N{int(spec.n_segments)}"
+        if spec.video_id is not None and spec.n_segments is not None
+        else spec.base
+    )
+
+    com_series = build_signed_com_series(metric_flex, metric_ext, name="com")
+    stats = compute_com_stats(com_series)
+    osc = compute_oscillation_indices(com_series)
+    com_stats_rows.append({"video": video_label, "cycles": cycles_label, **stats, **osc})
+
+    # Also compute stats on 50/50 equal-duration rescaled COM curves.
+    flex_50, ext_50 = rescale_to_equal_duration_50_50(metric_flex, metric_ext)
+    com_series_50 = build_signed_com_series(flex_50, ext_50, name="com_50_50")
+    stats_50 = compute_com_stats(com_series_50)
+    osc_50 = compute_oscillation_indices(com_series_50)
+    com_stats_rows.append(
+        {
+            "video": f"{video_label} (50/50)",
+            "cycles": cycles_label,
+            **stats_50,
+            **osc_50,
+        }
+    )
+
+
+def rescale_to_equal_duration_50_50(
+    flex: np.ndarray, ext: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Resample flexion and extension arrays to equal duration (50/50).
+
+    Both phases are resampled to the same length L = max(len(flex), len(ext)).
+    This mirrors the equal-duration (50/50) temporal rescaling used in
+    [`scripts/analysis/generate_spatiotemporal_heatmaps.py:540`](scripts/analysis/generate_spatiotemporal_heatmaps.py:540),
+    but applied to 1D COM curves.
+
+    Args:
+        flex: Flexion COM array (T_f,).
+        ext: Extension COM array (T_e,).
+
+    Returns:
+        (flex_50, ext_50) each with shape (L,).
+    """
+    flex = np.asarray(flex, dtype=float)
+    ext = np.asarray(ext, dtype=float)
+
+    l_f, l_e = int(flex.size), int(ext.size)
+    l = max(l_f, l_e)
+
+    def _resample(x: np.ndarray, l_new: int) -> np.ndarray:
+        if l_new <= 0:
+            return np.asarray([], dtype=float)
+        if x.size == 0:
+            return np.full((l_new,), np.nan, dtype=float)
+        if x.size == 1:
+            return np.full((l_new,), float(x[0]), dtype=float)
+        if x.size == l_new:
+            return x.astype(float, copy=False)
+        x_old = np.linspace(0.0, 1.0, x.size)
+        x_new = np.linspace(0.0, 1.0, l_new)
+        return np.interp(x_new, x_old, x.astype(float))
+
+    return _resample(flex, l), _resample(ext, l)
+
+
+def _format_float(x: float, ndigits: int = 4) -> str:
+    if x is None or (isinstance(x, float) and np.isnan(x)):
+        return "nan"
+    return f"{float(x):.{ndigits}f}"
+
+
+def print_com_statistics_table(
+    rows: List[Dict[str, Union[str, int, float]]],
+    title: str = "COM summary statistics",
+) -> None:
+    """Print a simple fixed-width table of COM stats to the terminal."""
+    if not rows:
+        print(f"\n{title}: (no rows)")
+        return
+
+    columns = [
+        "video",
+        "cycles",
+        "mean",
+        "sd",
+        "range",
+        "osc_full",
+        "osc_flex",
+        "osc_ext",
+    ]
+
+    # Convert to strings first (for width computation)
+    str_rows: List[Dict[str, str]] = []
+    for r in rows:
+        str_rows.append(
+            {
+                "video": str(r.get("video", "")),
+                "cycles": str(r.get("cycles", "")),
+                "mean": _format_float(float(r.get("mean", np.nan))),
+                "sd": _format_float(float(r.get("sd", np.nan))),
+                "range": _format_float(float(r.get("range", np.nan))),
+                "osc_full": _format_float(float(r.get("osc_full", np.nan))),
+                "osc_flex": _format_float(float(r.get("osc_flex", np.nan))),
+                "osc_ext": _format_float(float(r.get("osc_ext", np.nan))),
+            }
+        )
+
+    widths: Dict[str, int] = {}
+    for c in columns:
+        widths[c] = max(len(c), max(len(sr[c]) for sr in str_rows))
+
+    def _row_line(values: Dict[str, str]) -> str:
+        parts = [values[c].ljust(widths[c]) for c in columns]
+        return "  ".join(parts)
+
+    print(f"\n{title}:")
+    print(_row_line({c: c for c in columns}))
+    print(_row_line({c: "-" * widths[c] for c in columns}))
+    for sr in str_rows:
+        print(_row_line(sr))
+
 # =============================================================================
 # TYPE DEFINITIONS
 # =============================================================================
@@ -266,6 +516,11 @@ VIDEO_SPEC examples:
   308N64                   Video 308, 64 segments, all cycles (default)
   0308N64intensities.xlsx:cycles=1,2   Explicit basename
   1339N64:cycles=all:label=aging-1339  Custom legend label
+
+Plot tuning example:
+  python scripts/visualization/plot_averaged_cycle_metrics.py \
+    1339N64:cycles=1,2,3 --metric com --phase both --scaling norm --source raw \
+    --figsize 12,4 --title "My Plot" --ylim 0,100
         """,
     )
 
@@ -379,6 +634,26 @@ VIDEO_SPEC examples:
         help="Export averaged intensities and metrics to Excel",
     )
 
+    # Plot tuning
+    parser.add_argument(
+        "--figsize",
+        type=parse_figsize_arg,
+        default=None,
+        help="Matplotlib figure size in inches, as W,H (e.g., 12,4). (default: unchanged)",
+    )
+    parser.add_argument(
+        "--title",
+        type=str,
+        default=None,
+        help="Plot title text. Use shell quoting for spaces. (default: unchanged)",
+    )
+    parser.add_argument(
+        "--ylim",
+        type=parse_ylim_arg,
+        default=None,
+        help="Y-axis limits as YMIN,YMAX (e.g., 0,100). (default: unchanged)",
+    )
+
     return parser
 
 
@@ -397,6 +672,9 @@ class CliArgs:
     save: bool
     show: bool
     export_xlsx: bool
+    figsize: Optional[Tuple[float, float]]
+    title: Optional[str]
+    ylim: Optional[Tuple[float, float]]
 
 
 def parse_args(argv: Optional[List[str]] = None) -> CliArgs:
@@ -426,6 +704,9 @@ def parse_args(argv: Optional[List[str]] = None) -> CliArgs:
             save=args.save,
             show=args.show,
             export_xlsx=args.export_xlsx,
+            figsize=args.figsize,
+            title=args.title,
+            ylim=args.ylim,
         )
 
     # Otherwise, VIDEO_SPEC is required
@@ -454,6 +735,9 @@ def parse_args(argv: Optional[List[str]] = None) -> CliArgs:
         save=args.save,
         show=args.show,
         export_xlsx=args.export_xlsx,
+        figsize=args.figsize,
+        title=args.title,
+        ylim=args.ylim,
     )
 
 
@@ -1005,6 +1289,9 @@ def plot_metric_angle_domain(
     n_interp_samples: int,
     out_path: Optional[Path],
     show: bool,
+    figsize: Optional[Tuple[float, float]] = None,
+    title: Optional[str] = None,
+    ylim: Optional[Tuple[float, float]] = None,
 ) -> None:
     """Plot metric curves in angle domain.
 
@@ -1067,7 +1354,7 @@ def plot_metric_angle_domain(
     flex_tick_pos = (tick_angles - 30.0) / (135.0 - 30.0) * (n_interp_samples - 1)
     ext_tick_pos = n_interp_samples + (135.0 - tick_angles) / (135.0 - 30.0) * (n_interp_samples - 1)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=figsize or (10, 5))
     ax.grid(True, alpha=0.3)
 
     # Metric-specific labeling
@@ -1081,6 +1368,9 @@ def plot_metric_angle_domain(
         y_label = "Flux"
         title_metric = "Boundary Flux"
 
+    if ylim is not None:
+        ax.set_ylim(ylim)
+
     # Deterministic ordering: plot in input order
     # Use Matplotlib's default color cycle, but keep a single color per dataset
     # (i.e., flexion + extension share the same color).
@@ -1088,6 +1378,12 @@ def plot_metric_angle_domain(
     for i, (spec, metric_flex, metric_ext) in enumerate(video_data):
         color = color_cycle[i % len(color_cycle)] if color_cycle else None
         base_label = spec.label or spec.base
+
+        "Quick patch: in COM mode, force specific video IDs to dashed lines."
+        # Easiest implementation: match on digits in spec.base (e.g., '1339', '1342', '1358').
+        dashed_ids = ("1339", "1342", "1358", "1357")
+        use_dashed = metric == "com" and any(v in str(spec.base) for v in dashed_ids)
+        ls = "--" if use_dashed else "-"
 
         if metric != "flux":
             if phase in ("flexion", "both"):
@@ -1097,7 +1393,7 @@ def plot_metric_angle_domain(
                     x_flex,
                     y_f,
                     label=base_label,
-                    linestyle="-",
+                    linestyle=ls,
                     linewidth=2,
                     color=color,
                 )
@@ -1109,7 +1405,7 @@ def plot_metric_angle_domain(
                     x_ext if phase == "both" else x_flex,
                     y_e,
                     label="_nolegend_",
-                    linestyle="-",
+                    linestyle=ls,
                     linewidth=2,
                     color=color,
                 )
@@ -1163,7 +1459,10 @@ def plot_metric_angle_domain(
 
     ax.set_xlabel("Knee Angle (°)")
     ax.set_ylabel(y_label)
-    ax.set_title(f"Averaged {title_metric} vs Knee Angle ({phase}, scaling={scaling})")
+    if title is not None:
+        ax.set_title(title)
+    else:
+        ax.set_title(f"Averaged {title_metric} vs Knee Angle ({phase}, scaling={scaling})")
 
     if phase == "flexion":
         ax.set_xlim(0, n_interp_samples - 1)
@@ -1351,18 +1650,21 @@ def main() -> int:
     # Accumulate computed metric series for plotting (one entry per video)
     video_metric_data: List[Tuple[VideoSpec, np.ndarray, np.ndarray]] = []
 
+    # Optional: COM statistics table rows (computed only in --metric com mode)
+    com_stats_rows: List[Dict[str, Union[str, int, float]]] = []
+
     # Process each item
     for spec in args.video_specs:
         print(f"\nProcessing {spec.base} (cycles={spec.cycles or 'all'}, label={spec.label or 'default'})")
         print(f"    Resolved: {spec.resolved_path}")
 
-        # TODO: Implement full pipeline:
         # 1. Load workbooks
         # 2. Validate cycles
         # 3. Apply scaling
         # 4. Extract and average cycles
         # 5. Compute metric
         # 6. Plot
+        # 7. Save TODO
 
         # 1. Load workbooks
         workbook = load_workbook(spec, args.source)
@@ -1385,6 +1687,24 @@ def main() -> int:
         # 5. Compute metric
         if args.metric == "com":
             metric_flex, metric_ext = compute_com(avg_flex, avg_ext)
+
+            # -----------------------------------------------------------------
+            # COM statistics (ported from plot_com_cycles_from_heatmaps.py)
+            # Build a single series with a signed index so we can split flex/ext
+            # by index sign in compute_oscillation_indices().
+            # -----------------------------------------------------------------
+            cycles_label = "all" if spec.cycles is None else ",".join(str(i) for i in spec.cycles)
+            video_label = (
+                f"{int(spec.video_id):04d}N{int(spec.n_segments)}"
+                if spec.video_id is not None and spec.n_segments is not None
+                else spec.base
+            )
+            append_com_stats_rows(
+                com_stats_rows,
+                spec=spec,
+                metric_flex=metric_flex,
+                metric_ext=metric_ext,
+            )
         elif args.metric == "total":
             metric_flex, metric_ext = compute_total(avg_flex, avg_ext)
         elif args.metric == "flux":
@@ -1409,6 +1729,10 @@ def main() -> int:
         # Debug prints for pipeline progress (until plotting is implemented)
         print(f"    Metric='{args.metric}': flex shape={metric_flex.shape}, ext shape={metric_ext.shape}")
 
+    # Print COM statistics table before plotting (terminal export for now)
+    if args.metric == "com":
+        print_com_statistics_table(com_stats_rows, title="COM statistics (averaged cycle metric)")
+
     # 6. Plot
     out_path: Optional[Path]
     if args.save:
@@ -1425,6 +1749,9 @@ def main() -> int:
             n_interp_samples=args.n_interp_samples,
             out_path=out_path,
             show=args.show,
+            figsize=args.figsize,
+            title=args.title,
+            ylim=args.ylim,
         )
         return 0
 
