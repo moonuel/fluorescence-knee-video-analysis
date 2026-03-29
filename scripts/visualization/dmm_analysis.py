@@ -970,7 +970,7 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     # Display convention:
     # - raw/norm: plot in native units
     # - rel: stored as fractions in [0, 1] but displayed as percentages
-    # rel_display_scale = 100.0 if norm_label == "rel" else 1.0
+    rel_display_scale = 100.0 if scaling_label == "rel" else 1.0
 
     for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
         cycle_num = legend_label.split()[1]
@@ -983,11 +983,8 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
         
         # Plot both boundaries
         for boundary_name in ['SB->OT', 'OT->JC']:
-            flux_series = flux_data[boundary_name]
+            flux_series = rel_display_scale * flux_data[boundary_name]
             color = boundary_colors[boundary_name]
-
-            # For relative scaling, display as percentages
-            # flux_series = rel_display_scale * flux_series
             
             # Create label with scalar metrics
             label_key = (cycle_key, boundary_name)
@@ -1012,7 +1009,8 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
 
     ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
     ax.set_xlabel("Knee Angle (°)")
-    ax.set_ylabel("Boundary Flux (signed)")
+    y_unit_suffix = " (%)" if scaling_label == "rel" else ""
+    ax.set_ylabel(f"Boundary Flux (signed){y_unit_suffix}")
     if title is not None:
         ax.set_title(title)
     else:
@@ -1100,10 +1098,13 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         # - rel: stored as fractions in [0, 1] but displayed as percentages
         # rel_display_scale = 100.0 if norm_label == "rel" else 1.0
 
+        # Display convention:
+        # - raw/norm: plot in native units
+        # - rel: stored as fractions in [0, 1] but displayed as percentages
+        rel_display_scale = 100.0 if scaling_label == "rel" else 1.0
+
         for cycle_total_data, x_positions, angles, legend_label, cycle in all_cycle_data:
-            total = cycle_total_data[name]
-            # if norm_label == "rel":
-            #     total = rel_display_scale * total
+            total = rel_display_scale * cycle_total_data[name]
             cycle_num = legend_label.split()[1]
             cycle_key = f"Cycle {cycle_num}"
             color = color_map[cycle_key]
@@ -1129,10 +1130,8 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
                 transition_line = b["x_positions"][n_interp_samples - 1]
                 ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
 
-        # if norm_label == "rel":
-        #     ax.set_ylabel(f"{name} Total Intensity (%)")
-        # else:
-        ax.set_ylabel(f"{name} Total Intensity")
+        y_unit_suffix = " (%)" if scaling_label == "rel" else ""
+        ax.set_ylabel(f"{name} Total Intensity{y_unit_suffix}")
         ax.grid(True, alpha=0.3)
         ax.set_title(f"{name} Regional Total Intensity")
 
