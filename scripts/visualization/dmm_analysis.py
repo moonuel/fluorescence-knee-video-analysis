@@ -934,7 +934,7 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
     # Create color map for consistent cycle styling
     unique_cycles = set()
     for _, _, _, legend_label, _ in all_flux_data:
-        cycle_num = legend_label.split()[1]
+        cycle_num = legend_label.split()[1].rstrip(",")
         unique_cycles.add(f"Cycle {cycle_num}")
     
     # Use line styles to distinguish cycles
@@ -964,18 +964,82 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
             transition_line = b["x_positions"][n_interp_samples - 1]
             ax.axvline(transition_line, color='gray', linestyle='--', linewidth=1)
 
-    # Track which (cycle, boundary) combinations have been labeled
-    labeled_entries = set()
+    # Legend should contain exactly two entries total (one per boundary type).
+    labeled_boundaries: set[str] = set()
 
     # Display convention:
     # - raw/norm: plot in native units
     # - rel: stored as fractions in [0, 1] but displayed as percentages
     rel_display_scale = 100.0 if scaling_label == "rel" else 1.0
 
+    # In-plot annotations use blended transform (x in data coords, y in axes fraction)
+    xaxis_transform = ax.get_xaxis_transform()
+    annotated_cycles: set[str] = set()
+
     for flux_data, x_positions, angles, legend_label, cycle in all_flux_data:
-        cycle_num = legend_label.split()[1]
+        cycle_num = legend_label.split()[1].rstrip(",")
         cycle_key = f"Cycle {cycle_num}"
         line_style = cycle_line_styles[cycle_key]
+
+        # Cycle label: horizontally centered within this cycle's x-range, near top of axes.
+        # Uses axes-fraction y so it stays near the top regardless of y-limits.
+        if cycle_key not in annotated_cycles:
+            x0 = float(np.min(x_positions))
+            x1 = float(np.max(x_positions))
+            x_mid = 0.5 * (x0 + x1)
+            ax.text(
+                x_mid,
+                0.98,
+                cycle_key,
+                transform=xaxis_transform,
+                ha="center",
+                va="top",
+                fontsize=10,
+                color="0.2",
+            )
+            annotated_cycles.add(cycle_key)
+
+        # Phase/frame label(s): centered within phase x-range, near bottom of axes.
+        # Frame indices come from the Cycle object (convert to 1-based for display).
+        if phase in {"flexion", "both"}:
+            flex_start = int(cycle.flex.s) + 1
+            flex_end = int(cycle.flex.e) + 1
+            if phase == "flexion":
+                flex_x0 = float(np.min(x_positions))
+                flex_x1 = float(np.max(x_positions))
+            else:
+                flex_x0 = float(np.min(x_positions[:n_interp_samples]))
+                flex_x1 = float(np.max(x_positions[:n_interp_samples]))
+            ax.text(
+                0.5 * (flex_x0 + flex_x1),
+                0.04,
+                f"Frames: {flex_start}-{flex_end}",
+                transform=xaxis_transform,
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color="0.35",
+            )
+
+        if phase in {"extension", "both"}:
+            ext_start = int(cycle.ext.s) + 1
+            ext_end = int(cycle.ext.e) + 1
+            if phase == "extension":
+                ext_x0 = float(np.min(x_positions))
+                ext_x1 = float(np.max(x_positions))
+            else:
+                ext_x0 = float(np.min(x_positions[n_interp_samples:]))
+                ext_x1 = float(np.max(x_positions[n_interp_samples:]))
+            ax.text(
+                0.5 * (ext_x0 + ext_x1),
+                0.04,
+                f"Frames: {ext_start}-{ext_end}",
+                transform=xaxis_transform,
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                color="0.35",
+            )
         
         # Get scalar metrics from the flux data
         total_f = flux_data.get('total_flux')
@@ -985,27 +1049,52 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
         for boundary_name in ['SB->OT', 'OT->JC']:
             flux_series = rel_display_scale * flux_data[boundary_name]
             color = boundary_colors[boundary_name]
-            
-            # Create label with scalar metrics
-            label_key = (cycle_key, boundary_name)
-            if label_key not in labeled_entries:
-                if total_f is not None and net_f is not None:
-                    label = (
-                        f"{legend_label} {boundary_name} (total={total_f:.3f}, "
-                        f"net={net_f:.3f})"
-                    )
-                else:
-                    label = f"{legend_label} {boundary_name}"
-                labeled_entries.add(label_key)
-            else:
-                label = ""
-            
-            ax.plot(x_positions, flux_series, label=label, color=color, linestyle=line_style, alpha=0.8)
+
+            # Legend labeling: exactly two entries total (one per boundary), no per-cycle labels.
+            line_label = boundary_name if boundary_name not in labeled_boundaries else "_nolegend_"
+            labeled_boundaries.add(boundary_name)
+
+            ax.plot(
+                x_positions,
+                flux_series,
+                label=line_label,
+                color=color,
+                linestyle=line_style,
+                alpha=0.8,
+            )
 
     # Set x-axis ticks and labels
     if all_tick_positions:
         ax.set_xticks(all_tick_positions)
-        ax.set_xticklabels(all_tick_labels)
+        # Reduce visual clutter: only label IMPORTANT_ANGLE_LABELS; keep other ticks but hide labels.
+        # Robust to ints/floats/strings and degree-symbol formatting.
+        try:
+            important = set(int(a) for a in IMPORTANT_ANGLE_LABELS) if IMPORTANT_ANGLE_LABELS else set()
+        except Exception:
+            important = set()
+
+        if important and all_tick_labels:
+            filtered_tick_labels: list[str] = []
+            for label in all_tick_labels:
+                raw = "" if label is None else str(label)
+                s = raw.strip().replace("°", "")
+                angle_int: int | None = None
+                try:
+                    angle_int = int(round(float(s)))
+                except Exception:
+                    try:
+                        angle_int = int(round(float(s.split()[0])))
+                    except Exception:
+                        angle_int = None
+
+                if angle_int is not None and angle_int in important:
+                    filtered_tick_labels.append(raw)
+                else:
+                    filtered_tick_labels.append(" ")
+
+            ax.set_xticklabels(filtered_tick_labels)
+        else:
+            ax.set_xticklabels(all_tick_labels)
 
     ax.axhline(0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
     ax.set_xlabel("Knee Angle (°)")
@@ -1018,7 +1107,7 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
             f"{video_title}: Boundary Flux for selected cycles (angle-based, based on {scaling_label} intensities)"
         )
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="best", fontsize=8)
+    ax.legend(loc="best", fontsize=10)
 
     if ylim is not None:
         ax.set_ylim(ylim)
