@@ -1454,6 +1454,7 @@ def plot_metric_angle_domain(
     figsize: Optional[Tuple[float, float]] = None,
     title: Optional[str] = None,
     ylim: Optional[Tuple[float, float]] = None,
+    cycles_used: Optional[List[int]] = None,
 ) -> plt.Figure:
     """Plot metric curves in angle domain.
 
@@ -1670,6 +1671,21 @@ def plot_metric_angle_domain(
 
     ax.legend(loc="best", frameon=True)
 
+    # Figure-level cycle annotation (centered, near bottom margin)
+    if cycles_used:
+        cycles_text = "Cycles " + ",".join(str(int(c)) for c in cycles_used)
+        fig.text(
+            0.5,
+            0.02,
+            cycles_text,
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            color="0.4",
+        )
+        # Ensure the annotation doesn't collide with tick labels
+        fig.subplots_adjust(bottom=0.12)
+
     if out_path is not None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out_path, bbox_inches="tight")
@@ -1706,6 +1722,7 @@ def plot_metric_frame_domain(
 # =============================================================================
 
 def build_output_filename(
+    avg_cycle_mode: AvgCycleModeType,
     metric: MetricType,
     phase: PhaseType,
     x_domain: XDomainType,
@@ -1751,9 +1768,9 @@ def build_output_filename(
     payload = "||".join(_canonical_spec_string(s) for s in video_specs)
     tag6 = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:6]
 
-    # Partition ordering: averaged -> metric -> (plot parameters) -> (dataset partition)
+    # Partition ordering: averaged -> avg_cycle_mode -> metric -> (plot parameters) -> (dataset partition)
     return (
-        f"averaged_{metric}_{x_domain}_{phase}_scaling-{scaling}_source-{source}_"
+        f"{avg_cycle_mode}_{metric}_{x_domain}_{phase}_scaling-{scaling}_source-{source}_"
         f"{videos_part}_tag{tag6}"
     )
 
@@ -1807,6 +1824,7 @@ def main() -> int:
 
     # One output per invocation (combined multi-video plot)
     out_stem = build_output_filename(
+        avg_cycle_mode=args.avg_cycle_mode,
         metric=args.metric,
         phase=args.phase,
         x_domain=args.x_domain,
@@ -1851,6 +1869,19 @@ def main() -> int:
             extension_cycles=workbook.extension_cycles,
             cycle_indices=spec.cycles,
         )
+
+        # Cycle identifiers actually used for averaging/metric aggregation
+        if spec.cycles is None:
+            n_flex = int(len(workbook.flexion_cycles))
+            n_ext = int(len(workbook.extension_cycles))
+            if args.phase == "flexion":
+                cycles_used = list(range(1, n_flex + 1))
+            elif args.phase == "extension":
+                cycles_used = list(range(1, n_ext + 1))
+            else:
+                cycles_used = list(range(1, min(n_flex, n_ext) + 1))
+        else:
+            cycles_used = list(spec.cycles)
 
         # 5. Compute metric (two-branch structure controlled by args.avg_cycle_mode)
         if args.avg_cycle_mode == "averaged_data":
@@ -1918,6 +1949,7 @@ def main() -> int:
             figsize=args.figsize,
             title=args.title,
             ylim=args.ylim,
+            cycles_used=(cycles_used if len(args.video_specs) == 1 else None),
         )
         return 0
 
