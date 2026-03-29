@@ -23,6 +23,10 @@ from collections.abc import Iterable
 import scipy
 import mplcursors
 
+plt.rcParams['font.size']=14
+# Angles to show on x-axis (others will have blank labels)
+IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
+# IMPORTANT_ANGLE_LABELS = {30, 45, 60, 75, 90, 105, 120, 135}
 
 def _parse_pair_of_floats(text: str, *, name: str) -> tuple[float, float]:
     """Parse a CLI argument in the form "A,B" into a (A, B) float tuple.
@@ -52,9 +56,7 @@ def parse_figsize_arg(text: str) -> tuple[float, float]:
 def parse_ylim_arg(text: str) -> tuple[float, float]:
     return _parse_pair_of_floats(text, name="--ylim")
 
-# Angles to show on x-axis (others will have blank labels)
-# IMPORTANT_ANGLE_LABELS = {30, 60, 105, 135}
-IMPORTANT_ANGLE_LABELS = {30, 45, 60, 75, 90, 105, 120, 135}
+
 
 
 #################################################
@@ -729,7 +731,7 @@ def build_angle_ticks(phase: str, n_interp_samples: int, x_positions_list: List[
                 idx = np.argmin(np.abs(flex_labels - target_angle))
                 if idx < len(x_positions):
                     all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
+                    all_tick_labels.append(f'{int(target_angle)}')
         elif phase == "extension":
             ext_labels = np.linspace(135, 30, n_interp_samples)
             target_angles = np.arange(135, 29, -15)
@@ -737,7 +739,7 @@ def build_angle_ticks(phase: str, n_interp_samples: int, x_positions_list: List[
                 idx = np.argmin(np.abs(ext_labels - target_angle))
                 if idx < len(x_positions):
                     all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
+                    all_tick_labels.append(f'{int(target_angle)}')
         else:  # "both"
             flex_labels = np.linspace(30, 135, n_interp_samples)
             flex_target_angles = np.arange(30, 136, 15)
@@ -745,7 +747,7 @@ def build_angle_ticks(phase: str, n_interp_samples: int, x_positions_list: List[
                 idx = np.argmin(np.abs(flex_labels - target_angle))
                 if idx < len(x_positions):
                     all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
+                    all_tick_labels.append(f'{int(target_angle)}')
 
             ext_labels = np.linspace(135, 30, n_interp_samples)
             ext_target_angles = np.arange(120, 44, -15)  # Adjusted to avoid overlap with flex
@@ -753,7 +755,7 @@ def build_angle_ticks(phase: str, n_interp_samples: int, x_positions_list: List[
                 idx = n_interp_samples + np.argmin(np.abs(ext_labels - target_angle))
                 if idx < len(x_positions):
                     all_tick_positions.append(x_positions[idx])
-                    all_tick_labels.append(f'{int(target_angle)}°')
+                    all_tick_labels.append(f'{int(target_angle)}')
 
     return all_tick_positions, all_tick_labels
 
@@ -856,12 +858,7 @@ def plot_intra_region_coms_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.nd
     filtered_tick_labels = []
     if all_tick_labels:
         for label in all_tick_labels:
-            angle = None
-            if label.endswith("°"):
-                try:
-                    angle = int(label[:-1])
-                except ValueError:
-                    angle = None
+            angle = int(label.strip().rstrip("°"))
             if angle in IMPORTANT_ANGLE_LABELS:
                 filtered_tick_labels.append(label)
             else:
@@ -1149,25 +1146,11 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
         for ax in axes:
             ax.set_xlim(min_x, max_x)
 
-    axes[-1].set_xlabel("Knee Angle (°)")
-
-    if title is not None:
-        fig.suptitle(title)
-    else:
-        fig.suptitle(
-            f"{video_title}: Regional total intensity for selected cycles (angle-based, based on {scaling_label} intensities)"
-        )
-
     # Filter x-axis labels to reduce visual clutter: keep only specific angles
     filtered_tick_labels = []
     if all_tick_labels:
         for label in all_tick_labels:
-            angle = None
-            if label.endswith("°"):
-                try:
-                    angle = int(label[:-1])
-                except ValueError:
-                    angle = None
+            angle = int(label.strip().rstrip("°"))
             if angle in IMPORTANT_ANGLE_LABELS:
                 filtered_tick_labels.append(label)
             else:
@@ -1178,15 +1161,35 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
 
     # Set x-axis ticks and labels for all subplots
     if all_tick_positions:
+        # Edge case: for phase == "both", we intentionally avoid adding an extension tick at 30°
+        # inside every cycle to prevent overlap with the next cycle's flexion tick labels.
+        # However, the global rightmost endpoint should still be labeled 30°.
+        if blocks and filtered_tick_labels:
+            last_pos = blocks[-1]["x_positions"][-1]
+            if not all_tick_positions or all_tick_positions[-1] != last_pos:
+                all_tick_positions.append(last_pos)
+                filtered_tick_labels.append("30")
+            else:
+                # Ensure the existing rightmost tick is labeled.
+                filtered_tick_labels = list(filtered_tick_labels)
+                filtered_tick_labels[-1] = "30"
+
         for ax in axes:
             ax.set_xticks(all_tick_positions)
             ax.set_xticklabels(filtered_tick_labels)
 
-    axes[-1].set_xlabel("Knee Angle (°)")
-    fig.suptitle(f"{video_title}: Regional Total Intensity for selected cycles (angle-based, based on {scaling_label} intensities)")
-
     # Place legend on the top subplot (SB)
     axes[0].legend(loc="best")
+
+    # Axis and title
+    axes[-1].set_xlabel("Knee Angle (°)")
+    
+    if title is not None:
+        fig.suptitle(title)
+    else:
+        fig.suptitle(
+            f"{video_title}: Regional total intensity for selected cycles (angle-based, based on {scaling_label} intensities)"
+        )
 
     # Save figure
     filename = construct_filename("intra_region_totals", meta, scaling_label, cycles_str, ["angle_based"])
@@ -1195,7 +1198,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     print(f"Saved figure to {save_path}")
 
-    # plt.tight_layout()
+    plt.tight_layout()
     plt.show()
 
 
