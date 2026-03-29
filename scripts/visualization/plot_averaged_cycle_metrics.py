@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 
 
 def _parse_pair_of_floats(text: str, *, name: str) -> tuple[float, float]:
@@ -307,6 +308,7 @@ PhaseType = Literal["flexion", "extension", "both"]
 ScalingType = Literal["raw", "norm", "rel"]
 SourceType = Literal["raw", "bgsub"]
 XDomainType = Literal["angle", "frame"]
+AvgCycleModeType = Literal["averaged_data", "averaged_metric"]
 
 # Sheet names
 SHEET_SEGMENT_INTENSITIES = "Segment Intensities"
@@ -583,6 +585,17 @@ Plot tuning example:
         help="Number of interpolation samples per phase when --x-domain angle. (default: 525)",
     )
 
+    parser.add_argument(
+        "--avg-cycle-mode",
+        choices=["averaged_data", "averaged_metric"],
+        default="averaged_data",
+        help=(
+            "How to compute 'average cycle' metrics. "
+            "averaged_data: average the cycle intensity signals first, then compute metrics (default; preserves existing behavior). "
+            "averaged_metric: compute metrics on each cycle independently, resample each cycle's metric to a common angle grid, then average the metric curves."
+        ),
+    )
+
     # Output control
     parser.add_argument(
         "--list",
@@ -667,6 +680,7 @@ class CliArgs:
     source: SourceType
     x_domain: XDomainType
     n_interp_samples: int
+    avg_cycle_mode: AvgCycleModeType
     list_mode: bool
     out_dir: Path
     save: bool
@@ -699,6 +713,7 @@ def parse_args(argv: Optional[List[str]] = None) -> CliArgs:
             source=args.source,
             x_domain=args.x_domain,
             n_interp_samples=args.n_interp_samples,
+            avg_cycle_mode=args.avg_cycle_mode,
             list_mode=True,
             out_dir=args.out_dir,
             save=args.save,
@@ -730,6 +745,7 @@ def parse_args(argv: Optional[List[str]] = None) -> CliArgs:
         source=args.source,
         x_domain=args.x_domain,
         n_interp_samples=args.n_interp_samples,
+        avg_cycle_mode=args.avg_cycle_mode,
         list_mode=args.list,
         out_dir=args.out_dir,
         save=args.save,
@@ -739,6 +755,152 @@ def parse_args(argv: Optional[List[str]] = None) -> CliArgs:
         title=args.title,
         ylim=args.ylim,
     )
+
+
+# =============================================================================
+# AVERAGE-CYCLE COMPUTATION MODES
+# =============================================================================
+
+def _resample_series_to_common_grid(
+    series: np.ndarray,
+    n_interp_samples: int,
+    *,
+    fill_value: float = np.nan,
+) -> np.ndarray:
+    """Resample a 1D series (T,) or 2D series (K,T) onto a common normalized grid.
+
+    Interpolation policy (shared across metrics):
+    - x_old and x_new are normalized to [0, 1]
+    - interpolate using finite points only
+    - if fewer than 2 finite points, return all fill_value
+
+    Args:
+        series: 1D (T,) or 2D (K,T).
+        n_interp_samples: Target number of samples.
+        fill_value: Value used when interpolation is not possible.
+
+    Returns:
+        Resampled array of shape (n_interp_samples,) or (K, n_interp_samples).
+    """
+    y = np.asarray(series, dtype=float)
+    if y.size == 0:
+        if y.ndim == 2:
+            return np.full((y.shape[0], n_interp_samples), fill_value, dtype=float)
+        return np.full((n_interp_samples,), fill_value, dtype=float)
+
+    def _interp_1d(y1: np.ndarray) -> np.ndarray:
+        y1 = np.asarray(y1, dtype=float)
+        if y1.size == 0:
+            return np.full((n_interp_samples,), fill_value, dtype=float)
+        x_old = np.linspace(0.0, 1.0, num=y1.shape[0])
+        x_new = np.linspace(0.0, 1.0, num=n_interp_samples)
+        m = np.isfinite(y1)
+        if int(m.sum()) < 2:
+            return np.full((n_interp_samples,), fill_value, dtype=float)
+        return np.interp(x_new, x_old[m], y1[m]).astype(float, copy=False)
+
+    if y.ndim == 1:
+        return _interp_1d(y)
+    if y.ndim == 2:
+        k, _t = y.shape
+        out = np.full((k, n_interp_samples), fill_value, dtype=float)
+        for i in range(k):
+            out[i, :] = _interp_1d(y[i, :])
+        return out
+
+    raise ValueError(f"Expected 1D or 2D series, got shape={y.shape}")
+
+
+def _compute_metric_from_intensity_mats(
+    *,
+    metric: MetricType,
+    flex_mat: np.ndarray,
+    ext_mat: np.ndarray,
+    anatomical_regions: pd.DataFrame,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute selected metric given flex/ext intensity matrices."""
+    if metric == "com":
+        return compute_com(flex_mat, ext_mat)
+    if metric == "total":
+        return compute_total(flex_mat, ext_mat)
+    if metric == "flux":
+        (flux_sb_ot_flex, flux_sb_ot_ext), (flux_ot_jc_flex, flux_ot_jc_ext) = compute_flux(
+            flex_mat, ext_mat, anatomical_regions
+        )
+
+        def _stack_flux(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+            # Represent flux as 2xT: [SB->OT; OT->JC]
+            if a.size == 0 and b.size == 0:
+                return np.zeros((2, 0), dtype=float)
+            if a.shape != b.shape:
+                raise ValueError(f"Flux series length mismatch: {a.shape} vs {b.shape}")
+            return np.vstack([a, b]).astype(float, copy=False)
+
+        return (
+            _stack_flux(flux_sb_ot_flex, flux_ot_jc_flex),
+            _stack_flux(flux_sb_ot_ext, flux_ot_jc_ext),
+        )
+
+    raise ValueError(f"Unexpected metric: {metric!r}")
+
+
+def compute_metric_averaged_data(
+    *,
+    metric: MetricType,
+    cycle_data: CycleData,
+    anatomical_regions: pd.DataFrame,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Branch B (default): average cycle intensity signals first, then compute metric."""
+    avg_flex, avg_ext = average_cycles(cycle_data)
+    return _compute_metric_from_intensity_mats(
+        metric=metric,
+        flex_mat=avg_flex,
+        ext_mat=avg_ext,
+        anatomical_regions=anatomical_regions,
+    )
+
+
+def compute_metric_averaged_metric(
+    *,
+    metric: MetricType,
+    cycle_data: CycleData,
+    anatomical_regions: pd.DataFrame,
+    n_interp_samples: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Branch A: compute metric per-cycle, resample each cycle metric, then average metric curves."""
+
+    def _per_phase(mats: List[np.ndarray], phase_name: str) -> np.ndarray:
+        if not mats:
+            if metric == "flux":
+                return np.zeros((2, 0), dtype=float)
+            return np.asarray([], dtype=float)
+
+        resampled: List[np.ndarray] = []
+        for m in mats:
+            empty_other = np.zeros((0, 0), dtype=float)
+            if phase_name == "flexion":
+                cyc_metric, _ = _compute_metric_from_intensity_mats(
+                    metric=metric,
+                    flex_mat=m,
+                    ext_mat=empty_other,
+                    anatomical_regions=anatomical_regions,
+                )
+            else:
+                _, cyc_metric = _compute_metric_from_intensity_mats(
+                    metric=metric,
+                    flex_mat=empty_other,
+                    ext_mat=m,
+                    anatomical_regions=anatomical_regions,
+                )
+
+            resampled.append(_resample_series_to_common_grid(cyc_metric, n_interp_samples))
+
+        stacked = np.stack(resampled, axis=0)
+        return np.nanmean(stacked, axis=0)
+
+    metric_flex = _per_phase(cycle_data.flex_mats, "flexion")
+    metric_ext = _per_phase(cycle_data.ext_mats, "extension")
+    return metric_flex, metric_ext
 
 
 # =============================================================================
@@ -1292,7 +1454,7 @@ def plot_metric_angle_domain(
     figsize: Optional[Tuple[float, float]] = None,
     title: Optional[str] = None,
     ylim: Optional[Tuple[float, float]] = None,
-) -> None:
+) -> plt.Figure:
     """Plot metric curves in angle domain.
 
     Args:
@@ -1423,16 +1585,16 @@ def plot_metric_angle_domain(
                     label=f"{base_label} SB->OT",
                     linestyle="-",
                     linewidth=2,
-                    color=color,
+                    color="blue",
                 )
                 _plot_series(
                     ax,
                     x_flex,
                     y2_f[1, :],
                     label=f"{base_label} OT->JC",
-                    linestyle=(0, (4, 2)),
+                    linestyle="-",
                     linewidth=2,
-                    color=color,
+                    color="red",
                 )
 
             if phase in ("extension", "both"):
@@ -1445,19 +1607,25 @@ def plot_metric_angle_domain(
                     label="_nolegend_",
                     linestyle="-",
                     linewidth=2,
-                    color=color,
+                    color="blue",
                 )
                 _plot_series(
                     ax,
                     x_plot,
                     y2_e[1, :],
                     label="_nolegend_",
-                    linestyle=(0, (4, 2)),
+                    linestyle="-",
                     linewidth=2,
-                    color=color,
+                    color="red",
                 )
 
     ax.set_xlabel("Knee Angle (°)")
+    if scaling == "rel":
+        # Display axis as percent without changing the underlying plotted data.
+        # Tick label formatter multiplies by 100.
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{v * 100:g}"))
+        if "(%)" not in y_label:
+            y_label = f"{y_label} (%)"
     ax.set_ylabel(y_label)
     if title is not None:
         ax.set_title(title)
@@ -1508,8 +1676,9 @@ def plot_metric_angle_domain(
 
     if show:
         plt.show()
-    else:
-        plt.close(fig)
+
+    # Return figure for testing/introspection (callers may ignore).
+    return fig
 
 
 def plot_metric_frame_domain(
@@ -1675,18 +1844,32 @@ def main() -> int:
         # 3. Apply scaling
         scaled = apply_intensity_scaling(workbook.intensities, args.scaling)
 
-        # 4. Extract and average cycles
+        # 4. Extract cycles
         cycle_data = extract_cycles(
             intensities=scaled,
             flexion_cycles=workbook.flexion_cycles,
             extension_cycles=workbook.extension_cycles,
             cycle_indices=spec.cycles,
         )
-        avg_flex, avg_ext = average_cycles(cycle_data)
 
-        # 5. Compute metric
+        # 5. Compute metric (two-branch structure controlled by args.avg_cycle_mode)
+        if args.avg_cycle_mode == "averaged_data":
+            metric_flex, metric_ext = compute_metric_averaged_data(
+                metric=args.metric,
+                cycle_data=cycle_data,
+                anatomical_regions=workbook.anatomical_regions,
+            )
+        elif args.avg_cycle_mode == "averaged_metric":
+            metric_flex, metric_ext = compute_metric_averaged_metric(
+                metric=args.metric,
+                cycle_data=cycle_data,
+                anatomical_regions=workbook.anatomical_regions,
+                n_interp_samples=args.n_interp_samples,
+            )
+        else:
+            raise ValueError(f"Unexpected avg_cycle_mode: {args.avg_cycle_mode!r}")
+
         if args.metric == "com":
-            metric_flex, metric_ext = compute_com(avg_flex, avg_ext)
 
             # -----------------------------------------------------------------
             # COM statistics (ported from plot_com_cycles_from_heatmaps.py)
@@ -1705,24 +1888,7 @@ def main() -> int:
                 metric_flex=metric_flex,
                 metric_ext=metric_ext,
             )
-        elif args.metric == "total":
-            metric_flex, metric_ext = compute_total(avg_flex, avg_ext)
-        elif args.metric == "flux":
-            (flux_sb_ot_flex, flux_sb_ot_ext), (flux_ot_jc_flex, flux_ot_jc_ext) = compute_flux(
-                avg_flex, avg_ext, workbook.anatomical_regions
-            )
-
-            def _stack_flux(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-                # Represent flux as 2xT: [SB->OT; OT->JC] (matches dmm_analysis.py naming)
-                if a.size == 0 and b.size == 0:
-                    return np.zeros((2, 0), dtype=float)
-                if a.shape != b.shape:
-                    raise ValueError(f"Flux series length mismatch: {a.shape} vs {b.shape}")
-                return np.vstack([a, b]).astype(float, copy=False)
-
-            metric_flex, metric_ext = _stack_flux(flux_sb_ot_flex, flux_ot_jc_flex), _stack_flux(flux_sb_ot_ext, flux_ot_jc_ext)
-        else:
-            raise ValueError(f"Unexpected metric: {args.metric!r}")
+        # total/flux already handled in the helpers
 
         video_metric_data.append((spec, metric_flex, metric_ext))
 
@@ -1731,7 +1897,7 @@ def main() -> int:
 
     # Print COM statistics table before plotting (terminal export for now)
     if args.metric == "com":
-        print_com_statistics_table(com_stats_rows, title="COM statistics (averaged cycle metric)")
+        print_com_statistics_table(com_stats_rows, title=f"COM statistics ({args.avg_cycle_mode})")
 
     # 6. Plot
     out_path: Optional[Path]
