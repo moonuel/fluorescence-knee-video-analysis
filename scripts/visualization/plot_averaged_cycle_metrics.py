@@ -49,6 +49,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
+plt.rcParams['font.size']=14
 
 def _parse_pair_of_floats(text: str, *, name: str) -> tuple[float, float]:
     """Parse a CLI argument in the form "A,B" into a (A, B) float tuple.
@@ -1557,7 +1558,7 @@ def plot_metric_angle_domain(
                     y_f,
                     label=base_label,
                     linestyle=ls,
-                    linewidth=2,
+                    linewidth=1,
                     color=color,
                 )
 
@@ -1569,7 +1570,7 @@ def plot_metric_angle_domain(
                     y_e,
                     label="_nolegend_",
                     linestyle=ls,
-                    linewidth=2,
+                    linewidth=1,
                     color=color,
                 )
 
@@ -1585,7 +1586,7 @@ def plot_metric_angle_domain(
                     y2_f[0, :],
                     label=f"{base_label} SB->OT",
                     linestyle="-",
-                    linewidth=2,
+                    linewidth=1,
                     color="blue",
                 )
                 _plot_series(
@@ -1594,7 +1595,7 @@ def plot_metric_angle_domain(
                     y2_f[1, :],
                     label=f"{base_label} OT->JC",
                     linestyle="-",
-                    linewidth=2,
+                    linewidth=1,
                     color="red",
                 )
 
@@ -1607,7 +1608,7 @@ def plot_metric_angle_domain(
                     y2_e[0, :],
                     label="_nolegend_",
                     linestyle="-",
-                    linewidth=2,
+                    linewidth=1,
                     color="blue",
                 )
                 _plot_series(
@@ -1616,7 +1617,7 @@ def plot_metric_angle_domain(
                     y2_e[1, :],
                     label="_nolegend_",
                     linestyle="-",
-                    linewidth=2,
+                    linewidth=1,
                     color="red",
                 )
 
