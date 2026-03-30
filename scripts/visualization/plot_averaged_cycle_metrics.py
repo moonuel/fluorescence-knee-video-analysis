@@ -319,7 +319,7 @@ SHEET_ANATOMICAL_REGIONS = "Anatomical Regions"
 
 # Default directories
 INTENSITIES_DIR = Path("data") / "intensities_total"
-DEFAULT_OUT_DIR = Path("figures") / "cycle_metrics_from_intensities"
+DEFAULT_OUT_DIR = Path("figures") # / "cycle_metrics_from_intensities"
 
 
 # =============================================================================
@@ -1650,45 +1650,45 @@ def plot_metric_angle_domain(
         # Visual cue for phase halves
         ax.text(
             0.25,
-            0.98,
-            "flex",
+            0.03,
+            "Flexion",
             transform=ax.transAxes,
             ha="center",
-            va="top",
+            va="bottom",
             fontsize=9,
             alpha=0.7,
         )
         ax.text(
             0.75,
-            0.98,
-            "ext",
+            0.03,
+            "Extension",
             transform=ax.transAxes,
             ha="center",
-            va="top",
+            va="bottom",
             fontsize=9,
             alpha=0.7,
         )
 
     ax.legend(loc="best", frameon=True)
 
-    # Figure-level cycle annotation (centered, near bottom margin)
+    # Cycle annotation placed inside the plot area, above the x-axis.
+    # (Keeps it from colliding with x-axis tick labels.)
     if cycles_used:
         cycles_text = "Cycles " + ",".join(str(int(c)) for c in cycles_used)
-        fig.text(
+        ax.text(
             0.5,
-            0.02,
+            0.98,
             cycles_text,
+            transform=ax.transAxes,
             ha="center",
-            va="bottom",
+            va="top",
             fontsize=9,
             color="0.4",
         )
-        # Ensure the annotation doesn't collide with tick labels
-        fig.subplots_adjust(bottom=0.12)
 
     if out_path is not None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(out_path, bbox_inches="tight")
+        fig.savefig(out_path, dpi=300, bbox_inches="tight")
 
     if show:
         plt.show()
@@ -1832,7 +1832,7 @@ def main() -> int:
         source=args.source,
         video_specs=args.video_specs,
     )
-    print(f"\nOutput: {out_stem}.pdf")
+    print(f"\nOutput: {out_stem}.png")
 
     # Accumulate computed metric series for plotting (one entry per video)
     video_metric_data: List[Tuple[VideoSpec, np.ndarray, np.ndarray]] = []
@@ -1933,7 +1933,7 @@ def main() -> int:
     # 6. Plot
     out_path: Optional[Path]
     if args.save:
-        out_path = args.out_dir / f"{out_stem}.pdf"
+        out_path = args.out_dir / f"{out_stem}.png"
     else:
         out_path = None
 
