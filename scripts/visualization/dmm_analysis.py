@@ -526,13 +526,13 @@ def compute_boundary_flux(I_SB: np.ndarray, I_JC: np.ndarray) -> Dict[str, np.nd
     F_SB_to_OT = I_SB[:-1] - I_SB[1:]
     F_OT_to_JC = I_JC[1:] - I_JC[:-1]
 
-    total_flux = np.sum(np.abs(F_SB_to_OT) + np.abs(F_OT_to_JC))
-    net_flux = np.sum(F_SB_to_OT + F_OT_to_JC)    
+    total_flux = np.sum(np.abs(F_SB_to_OT) + np.abs(F_OT_to_JC)) # Deprecated
+    net_flux = np.sum(F_SB_to_OT + F_OT_to_JC) # Deprecated
     return {
         'SB->OT': F_SB_to_OT,
         'OT->JC': F_OT_to_JC,
-        "total_flux": total_flux,
-        "net_flux": net_flux
+        # "total_flux": total_flux, # Deprecated
+        # "net_flux": net_flux # Deprecated
     }
 
 
@@ -1042,8 +1042,8 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
             )
         
         # Get scalar metrics from the flux data
-        total_f = flux_data.get('total_flux')
-        net_f = flux_data.get('net_flux')
+        # total_f = flux_data.get('total_flux') # Deprecated
+        # net_f = flux_data.get('net_flux')
         
         # Plot both boundaries
         for boundary_name in ['SB->OT', 'OT->JC']:
