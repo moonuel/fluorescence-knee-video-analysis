@@ -1130,16 +1130,16 @@ def plot_boundary_flux_angle_mode(all_flux_data: List[Tuple[Dict, np.ndarray, np
 
 
 def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.ndarray], np.ndarray, np.ndarray, str, Cycle]],
-                                        phase: str,
-                                        n_interp_samples: int,
-                                        video_title: str,
-                                        scaling_label: str,
-                                        meta: 'KneeVideoMeta',
-                                        blocks: List[Dict],
-                                        cycles_str: str,
-                                        figsize: tuple[float, float] | None = None,
-                                        title: str | None = None,
-                                        ylim: tuple[float, float] | None = None) -> None:
+                                         phase: str,
+                                         n_interp_samples: int,
+                                         video_title: str,
+                                         scaling_label: str,
+                                         meta: 'KneeVideoMeta',
+                                         blocks: List[Dict],
+                                         cycles_str: str,
+                                         figsize: tuple[float, float] | None = None,
+                                         title: str | None = None,
+                                         ylim: tuple[float, float] | None = None) -> None:
     """Create 3 stacked subplots (SB, OT, JC) of Regional total intensity vs angle for multiple cycles.
 
     Parameters
@@ -1171,6 +1171,82 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
     # Build x-axis ticks (use full layout, including placeholder blocks)
     x_positions_list = [b["x_positions"] for b in blocks]
     all_tick_positions, all_tick_labels = build_angle_ticks(phase, n_interp_samples, x_positions_list)
+
+    # In-plot annotations use blended transform (x in data coords, y in axes fraction)
+    # - Cycle numbers: top axis (avoids duplicating across stacked plots)
+    # - Frame ranges: bottom axis (visually tied to the x-axis)
+    if axes is not None and len(axes) > 0:
+        top_ax = axes[0]
+        bottom_ax = axes[-1]
+
+        top_xaxis_transform = top_ax.get_xaxis_transform()
+        bottom_xaxis_transform = bottom_ax.get_xaxis_transform()
+
+        annotated_cycles: set[str] = set()
+
+        for _, x_positions, _, legend_label, cycle in all_cycle_data:
+            cycle_num = legend_label.split()[1].rstrip(",")
+            cycle_key = f"Cycle {cycle_num}"
+
+            # Cycle label: horizontally centered within this cycle's x-range, near top of axes.
+            # Uses axes-fraction y so it stays near the top regardless of y-limits.
+            if cycle_key not in annotated_cycles:
+                x0 = float(np.min(x_positions))
+                x1 = float(np.max(x_positions))
+                x_mid = 0.5 * (x0 + x1)
+                top_ax.text(
+                    x_mid,
+                    0.98,
+                    cycle_key,
+                    transform=top_xaxis_transform,
+                    ha="center",
+                    va="top",
+                    fontsize=10,
+                    color="0.2",
+                )
+                annotated_cycles.add(cycle_key)
+
+            # Phase/frame label(s): centered within phase x-range, near bottom of axes.
+            # Frame indices come from the Cycle object (convert to 1-based for display).
+            if phase in {"flexion", "both"}:
+                flex_start = int(cycle.flex.s) + 1
+                flex_end = int(cycle.flex.e) + 1
+                if phase == "flexion":
+                    flex_x0 = float(np.min(x_positions))
+                    flex_x1 = float(np.max(x_positions))
+                else:
+                    flex_x0 = float(np.min(x_positions[:n_interp_samples]))
+                    flex_x1 = float(np.max(x_positions[:n_interp_samples]))
+                bottom_ax.text(
+                    0.5 * (flex_x0 + flex_x1),
+                    0.04,
+                    f"Frames: {flex_start}-{flex_end}",
+                    transform=bottom_xaxis_transform,
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color="0.35",
+                )
+
+            if phase in {"extension", "both"}:
+                ext_start = int(cycle.ext.s) + 1
+                ext_end = int(cycle.ext.e) + 1
+                if phase == "extension":
+                    ext_x0 = float(np.min(x_positions))
+                    ext_x1 = float(np.max(x_positions))
+                else:
+                    ext_x0 = float(np.min(x_positions[n_interp_samples:]))
+                    ext_x1 = float(np.max(x_positions[n_interp_samples:]))
+                bottom_ax.text(
+                    0.5 * (ext_x0 + ext_x1),
+                    0.04,
+                    f"Frames: {ext_start}-{ext_end}",
+                    transform=bottom_xaxis_transform,
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color="0.35",
+                )
 
     for ax, name in zip(axes, region_order):
         # Shade placeholder blocks (behind plot elements)
@@ -1267,7 +1343,7 @@ def plot_intra_region_totals_angle_mode(all_cycle_data: List[Tuple[Dict[str, np.
             ax.set_xticklabels(filtered_tick_labels)
 
     # Place legend on the top subplot (SB)
-    axes[0].legend(loc="best")
+    # axes[0].legend(loc="best")
 
     # Axis and title
     axes[-1].set_xlabel("Knee Angle (°)")
