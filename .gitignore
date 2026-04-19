@@ -25,3 +25,4 @@ memory-bank/
 *.csv
 .vscode/launch.json
 .vscode/settings.json
+.kilo/
