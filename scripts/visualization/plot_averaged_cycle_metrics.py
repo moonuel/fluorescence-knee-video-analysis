@@ -1511,7 +1511,7 @@ def plot_metric_angle_domain(
     x_ext = np.arange(n_interp_samples, 2 * n_interp_samples, dtype=float)
 
     tick_angles = np.arange(30.0, 135.0 + 0.5 * 15.0, 15.0, dtype=float)  # 30..135 inclusive
-    tick_labels = [f"{int(a)}°" for a in tick_angles]
+    tick_labels = [f"{int(a)}" for a in tick_angles]
 
     # Tick positions derived from the assumption that each phase spans n_interp_samples points
     # uniformly from 30..135 (flex) and 135..30 (ext).
