@@ -1,9 +1,10 @@
 from utils import io, views
-from typing import Dict
+from typing import Dict, Optional, Tuple
 from pathlib import Path
 import numpy as np
 import argparse
 import sys
+import re
 
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -34,16 +35,76 @@ def discover_available_videos(segmented_dir: Path) -> Dict[int, Dict]:
     return videos
 
 
+def parse_video_selector(text: str) -> Tuple[int, Optional[int]]:
+    """Parse selector into (video_id, N).
+
+    Accepted:
+      - "1339" -> (1339, None) raw/unsegmented
+      - "1339N64" / "1339n64" -> (1339, 64) segmented
+    """
+    s = text.strip()
+    m = re.fullmatch(r"(\d+)", s)
+    if m:
+        return int(m.group(1)), None
+
+    m = re.fullmatch(r"(\d+)[Nn](\d+)", s)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+
+    raise ValueError(
+        "Invalid selector. Use <video_id> for raw or <video_id>N<N> for segmented (e.g. 1339N64)."
+    )
+
+
+def discover_raw_videos(raw_dir: Path) -> Dict[int, Dict]:
+    """Discover raw/unsegmented previewable files in data/raw.
+
+    Returns {video_id: {'files': list[Path]}}.
+
+    Only supports .npy and .avi (non-recursive scan).
+    Video id is extracted from trailing "_<digits>" in the stem.
+    """
+    videos: Dict[int, Dict] = {}
+    if not raw_dir.exists():
+        return videos
+
+    for p in raw_dir.iterdir():
+        if not p.is_file():
+            continue
+        if p.suffix.lower() not in {".npy", ".avi"}:
+            continue
+
+        m = re.search(r"_(\d+)$", p.stem)
+        if not m:
+            continue
+        video_id = int(m.group(1))
+        videos.setdefault(video_id, {"files": []})["files"].append(p)
+
+    for info in videos.values():
+        info["files"].sort(key=lambda x: (0 if x.suffix.lower() == ".npy" else 1, x.name.lower()))
+    return videos
+
+
+def choose_preferred_raw_file(files: list[Path]) -> Path:
+    if not files:
+        raise FileNotFoundError("No raw files available")
+    files_sorted = sorted(files, key=lambda x: (0 if x.suffix.lower() == ".npy" else 1, x.name.lower()))
+    return files_sorted[0]
+
+
 def parse_arguments():
     """
     Parse command line arguments with dynamic validation based on available files.
     """
     parser = argparse.ArgumentParser(
-        description="Play segmented knee videos",
+        description="Play knee videos (segmented or raw)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Examples:\n"
                "  python play_video.py --list\n"
-               "  python play_video.py 1339 64"
+               "  python play_video.py --list-raw\n"
+               "  python play_video.py 1339N64\n"
+               "  python play_video.py 1339\n"
+               "  python play_video.py 1339 64  # legacy"
     )
 
     parser.add_argument(
@@ -53,17 +114,22 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        'video_id',
-        type=int,
+        '--list-raw',
+        action='store_true',
+        help="List raw/unsegmented previewable videos in data/raw"
+    )
+
+    parser.add_argument(
+        'selector',
         nargs='?',
-        help="Video ID number"
+        help="Video selector: <id> (raw) or <id>N<N> (segmented), e.g. 1339 or 1339N64"
     )
 
     parser.add_argument(
         'N',
         type=int,
         nargs='?',
-        help="Number of radial segments"
+        help="Legacy segmented mode: play_video.py <id> <N>"
     )
 
     args = parser.parse_args()
@@ -72,68 +138,116 @@ def parse_arguments():
     segmented_dir = PROJECT_ROOT / "data" / "segmented"
     available = discover_available_videos(segmented_dir)
 
+    raw_dir = PROJECT_ROOT / "data" / "raw"
+    raw_available = discover_raw_videos(raw_dir)
+
     # Handle --list mode
     if args.list:
-        print("\n📋 Available videos in data/segmented:\n")
+        print("\nAvailable videos in data/segmented:\n")
         for vid, info in sorted(available.items()):
             n_vals = ', '.join(f"N={n}" for n in sorted(info['N_values']))
             print(f"  {vid:4d} ({info['type']:6s}) - {n_vals}")
         sys.exit(0)
 
+    if args.list_raw:
+        print("\nAvailable videos in data/raw (previewable: .npy, .avi):\n")
+        for vid, info in sorted(raw_available.items()):
+            files = ", ".join(p.name for p in info["files"])
+            print(f"  {vid:4d} - {files}")
+        sys.exit(0)
+
     # Validate required arguments
-    if args.video_id is None or args.N is None:
-        parser.error("video_id and N are required (or use --list)")
+    if args.selector is None:
+        parser.error("selector is required (or use --list/--list-raw)")
 
-    # Validate video_id exists
-    if args.video_id not in available:
-        valid_ids = ', '.join(str(v) for v in sorted(available.keys()))
+    # Backward-compat: play_video.py <id> <N>
+    selector_text = args.selector
+    if args.N is not None and re.fullmatch(r"\d+", selector_text.strip()):
+        selector_text = f"{selector_text}N{args.N}"
+
+    try:
+        video_id, N = parse_video_selector(selector_text)
+    except ValueError as e:
+        parser.error(str(e))
+
+    if N is not None:
+        # Segmented validation
+        if video_id not in available:
+            valid_ids = ', '.join(str(v) for v in sorted(available.keys()))
+            parser.error(
+                f"Video ID {video_id} not found in data/segmented.\n"
+                f"Available IDs: {valid_ids}\n"
+                f"Use --list to see details."
+            )
+        if N not in available[video_id]['N_values']:
+            valid_n = ', '.join(f"N={n}" for n in sorted(available[video_id]['N_values']))
+            parser.error(
+                f"N={N} not available for video {video_id}.\n"
+                f"Available: {valid_n}"
+            )
+        return video_id, N, available[video_id]['type'], None
+
+    # Raw validation
+    if video_id not in raw_available:
+        valid_ids = ', '.join(str(v) for v in sorted(raw_available.keys()))
         parser.error(
-            f"Video ID {args.video_id} not found.\n"
+            f"Video ID {video_id} not found in data/raw.\n"
             f"Available IDs: {valid_ids}\n"
-            f"Use --list to see details."
+            f"Use --list-raw to see details."
         )
-
-    # Validate N value exists for this video
-    if args.N not in available[args.video_id]['N_values']:
-        valid_n = ', '.join(f"N={n}" for n in sorted(available[args.video_id]['N_values']))
-        parser.error(
-            f"N={args.N} not available for video {args.video_id}.\n"
-            f"Available: {valid_n}"
-        )
-
-    return args.video_id, args.N, available[args.video_id]['type']
+    raw_path = choose_preferred_raw_file(raw_available[video_id]["files"])
+    return video_id, None, None, raw_path
 
 
-def main(video_id: int, N: int, knee_type: str):
+def main(video_id: int, N: Optional[int], knee_type: Optional[str], raw_path: Optional[Path]):
     """
     Display the radial segmentation mask alongside the processed video.
     """
-    segmented_dir = PROJECT_ROOT / "data" / "segmented"
+    if N is not None:
+        segmented_dir = PROJECT_ROOT / "data" / "segmented"
+        assert knee_type is not None
 
-    # Load radial mask and video
-    radial_path = segmented_dir / f"{knee_type}_{video_id:04d}_radial_N{N}.npy"
-    video_path = segmented_dir / f"{knee_type}_{video_id:04d}_video_N{N}.npy"
+        radial_path = segmented_dir / f"{knee_type}_{video_id:04d}_radial_N{N}.npy"
+        video_path = segmented_dir / f"{knee_type}_{video_id:04d}_video_N{N}.npy"
+        if not radial_path.exists():
+            raise FileNotFoundError(f"Missing radial mask: {radial_path}")
+        if not video_path.exists():
+            raise FileNotFoundError(f"Missing video: {video_path}")
 
-    print(f"Loading radial mask: {radial_path}")
-    radial_mask = io.load_nparray(radial_path)
+        print(f"Loading radial mask: {radial_path}")
+        radial_mask = io.load_nparray(radial_path)
 
-    print(f"Loading video: {video_path}")
-    video = io.load_nparray(video_path)
+        print(f"Loading video: {video_path}")
+        video = io.load_nparray(video_path)
 
-    # Scale radial mask for visualization
-    max_label = np.max(radial_mask)
-    if max_label > 0:
-        scale = 255 // max_label
-        radial_display = radial_mask * scale
+        max_label = np.max(radial_mask)
+        if max_label > 0:
+            scale = 255 // max_label
+            radial_display = radial_mask * scale
+        else:
+            radial_display = radial_mask
+
+        print(f"Displaying {knee_type} video {video_id} with {N} segments...")
+        print("Radial mask (left) and processed video (right)")
+        views.show_frames([radial_display, video])
+        return
+
+    assert raw_path is not None
+    if not raw_path.exists():
+        raise FileNotFoundError(f"Missing raw file: {raw_path}")
+
+    print(f"Loading raw video: {raw_path}")
+    if raw_path.suffix.lower() == ".npy":
+        video = io.load_nparray(raw_path)
+    elif raw_path.suffix.lower() == ".avi":
+        video = io.load_avi(str(raw_path))
     else:
-        radial_display = radial_mask
+        raise ValueError(f"Unsupported raw extension: {raw_path.suffix}")
 
-    print(f"Displaying {knee_type} video {video_id} with {N} segments...")
-    print("Radial mask (left) and processed video (right)")
-    views.show_frames([radial_display, video])
+    print(f"Displaying raw video {video_id} from {raw_path.name}...")
+    views.show_frames(video, title=f"raw_{video_id:04d}")
 
 
 if __name__ == "__main__":
-    video_id, N, knee_type = parse_arguments()
-    breakpoint()
-    main(video_id, N, knee_type)
+    video_id, N, knee_type, raw_path = parse_arguments()
+    main(video_id, N, knee_type, raw_path)
