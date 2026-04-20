@@ -54,7 +54,8 @@ Options for the fourth argument are:
     )
 
     # Extract unique conditions from KNEE_VIDEOS metadata
-    available_conditions = sorted(set(condition for condition, _, _ in KNEE_VIDEOS.keys()))
+    # Keys are (video_id, n_segments); condition is stored on the values.
+    available_conditions = sorted({meta.condition for meta in KNEE_VIDEOS.values()})
     parser.add_argument("condition", choices=available_conditions, help="Condition (e.g. normal, aging, dmm-0w)")
     parser.add_argument("video_number", type=int, help="Video identifier number")
     parser.add_argument("segment_count", type=int, help="Number of segments")

@@ -26,3 +26,6 @@ memory-bank/
 .vscode/launch.json
 .vscode/settings.json
 .kilo/
+!knee_metadata.csv
+# Temporary Excel lock files
+.~lock.*

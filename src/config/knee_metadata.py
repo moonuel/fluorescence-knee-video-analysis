@@ -1,12 +1,12 @@
 """
-Centralized metadata for all knee videos: condition, cycles, and anatomical regions.
+Centralized interface for accessing metadata for all knee videos: condition, cycles, and anatomical regions.
 
 This module replaces scattered CYCLES, TYPES, and REGION_RANGES dictionaries.
 """
 
 from dataclasses import dataclass
 from pathlib import Path
-import csv
+import json
 from typing import Dict, List, Tuple, Literal, Iterable
 
 Phase = Literal["flexion", "extension", "both"]
@@ -79,83 +79,98 @@ class KneeVideoMeta:
 # Global registry: key = (video_id, n_segments)
 Key = Tuple[int, int]  # (video_id, n_segments)
 
-CSV_PATH = Path(__file__).resolve().parent / "metadata" / "knee_metadata.csv"
+JSON_PATH = Path(__file__).resolve().parent / "metadata" / "knee_metadata.json"
 
 
-def _require_int(row: dict, col: str, ctx: str) -> int:
-    v = row.get(col, "")
+def _require_int(obj: dict, key: str, ctx: str) -> int:
+    v = obj.get(key, None)
     try:
         return int(v)
     except Exception as e:
-        raise ValueError(f"{ctx}: expected int for column {col!r}, got {v!r}") from e
+        raise ValueError(f"{ctx}: expected int for key {key!r}, got {v!r}") from e
 
 
-def _require_str(row: dict, col: str, ctx: str) -> str:
-    v = row.get(col, "")
+def _require_str(obj: dict, key: str, ctx: str) -> str:
+    v = obj.get(key, "")
     if v is None:
         v = ""
     v = str(v).strip()
     if not v:
-        raise ValueError(f"{ctx}: missing required column {col!r}")
+        raise ValueError(f"{ctx}: missing required key {key!r}")
     return v
 
 
-def _load_knee_metadata_csv(csv_path: Path) -> Dict[Key, KneeVideoMeta]:
-    if not csv_path.exists():
-        raise FileNotFoundError(f"knee metadata CSV not found at {str(csv_path)!r}")
+def _load_knee_metadata_json(json_path: Path) -> Dict[Key, KneeVideoMeta]:
+    if not json_path.exists():
+        raise FileNotFoundError(f"knee metadata JSON not found at {str(json_path)!r}")
 
-    with csv_path.open("r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        if reader.fieldnames is None:
-            raise ValueError(f"knee metadata CSV has no header: {str(csv_path)!r}")
+    try:
+        raw = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise ValueError(f"failed to parse knee metadata JSON at {str(json_path)!r}") from e
 
-        rows = list(reader)
+    if not isinstance(raw, dict):
+        raise ValueError(f"knee metadata JSON root must be an object; got {type(raw).__name__}")
 
-    groups: dict[Key, list[dict]] = {}
-    for i, row in enumerate(rows, start=2):
-        ctx = f"{csv_path.name}:{i}"
-        video_id = _require_int(row, "video_id", ctx)
-        n_segments = _require_int(row, "n_segments", ctx)
-        key = (video_id, n_segments)
-        groups.setdefault(key, []).append(row)
+    schema_version = raw.get("schema_version", None)
+    if schema_version != 1:
+        raise ValueError(f"unsupported knee metadata schema_version={schema_version!r}; expected 1")
+
+    videos = raw.get("videos", None)
+    if not isinstance(videos, list):
+        raise ValueError(f"knee metadata JSON 'videos' must be a list; got {type(videos).__name__}")
 
     registry: Dict[Key, KneeVideoMeta] = {}
     errors: list[str] = []
 
-    for (video_id, n_segments), group_rows in sorted(groups.items()):
-        ctx = f"video_id={video_id}, n_segments={n_segments}"
+    for i, entry in enumerate(videos):
+        ctx = f"videos[{i}]"
         try:
-            conditions = {_require_str(r, "condition", ctx) for r in group_rows}
-            if len(conditions) != 1:
-                raise ValueError(f"{ctx}: inconsistent condition values: {sorted(conditions)!r}")
-            condition = next(iter(conditions))
+            if not isinstance(entry, dict):
+                raise ValueError(f"{ctx}: entry must be an object; got {type(entry).__name__}")
 
-            # Regions are repeated per row; dedupe and validate consistency.
-            region_cols = [
-                ("JC", "JC_start_1", "JC_end_1"),
-                ("OT", "OT_start_1", "OT_end_1"),
-                ("SB", "SB_start_1", "SB_end_1"),
-            ]
+            video_id = _require_int(entry, "video_id", ctx)
+            n_segments = _require_int(entry, "n_segments", ctx)
+            condition = _require_str(entry, "condition", ctx)
+
+            regions_raw = entry.get("regions", None)
+            if not isinstance(regions_raw, dict):
+                raise ValueError(f"{ctx}: 'regions' must be an object; got {type(regions_raw).__name__}")
+
             regions: Dict[str, RegionSegments] = {}
-            for name, c_s, c_e in region_cols:
-                starts = {_require_int(r, c_s, ctx) for r in group_rows}
-                ends = {_require_int(r, c_e, ctx) for r in group_rows}
-                if len(starts) != 1 or len(ends) != 1:
-                    raise ValueError(
-                        f"{ctx}: inconsistent region {name} values: {c_s}={sorted(starts)!r}, {c_e}={sorted(ends)!r}"
-                    )
-                regions[name] = RegionSegments(s=next(iter(starts)), e=next(iter(ends)))
+            for name in ("JC", "OT", "SB"):
+                r_ctx = f"{ctx}.regions[{name!r}]"
+                r_obj = regions_raw.get(name, None)
+                if not isinstance(r_obj, dict):
+                    raise ValueError(f"{r_ctx}: must be an object; got {type(r_obj).__name__}")
+                s1 = _require_int(r_obj, "start_1", r_ctx)
+                e1 = _require_int(r_obj, "end_1", r_ctx)
+                regions[name] = RegionSegments(s=s1, e=e1)
 
-            cycles_by_idx: dict[int, Cycle] = {}
-            for r in group_rows:
-                cycle_idx = _require_int(r, "cycle_idx", ctx)
-                if cycle_idx in cycles_by_idx:
-                    raise ValueError(f"{ctx}: duplicate cycle_idx={cycle_idx}")
-                flex = FrameRange.from_1based(_require_int(r, "flex_start_1", ctx), _require_int(r, "flex_end_1", ctx))
-                ext = FrameRange.from_1based(_require_int(r, "ext_start_1", ctx), _require_int(r, "ext_end_1", ctx))
-                cycles_by_idx[cycle_idx] = Cycle(flex=flex, ext=ext)
+            cycles_raw = entry.get("cycles", None)
+            if not isinstance(cycles_raw, list) or not cycles_raw:
+                raise ValueError(f"{ctx}: 'cycles' must be a non-empty list")
 
-            cycles: List[Cycle] = [c for _i, c in sorted(cycles_by_idx.items(), key=lambda kv: kv[0])]
+            cycles: List[Cycle] = []
+            for j, c_obj in enumerate(cycles_raw):
+                c_ctx = f"{ctx}.cycles[{j}]"
+                if not isinstance(c_obj, dict):
+                    raise ValueError(f"{c_ctx}: must be an object; got {type(c_obj).__name__}")
+
+                flex_obj = c_obj.get("flex", None)
+                ext_obj = c_obj.get("ext", None)
+                if not isinstance(flex_obj, dict) or not isinstance(ext_obj, dict):
+                    raise ValueError(f"{c_ctx}: 'flex' and 'ext' must be objects")
+
+                flex = FrameRange.from_1based(
+                    _require_int(flex_obj, "start_1", f"{c_ctx}.flex"),
+                    _require_int(flex_obj, "end_1", f"{c_ctx}.flex"),
+                )
+                ext = FrameRange.from_1based(
+                    _require_int(ext_obj, "start_1", f"{c_ctx}.ext"),
+                    _require_int(ext_obj, "end_1", f"{c_ctx}.ext"),
+                )
+                cycles.append(Cycle(flex=flex, ext=ext))
 
             meta = KneeVideoMeta(
                 condition=condition,
@@ -165,15 +180,16 @@ def _load_knee_metadata_csv(csv_path: Path) -> Dict[Key, KneeVideoMeta]:
                 regions=regions,
             )
 
-            if (video_id, n_segments) in registry:
-                raise ValueError(f"{ctx}: duplicate key encountered")
-            registry[(video_id, n_segments)] = meta
+            key = (video_id, n_segments)
+            if key in registry:
+                raise ValueError(f"{ctx}: duplicate key {key!r} encountered")
+            registry[key] = meta
         except Exception as e:
             errors.append(f"{ctx}: {e}")
 
     if errors:
         joined = "\n".join(f"- {m}" for m in errors)
-        raise ValueError(f"knee metadata CSV validation failed ({csv_path}):\n{joined}")
+        raise ValueError(f"knee metadata JSON validation failed ({json_path}):\n{joined}")
 
     return registry
 
@@ -237,7 +253,7 @@ def validate_knee_metadata(registry: Dict[Key, KneeVideoMeta]) -> None:
         raise ValueError(f"knee metadata validation failed:\n{joined}")
 
 
-KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = _load_knee_metadata_csv(CSV_PATH)
+KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = _load_knee_metadata_json(JSON_PATH)
 validate_knee_metadata(KNEE_VIDEOS)
 
 
