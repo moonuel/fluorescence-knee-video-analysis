@@ -218,7 +218,7 @@ def main() -> None:
 
     cycle_indices, cycles_str = parse_cycles_arg(args.cycles)
 
-    meta = get_knee_meta(args.condition, args.video_id, args.n_segments)
+    meta = get_knee_meta_by_condition(args.condition, args.video_id, args.n_segments)
 
     video, masks = load_video_data(args.condition, args.video_id, args.n_segments)
     total_sums, _total_nonzero, _segment_labels = compute_intensity_data(video, masks)

@@ -5,7 +5,9 @@ This module replaces scattered CYCLES, TYPES, and REGION_RANGES dictionaries.
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Literal
+from pathlib import Path
+import csv
+from typing import Dict, List, Tuple, Literal, Iterable
 
 Phase = Literal["flexion", "extension", "both"]
 
@@ -74,316 +76,189 @@ class KneeVideoMeta:
         return self.regions[name]
 
 
-# Global registry: key = (condition, video_id, n_segments)
-Key = Tuple[str, int, int]  # (condition, video_id, n_segments)
+# Global registry: key = (video_id, n_segments)
+Key = Tuple[int, int]  # (video_id, n_segments)
 
-KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = {
-    # Normal knees, N=64
-    ("normal", 308, 64): KneeVideoMeta(
-        condition="normal",
-        video_id=308,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(71, 116), FrameRange.from_1based(117, 155)),
-            Cycle(FrameRange.from_1based(253, 298), FrameRange.from_1based(299, 335)),
-            Cycle(FrameRange.from_1based(585, 618), FrameRange.from_1based(630, 669)),
-            Cycle(FrameRange.from_1based(156, 199), FrameRange.from_1based(210, 250)),
-            Cycle(FrameRange.from_1based(342, 393), FrameRange.from_1based(407, 439)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 29),
-            "OT": RegionSegments(30, 47),
-            "SB": RegionSegments(48, 64),
-        },
-    ),
-
-    ("normal", 1190, 64): KneeVideoMeta(
-        condition="normal",
-        video_id=1190,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(66, 89), FrameRange.from_1based(92, 109)),
-            Cycle(FrameRange.from_1based(421, 452), FrameRange.from_1based(470, 492)),
-            Cycle(FrameRange.from_1based(503, 532), FrameRange.from_1based(533, 569)),
-            Cycle(FrameRange.from_1based(737, 767), FrameRange.from_1based(770, 793)),
-            Cycle(FrameRange.from_1based(794, 822), FrameRange.from_1based(823, 860)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 29),  # Assuming default; adjust if needed
-            "OT": RegionSegments(30, 47),
-            "SB": RegionSegments(48, 64),
-        },
-    ),
-
-    ("normal", 1193, 64): KneeVideoMeta(
-        condition="normal",
-        video_id=1193,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(1792, 1801), FrameRange.from_1based(1802, 1812)),
-            Cycle(FrameRange.from_1based(1813, 1822), FrameRange.from_1based(1823, 1833)),
-            Cycle(FrameRange.from_1based(1834, 1843), FrameRange.from_1based(1844, 1852)),
-            Cycle(FrameRange.from_1based(1853, 1863), FrameRange.from_1based(1864, 1872)),
-            Cycle(FrameRange.from_1based(1873, 1881), FrameRange.from_1based(1881, 1889)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 29),  # Assuming default
-            "OT": RegionSegments(30, 47),
-            "SB": RegionSegments(48, 64),
-        },
-    ),
-
-    ("normal", 1207, 64): KneeVideoMeta(
-        condition="normal",
-        video_id=1207,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(242, 254), FrameRange.from_1based(264, 280)),
-            Cycle(FrameRange.from_1based(281, 293), FrameRange.from_1based(299, 312)),
-            Cycle(FrameRange.from_1based(318, 335), FrameRange.from_1based(337, 352)),
-            Cycle(FrameRange.from_1based(353, 372), FrameRange.from_1based(373, 389)),
-            Cycle(FrameRange.from_1based(391, 411), FrameRange.from_1based(412, 431)),
-            Cycle(FrameRange.from_1based(434, 451), FrameRange.from_1based(453, 467)),
-            Cycle(FrameRange.from_1based(472, 486), FrameRange.from_1based(488, 505)),
-            Cycle(FrameRange.from_1based(614, 632), FrameRange.from_1based(633, 651)),
-            Cycle(FrameRange.from_1based(652, 671), FrameRange.from_1based(672, 690)),
-            Cycle(FrameRange.from_1based(693, 708), FrameRange.from_1based(709, 727)),
-            Cycle(FrameRange.from_1based(731, 748), FrameRange.from_1based(751, 767)),
-            Cycle(FrameRange.from_1based(768, 786), FrameRange.from_1based(787, 804)),
-            Cycle(FrameRange.from_1based(807, 822), FrameRange.from_1based(824, 841)),
-            Cycle(FrameRange.from_1based(844, 862), FrameRange.from_1based(863, 877)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 26),
-            "OT": RegionSegments(27, 39),
-            "SB": RegionSegments(40, 64),
-        },
-    ),
-
-    # Normal knees, N=16 (cycles = N=64; JC/OT/SB downscaled from 64-seg ranges)
-    ("normal", 308, 16): KneeVideoMeta(
-        condition="normal",
-        video_id=308,
-        n_segments=16,
-        cycles=[  # same frames as ("normal", 308, 64)
-            Cycle(FrameRange.from_1based(71, 116), FrameRange.from_1based(117, 155)),
-            Cycle(FrameRange.from_1based(253, 298), FrameRange.from_1based(299, 335)),
-            Cycle(FrameRange.from_1based(585, 618), FrameRange.from_1based(630, 669)),
-            Cycle(FrameRange.from_1based(156, 199), FrameRange.from_1based(210, 250)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 7),
-            "OT": RegionSegments(8, 12),
-            "SB": RegionSegments(13, 16),
-        },
-    ),
-
-    ("normal", 1190, 16): KneeVideoMeta(
-        condition="normal",
-        video_id=1190,
-        n_segments=16,
-        cycles=[  # same frames as ("normal", 1190, 64)
-            Cycle(FrameRange.from_1based(66, 89), FrameRange.from_1based(92, 109)),
-            Cycle(FrameRange.from_1based(421, 452), FrameRange.from_1based(470, 492)),
-            Cycle(FrameRange.from_1based(503, 532), FrameRange.from_1based(533, 569)),
-            Cycle(FrameRange.from_1based(737, 767), FrameRange.from_1based(770, 793)),
-            Cycle(FrameRange.from_1based(794, 822), FrameRange.from_1based(823, 860)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 7),
-            "OT": RegionSegments(8, 12),
-            "SB": RegionSegments(13, 16),
-        },
-    ),
-
-    ("normal", 1193, 16): KneeVideoMeta(
-        condition="normal",
-        video_id=1193,
-        n_segments=16,
-        cycles=[  # same frames as ("normal", 1193, 64)
-            Cycle(FrameRange.from_1based(1792, 1801), FrameRange.from_1based(1802, 1812)),
-            Cycle(FrameRange.from_1based(1813, 1822), FrameRange.from_1based(1823, 1833)),
-            Cycle(FrameRange.from_1based(1834, 1843), FrameRange.from_1based(1844, 1852)),
-            Cycle(FrameRange.from_1based(1853, 1863), FrameRange.from_1based(1864, 1872)),
-            Cycle(FrameRange.from_1based(1873, 1881), FrameRange.from_1based(1881, 1889)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 7),
-            "OT": RegionSegments(8, 12),
-            "SB": RegionSegments(13, 16),
-        },
-    ),
-
-    # Aging knees, N=64
-    ("aging", 1339, 64): KneeVideoMeta(
-        condition="aging",
-        video_id=1339,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(290, 309), FrameRange.from_1based(312, 329)),
-            Cycle(FrameRange.from_1based(331, 352), FrameRange.from_1based(355, 374)),
-            Cycle(FrameRange.from_1based(375, 394), FrameRange.from_1based(398, 421)),
-            Cycle(FrameRange.from_1based(422, 439), FrameRange.from_1based(441, 463)),
-            Cycle(FrameRange.from_1based(464, 488), FrameRange.from_1based(490, 512)),
-            Cycle(FrameRange.from_1based(513, 530), FrameRange.from_1based(532, 553)),
-            Cycle(FrameRange.from_1based(554, 576), FrameRange.from_1based(579, 609)),
-            # Revised cycles suggested by Huizhu on 2026-01-19
-            Cycle(FrameRange.from_1based(1199, 1231), FrameRange.from_1based(1232, 1264)), # 8 
-            Cycle(FrameRange.from_1based(1265, 1299), FrameRange.from_1based(1300, 1336)), # 9
-            Cycle(FrameRange.from_1based(1337, 1365), FrameRange.from_1based(1366, 1390)), # 10
-        ],
-        regions={
-            "JC": RegionSegments(1, 27),
-            "OT": RegionSegments(28, 44),
-            "SB": RegionSegments(45, 64),
-        },
-    ),
-
-    ("aging", 1342, 64): KneeVideoMeta(
-        condition="aging",
-        video_id=1342,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(62, 81), FrameRange.from_1based(82, 100)),
-            Cycle(FrameRange.from_1based(102, 119), FrameRange.from_1based(123, 151)),
-            Cycle(FrameRange.from_1based(152, 171), FrameRange.from_1based(178, 199)),
-            Cycle(FrameRange.from_1based(206, 222), FrameRange.from_1based(223, 246)),
-            Cycle(FrameRange.from_1based(247, 272), FrameRange.from_1based(273, 297)),
-            Cycle(FrameRange.from_1based(298, 320), FrameRange.from_1based(321, 340)),
-            Cycle(FrameRange.from_1based(341, 364), FrameRange.from_1based(365, 384)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 27),  # Assuming default
-            "OT": RegionSegments(28, 44),
-            "SB": RegionSegments(45, 64),
-        },
-    ),
-
-    ("aging", 1357, 64): KneeVideoMeta(
-        condition="aging",
-        video_id=1357,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(218, 240), FrameRange.from_1based(241, 272)),
-            Cycle(FrameRange.from_1based(278, 305), FrameRange.from_1based(306, 330)),
-            Cycle(FrameRange.from_1based(420, 447), FrameRange.from_1based(449, 467)),
-            Cycle(FrameRange.from_1based(469, 492), FrameRange.from_1based(493, 517)),
-            Cycle(FrameRange.from_1based(639, 660), FrameRange.from_1based(662, 682)),
-            Cycle(FrameRange.from_1based(683, 709), FrameRange.from_1based(710, 732)),
-            Cycle(FrameRange.from_1based(744, 775), FrameRange.from_1based(777, 779)),
-            Cycle(FrameRange.from_1based(801, 828), FrameRange.from_1based(837, 858)),
-            Cycle(FrameRange.from_1based(859, 890), FrameRange.from_1based(893, 917)),
-            Cycle(FrameRange.from_1based(1067, 1091), FrameRange.from_1based(1092, 1118)),
-            Cycle(FrameRange.from_1based(1136, 1171), FrameRange.from_1based(1173, 1198)),
-            Cycle(FrameRange.from_1based(1199, 1230), FrameRange.from_1based(1232, 1260)),
-            Cycle(FrameRange.from_1based(1261, 1285), FrameRange.from_1based(1286, 1311)),
-            Cycle(FrameRange.from_1based(1313, 1340), FrameRange.from_1based(1342, 1365)),
-            Cycle(FrameRange.from_1based(1368, 1394), FrameRange.from_1based(1395, 1419)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 27),  # Assuming default
-            "OT": RegionSegments(28, 44),
-            "SB": RegionSegments(45, 64),
-        },
-    ),
-
-    ("aging", 1358, 64): KneeVideoMeta(
-        condition="aging",
-        video_id=1358,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(1360, 1384), FrameRange.from_1based(1385, 1406)),
-            Cycle(FrameRange.from_1based(1407, 1433), FrameRange.from_1based(1434, 1454)),
-            Cycle(FrameRange.from_1based(1461, 1483), FrameRange.from_1based(1484, 1508)),
-            Cycle(FrameRange.from_1based(1509, 1540), FrameRange.from_1based(1541, 1559)),
-            Cycle(FrameRange.from_1based(1618, 1648), FrameRange.from_1based(1649, 1669)),
-            Cycle(FrameRange.from_1based(1672, 1696), FrameRange.from_1based(1697, 1720)), 
-        ],
-        regions={
-            "JC": RegionSegments(1, 27),  # Assuming default
-            "OT": RegionSegments(28, 44),
-            "SB": RegionSegments(45, 64),
-        },
-    ),
-
-    # Aging knees, N=16 (cycles = N=64; JC/OT/SB downscaled from 64-seg ranges)
-    ("aging", 1339, 16): KneeVideoMeta(
-        condition="aging",
-        video_id=1339,
-        n_segments=16,
-        cycles=[  # same frames as ("aging", 1339, 64)
-            Cycle(FrameRange.from_1based(290, 309), FrameRange.from_1based(312, 329)),
-            Cycle(FrameRange.from_1based(331, 352), FrameRange.from_1based(355, 374)),
-            Cycle(FrameRange.from_1based(375, 394), FrameRange.from_1based(398, 421)),
-            Cycle(FrameRange.from_1based(422, 439), FrameRange.from_1based(441, 463)),
-            Cycle(FrameRange.from_1based(464, 488), FrameRange.from_1based(490, 512)),
-            Cycle(FrameRange.from_1based(513, 530), FrameRange.from_1based(532, 553)),
-            Cycle(FrameRange.from_1based(554, 576), FrameRange.from_1based(579, 609)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 7),
-            "OT": RegionSegments(8, 11),
-            "SB": RegionSegments(12, 16),
-        },
-    ),
-
-    ("aging", 1342, 16): KneeVideoMeta(
-        condition="aging",
-        video_id=1342,
-        n_segments=16,
-        cycles=[  # same 7 cycles as the updated ("aging", 1342, 64)
-            Cycle(FrameRange.from_1based(62, 81),  FrameRange.from_1based(82, 100)),
-            Cycle(FrameRange.from_1based(102, 119), FrameRange.from_1based(123, 151)),
-            Cycle(FrameRange.from_1based(152, 171), FrameRange.from_1based(178, 199)),
-            Cycle(FrameRange.from_1based(206, 222), FrameRange.from_1based(223, 246)),
-            Cycle(FrameRange.from_1based(247, 272), FrameRange.from_1based(273, 297)),
-            Cycle(FrameRange.from_1based(298, 320), FrameRange.from_1based(321, 340)),
-            Cycle(FrameRange.from_1based(341, 364), FrameRange.from_1based(365, 384)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 7),
-            "OT": RegionSegments(8, 11),
-            "SB": RegionSegments(12, 16),
-        },
-    ),
-
-    # DMM knees, N=64
-    ("dmm-0w", 1195, 64): KneeVideoMeta(
-        condition="dmm-0w",
-        video_id=1195,
-        n_segments=64,
-        cycles=[
-            Cycle(FrameRange.from_1based(771, 849), FrameRange.from_1based(855, 922)),
-            Cycle(FrameRange.from_1based(929, 988), FrameRange.from_1based(989, 1047)),
-        ],
-        regions={
-            "JC": RegionSegments(1, 27),
-            "OT": RegionSegments(28, 40),
-            "SB": RegionSegments(41, 64),
-        },
-    ),
-
-    # DMM knees, N=64 (additional stub for 4w; cycles to be filled manually)
-    # ("dmm-4w", 91, 64): KneeVideoMeta(
-    #     condition="dmm-4w",
-    #     video_id=91,
-    #     n_segments=64,
-    #     cycles=[
-    #         # TODO: fill flexion/extension frame ranges, e.g.
-    #         # Cycle(FrameRange.from_1based(start_flex, end_flex), FrameRange.from_1based(start_ext, end_ext)),
-    #     ],
-    #     regions={
-    #         "JC": RegionSegments(1, 27),   # provisional: copied from dmm-0w 1195
-    #         "OT": RegionSegments(28, 40),
-    #         "SB": RegionSegments(41, 64),
-    #     },
-    # ),
-}
+CSV_PATH = Path(__file__).resolve().parent / "metadata" / "knee_metadata.csv"
 
 
-def get_knee_meta(condition: str, video_id: int, n_segments: int) -> KneeVideoMeta:
-    key = (condition, int(video_id), n_segments)
+def _require_int(row: dict, col: str, ctx: str) -> int:
+    v = row.get(col, "")
+    try:
+        return int(v)
+    except Exception as e:
+        raise ValueError(f"{ctx}: expected int for column {col!r}, got {v!r}") from e
+
+
+def _require_str(row: dict, col: str, ctx: str) -> str:
+    v = row.get(col, "")
+    if v is None:
+        v = ""
+    v = str(v).strip()
+    if not v:
+        raise ValueError(f"{ctx}: missing required column {col!r}")
+    return v
+
+
+def _load_knee_metadata_csv(csv_path: Path) -> Dict[Key, KneeVideoMeta]:
+    if not csv_path.exists():
+        raise FileNotFoundError(f"knee metadata CSV not found at {str(csv_path)!r}")
+
+    with csv_path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None:
+            raise ValueError(f"knee metadata CSV has no header: {str(csv_path)!r}")
+
+        rows = list(reader)
+
+    groups: dict[Key, list[dict]] = {}
+    for i, row in enumerate(rows, start=2):
+        ctx = f"{csv_path.name}:{i}"
+        video_id = _require_int(row, "video_id", ctx)
+        n_segments = _require_int(row, "n_segments", ctx)
+        key = (video_id, n_segments)
+        groups.setdefault(key, []).append(row)
+
+    registry: Dict[Key, KneeVideoMeta] = {}
+    errors: list[str] = []
+
+    for (video_id, n_segments), group_rows in sorted(groups.items()):
+        ctx = f"video_id={video_id}, n_segments={n_segments}"
+        try:
+            conditions = {_require_str(r, "condition", ctx) for r in group_rows}
+            if len(conditions) != 1:
+                raise ValueError(f"{ctx}: inconsistent condition values: {sorted(conditions)!r}")
+            condition = next(iter(conditions))
+
+            # Regions are repeated per row; dedupe and validate consistency.
+            region_cols = [
+                ("JC", "JC_start_1", "JC_end_1"),
+                ("OT", "OT_start_1", "OT_end_1"),
+                ("SB", "SB_start_1", "SB_end_1"),
+            ]
+            regions: Dict[str, RegionSegments] = {}
+            for name, c_s, c_e in region_cols:
+                starts = {_require_int(r, c_s, ctx) for r in group_rows}
+                ends = {_require_int(r, c_e, ctx) for r in group_rows}
+                if len(starts) != 1 or len(ends) != 1:
+                    raise ValueError(
+                        f"{ctx}: inconsistent region {name} values: {c_s}={sorted(starts)!r}, {c_e}={sorted(ends)!r}"
+                    )
+                regions[name] = RegionSegments(s=next(iter(starts)), e=next(iter(ends)))
+
+            cycles_by_idx: dict[int, Cycle] = {}
+            for r in group_rows:
+                cycle_idx = _require_int(r, "cycle_idx", ctx)
+                if cycle_idx in cycles_by_idx:
+                    raise ValueError(f"{ctx}: duplicate cycle_idx={cycle_idx}")
+                flex = FrameRange.from_1based(_require_int(r, "flex_start_1", ctx), _require_int(r, "flex_end_1", ctx))
+                ext = FrameRange.from_1based(_require_int(r, "ext_start_1", ctx), _require_int(r, "ext_end_1", ctx))
+                cycles_by_idx[cycle_idx] = Cycle(flex=flex, ext=ext)
+
+            cycles: List[Cycle] = [c for _i, c in sorted(cycles_by_idx.items(), key=lambda kv: kv[0])]
+
+            meta = KneeVideoMeta(
+                condition=condition,
+                video_id=video_id,
+                n_segments=n_segments,
+                cycles=cycles,
+                regions=regions,
+            )
+
+            if (video_id, n_segments) in registry:
+                raise ValueError(f"{ctx}: duplicate key encountered")
+            registry[(video_id, n_segments)] = meta
+        except Exception as e:
+            errors.append(f"{ctx}: {e}")
+
+    if errors:
+        joined = "\n".join(f"- {m}" for m in errors)
+        raise ValueError(f"knee metadata CSV validation failed ({csv_path}):\n{joined}")
+
+    return registry
+
+
+def validate_knee_metadata(registry: Dict[Key, KneeVideoMeta]) -> None:
+    errors: list[str] = []
+
+    for (video_id, n_segments), meta in sorted(registry.items()):
+        ctx = f"video_id={video_id}, n_segments={n_segments}"
+
+        # Regions: 1-based inclusive and cover [1, n_segments] contiguously.
+        regions = meta.regions
+        required = {"JC", "OT", "SB"}
+        missing = required - set(regions.keys())
+        if missing:
+            errors.append(f"{ctx}: missing regions {sorted(missing)!r}")
+            continue
+
+        intervals = []
+        for name in sorted(required):
+            reg = regions[name]
+            if not (1 <= reg.s <= reg.e <= n_segments):
+                errors.append(
+                    f"{ctx}: region {name} out of bounds or inverted: s={reg.s}, e={reg.e}, n_segments={n_segments}"
+                )
+            intervals.append((reg.s, reg.e, name))
+
+        intervals.sort(key=lambda t: t[0])
+        if intervals:
+            if intervals[0][0] != 1:
+                errors.append(f"{ctx}: regions must start at segment 1; got start={intervals[0][0]} ({intervals[0][2]})")
+            for (ps, pe, pn), (ns, ne, nn) in zip(intervals, intervals[1:]):
+                if ns != pe + 1:
+                    errors.append(
+                        f"{ctx}: regions not contiguous between {pn}({ps}-{pe}) and {nn}({ns}-{ne}); expected next.start={pe+1}"
+                    )
+            if intervals[-1][1] != n_segments:
+                errors.append(
+                    f"{ctx}: regions must end at n_segments={n_segments}; got end={intervals[-1][1]} ({intervals[-1][2]})"
+                )
+
+        # Cycles: validate ordering and bounds (FrameRange is already 0-based inclusive).
+        if not meta.cycles:
+            errors.append(f"{ctx}: no cycles defined")
+        for i, c in enumerate(meta.cycles):
+            if c.flex.s < 0 or c.flex.e < 0 or c.ext.s < 0 or c.ext.e < 0:
+                errors.append(f"{ctx}: cycle_idx={i}: negative frame index in {c}")
+                continue
+            if c.flex.s > c.flex.e:
+                errors.append(f"{ctx}: cycle_idx={i}: flex start > end ({c.flex.s}>{c.flex.e})")
+            if c.ext.s > c.ext.e:
+                errors.append(f"{ctx}: cycle_idx={i}: ext start > end ({c.ext.s}>{c.ext.e})")
+            # Allow touching boundary (<=) due to existing data (e.g. normal/1193).
+            if c.flex.e > c.ext.s:
+                errors.append(
+                    f"{ctx}: cycle_idx={i}: flex must end before or at ext start; flex_end={c.flex.e}, ext_start={c.ext.s}"
+                )
+
+    if errors:
+        joined = "\n".join(f"- {m}" for m in errors)
+        raise ValueError(f"knee metadata validation failed:\n{joined}")
+
+
+KNEE_VIDEOS: Dict[Key, KneeVideoMeta] = _load_knee_metadata_csv(CSV_PATH)
+validate_knee_metadata(KNEE_VIDEOS)
+
+
+def get_knee_meta(video_id: int, n_segments: int) -> KneeVideoMeta:
+    key = (int(video_id), int(n_segments))
     try:
         return KNEE_VIDEOS[key]
     except KeyError:
         raise KeyError(f"No metadata for {key=}")
+
+
+def get_knee_meta_by_condition(condition: str, video_id: int, n_segments: int) -> KneeVideoMeta:
+    """Compatibility wrapper for older call sites.
+
+    The registry is keyed by (video_id, n_segments); this asserts the passed
+    condition matches the CSV to catch mismatched wiring early.
+    """
+    meta = get_knee_meta(video_id, n_segments)
+    if str(condition) != meta.condition:
+        raise KeyError(
+            f"No metadata for condition={condition!r}, video_id={int(video_id)}, n_segments={int(n_segments)}; "
+            f"found condition={meta.condition!r} in CSV"
+        )
+    return meta

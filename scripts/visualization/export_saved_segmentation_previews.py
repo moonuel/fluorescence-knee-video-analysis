@@ -18,7 +18,7 @@ import cv2
 from pathlib import Path
 from utils import io, views
 import tifffile as tif
-from config.knee_metadata import get_knee_meta
+from config.knee_metadata import get_knee_meta_by_condition
 
 # Target videos: all 7 at N=64
 # Map (condition, video_id) to the actual file naming convention used in data/segmented/
@@ -105,7 +105,7 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
 
     # Anatomical region boundaries if metadata available
     try:
-        meta = get_knee_meta(condition, int(video_id), n_segments)
+        meta = get_knee_meta_by_condition(condition, int(video_id), n_segments)
         regions = meta.regions
         jc = regions.get("JC")
         ot = regions.get("OT")
@@ -115,7 +115,7 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
             boundary_overlay = views.draw_boundary_line(
                 boundary_overlay,
                 radial,
-                seg_num=ot.start,  # boundary between JC and OT
+                seg_num=ot.s,  # boundary between JC and OT
                 n_segments=n_segments,
                 intensity=200,     # slightly dimmer
                 thickness=1,
@@ -128,7 +128,7 @@ def export_preview_for_video(condition: str, video_id: str, n_segments: int) -> 
             boundary_overlay = views.draw_boundary_line(
                 boundary_overlay,
                 radial,
-                seg_num=sb.start,  # boundary between OT and SB
+                seg_num=sb.s,  # boundary between OT and SB
                 n_segments=n_segments,
                 intensity=150,     # dimmer still
                 thickness=1,

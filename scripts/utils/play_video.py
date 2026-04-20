@@ -6,6 +6,8 @@ import argparse
 import sys
 import re
 
+from config.knee_metadata import get_knee_meta_by_condition
+
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
@@ -209,6 +211,7 @@ def main(video_id: int, N: Optional[int], knee_type: Optional[str], raw_path: Op
 
         radial_path = segmented_dir / f"{knee_type}_{video_id:04d}_radial_N{N}.npy"
         video_path = segmented_dir / f"{knee_type}_{video_id:04d}_video_N{N}.npy"
+        femur_path = segmented_dir / f"{knee_type}_{video_id:04d}_femur_N{N}.npy"
         if not radial_path.exists():
             raise FileNotFoundError(f"Missing radial mask: {radial_path}")
         if not video_path.exists():
@@ -229,7 +232,82 @@ def main(video_id: int, N: Optional[int], knee_type: Optional[str], raw_path: Op
 
         print(f"Displaying {knee_type} video {video_id} with {N} segments...")
         print("Radial mask (left) and processed video (right)")
-        views.show_frames([radial_display, video])
+
+        # Default: fall back to current behavior if metadata is missing/incomplete.
+        boundary_overlay = video.copy()
+
+        # Always draw the outer segmentation boundary (if possible)
+        try:
+            boundary_overlay = views.draw_outer_radial_mask_boundary(
+                boundary_overlay,
+                radial_mask,
+                intensity=255,
+                thickness=1,
+                show_video=False,
+            )
+        except Exception as e:
+            print(f"Warning: failed to draw outer segmentation boundary ({e})")
+
+        # Femur line in this project = reference radial boundary between seg 1 and seg N.
+        # Draw it across the whole video (not cycle-limited) to match existing previews.
+        try:
+            views.draw_boundary_line(
+                boundary_overlay,
+                radial_mask,
+                seg_num=1,
+                n_segments=N,
+                intensity=255,
+                thickness=1,
+                show_video=False,
+                inplace=True,
+                dashed=False,
+            )
+        except Exception as e:
+            print(f"Warning: failed to draw femur line (seg 1/N boundary) ({e})")
+
+        try:
+            meta = get_knee_meta_by_condition(knee_type, int(video_id), int(N))
+            regions = meta.regions
+            ot = regions.get("OT")
+            sb = regions.get("SB")
+            if ot is None or sb is None or not meta.cycles:
+                raise KeyError("Incomplete region/cycle metadata")
+            for cycle in meta.cycles:
+                fr = cycle.full_cycle()
+                sl = fr.to_slice()  # 0-based inclusive -> python slice
+
+                # OT-JC boundary (between OT.s-1 and OT.s)
+                views.draw_boundary_line(
+                    boundary_overlay[sl],
+                    radial_mask[sl],
+                    seg_num=ot.s,
+                    n_segments=N,
+                    intensity=200,
+                    thickness=1,
+                    show_video=False,
+                    inplace=True,
+                    dashed=False,
+                )
+
+                # SB-OT boundary (between SB.s-1 and SB.s)
+                views.draw_boundary_line(
+                    boundary_overlay[sl],
+                    radial_mask[sl],
+                    seg_num=sb.s,
+                    n_segments=N,
+                    intensity=150,
+                    thickness=1,
+                    show_video=False,
+                    inplace=True,
+                    dashed=False,
+                )
+        except Exception as e:
+            print(
+                f"Warning: no usable knee metadata for {knee_type}_{video_id:04d}_N{N}; "
+                f"skipping anatomical boundaries ({e})"
+            )
+
+        views.show_frames([radial_display, boundary_overlay])
         return
 
     assert raw_path is not None

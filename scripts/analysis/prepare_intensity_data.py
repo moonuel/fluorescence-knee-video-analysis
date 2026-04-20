@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, asdict, is_dataclass
 from typing import List, Tuple, Dict
 import sys
 import argparse
-from config.knee_metadata import get_knee_meta
+from config.knee_metadata import get_knee_meta_by_condition
 
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -329,7 +329,7 @@ def main(tasks: List[Tuple[int, int, str]]):
         print(f"---------- Processing {video_id=}, {condition=}, {N=} ----------")
 
         # Get metadata
-        meta = get_knee_meta(condition, video_id, N)
+        meta = get_knee_meta_by_condition(condition, video_id, N)
 
         # Select data
         segmented_dir = PROJECT_ROOT / "data" / "segmented"

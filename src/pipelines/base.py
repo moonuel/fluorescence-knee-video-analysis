@@ -5,7 +5,7 @@ from functools import partial
 from utils import io, utils, views
 from core import knee_segmentation as ks
 from core import radial_segmentation as rdl
-from config.knee_metadata import get_knee_meta
+from config.knee_metadata import get_knee_meta_by_condition
 
 
 # -------------------------------------------------------------------------
@@ -206,7 +206,7 @@ class KneeSegmentationPipeline:
         Returns (jc_ot_seg, ot_sb_seg) or None if metadata unavailable.
         """
         try:
-            meta = get_knee_meta(self.condition, int(self.video_id), self.n_segments)
+            meta = get_knee_meta_by_condition(self.condition, int(self.video_id), self.n_segments)
         except Exception as e:
             print(f"Warning: no region metadata for {self.condition}_{self.video_id}_N{self.n_segments}: {e}")
             return None

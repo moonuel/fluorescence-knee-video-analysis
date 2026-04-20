@@ -15,7 +15,7 @@ from pathlib import Path
 from utils import io, views, utils
 from utils.io import FigureFilename
 from core import data_processing as dp
-from config.knee_metadata import get_knee_meta, Cycle
+from config.knee_metadata import get_knee_meta_by_condition, Cycle
 import sys
 import argparse
 import warnings
@@ -1519,7 +1519,7 @@ def main(
     print(f"Scaling: {scaling}")
 
     # Get metadata
-    knee_meta = get_knee_meta(knee_cond, int(id), int(nsegs))
+    knee_meta = get_knee_meta_by_condition(knee_cond, int(id), int(nsegs))
 
     # New angle-based mode with interpolation and contiguous plotting
     # Load video and masks
