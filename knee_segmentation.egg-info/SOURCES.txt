@@ -1,0 +1,77 @@
+README.md
+pyproject.toml
+knee_segmentation.egg-info/PKG-INFO
+knee_segmentation.egg-info/SOURCES.txt
+knee_segmentation.egg-info/dependency_links.txt
+knee_segmentation.egg-info/entry_points.txt
+knee_segmentation.egg-info/requires.txt
+knee_segmentation.egg-info/top_level.txt
+scripts/analysis/generate_spatiotemporal_heatmaps.py
+scripts/analysis/prepare_intensity_data.py
+scripts/archive/old/data analysis scripts/1190_knee_radial_analysis.py
+scripts/archive/old/data analysis scripts/1193_normal_knee_analysis.py
+scripts/archive/old/data analysis scripts/1339_knee_radial_analysis.py
+scripts/archive/old/data analysis scripts/1339_knee_radial_segmentation-1.1.py
+scripts/archive/old/data analysis scripts/1342_aging_knee_analysis.py
+scripts/archive/old/data analysis scripts/308_normal_knee_radial_analysis.py
+scripts/archive/old/data analysis scripts/aging_knee_radial_segmentation_new_method.py
+scripts/archive/old/data analysis scripts/analysis of 1358 anomaly.py
+scripts/archive/old/data analysis scripts/plot_center_of_mass_cycles.py
+scripts/archive/old/segmentation scripts/308_normal_knee_radial_segmentation.py
+scripts/archive/old/segmentation scripts/aging_1339_radial.py
+scripts/archive/old/segmentation scripts/aging_knee_radial_segmentation.py
+scripts/archive/old/segmentation scripts/aging_knee_three_parts_segmentation.py
+scripts/archive/old/segmentation scripts/normal_knee_three_parts_segmentation.py
+scripts/archive/old/segmentation scripts/normal_knee_three_parts_segmentation_juan_comparison.py
+scripts/archive/old/segmentation scripts/three_parts_segmentation_coordinate_smoothing_demo.py
+scripts/archive/old/utility scripts/save_preprocess_raw_video.py
+scripts/archive/old/utility scripts/save_preprocessed_data.py
+scripts/archive/reference/AverageNormalizeHeatMapvideo1339.py
+scripts/archive/reference/AverageNormalizeHeatMapvideo308.py
+scripts/archive/reference/COM_rescaled.py
+scripts/experiments/edge detection/edge_detection.py
+scripts/experiments/noise removal and normalization/normalize_video_intensity.py
+scripts/segmentation/aging_1339_radial.py
+scripts/segmentation/aging_1342_radial.py
+scripts/segmentation/aging_1357_radial.py
+scripts/segmentation/aging_1358_radial.py
+scripts/segmentation/dmm-0w_1195_radial.py
+scripts/segmentation/dmm-4w_0091_radial.py
+scripts/segmentation/normal_0000_radial.py
+scripts/segmentation/normal_0001_radial.py
+scripts/segmentation/normal_0308_radial.py
+scripts/segmentation/normal_1189_radial.py
+scripts/segmentation/normal_1190_radial.py
+scripts/segmentation/normal_1193_radial.py
+scripts/segmentation/normal_1207_radial.py
+scripts/utils/__init__.py
+scripts/utils/gui_process_avi.py
+scripts/utils/gui_process_tif.py
+scripts/utils/play_video.py
+scripts/utils/process_avi_to_h5.py
+scripts/utils/process_avi_to_npy.py
+scripts/utils/process_h5_to_npy.py
+scripts/utils/process_npy_to_h5.py
+scripts/utils/process_tif_to_npy.py
+scripts/utils/validate_excel_files.py
+scripts/utils/json_excel_sync/__init__.py
+scripts/utils/json_excel_sync/excel_to_json.py
+scripts/utils/json_excel_sync/json_to_excel.py
+scripts/visualization/__init__.py
+scripts/visualization/dmm_analysis.py
+scripts/visualization/export_annotated_knee_video.py
+scripts/visualization/export_saved_segmentation_previews.py
+scripts/visualization/plot_all_com_cycles.py
+scripts/visualization/plot_averaged_cycle_metrics.py
+scripts/visualization/plot_com_cycles_from_heatmaps.py
+scripts/visualization/plot_flux_smoothing_variants.py
+scripts/visualization/plot_total_intensity_video.py
+scripts/visualization/tests/test_avg_cycle_mode.py
+src/config/__init__.py
+src/config/knee_metadata.py
+src/core/__init__.py
+src/core/data_processing.py
+src/core/knee_segmentation.py
+src/core/radial_segmentation.py
+src/pipelines/__init__.py
+src/pipelines/base.py

@@ -1,6 +1,6 @@
 # Knee segmentation config package
 
-VERBOSE = True
+VERBOSE = False
 OUTPUT = False
 
 TYPES = { # TODO: remove this
