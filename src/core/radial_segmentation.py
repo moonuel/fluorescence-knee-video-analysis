@@ -372,6 +372,69 @@ def get_centroid_pts(femur_pts: np.ndarray) -> np.ndarray:
 
     return np.array(centroids, dtype=object)
 
+
+def get_quantile_centroid_pts(
+    femur_pts: np.ndarray,
+    *,
+    x_weight: float = 0.5,
+    y_weight: float = 0.5,
+    fill_empty: str = "previous",
+) -> np.ndarray:
+    """Calculates a quantile-based centroid of points, per frame.
+
+    Uses per-axis quantiles: `x_weight` for the x-coordinate, `y_weight` for the y-coordinate.
+
+    Output shape conventions match `get_centroid_pts`: each frame contributes a single point
+    wrapped as `[cntrd]` to preserve downstream indexing expectations (`centers[f, 0]`).
+
+    Args:
+        femur_pts: Jagged/object array of per-frame points, each (n_pts_i, 2) in (x, y).
+        x_weight: Quantile in [0, 1] for x-coordinates.
+        y_weight: Quantile in [0, 1] for y-coordinates.
+        fill_empty: Behavior for empty frames:
+            - "previous": forward-fill centroid using last valid centroid
+            - "none": keep an empty placeholder for that frame
+
+    Returns:
+        np.ndarray (dtype=object): shape (n_frames,) with each element shaped like (1, 2).
+    """
+
+    if VERBOSE:
+        print("get_quantile_centroid_pts() called!")
+
+    femur_pts = femur_pts.copy()
+    nfs = femur_pts.shape[0]
+
+    xw = float(np.clip(x_weight, 0.0, 1.0))
+    yw = float(np.clip(y_weight, 0.0, 1.0))
+
+    if fill_empty not in {"previous", "none"}:
+        raise ValueError(f"fill_empty must be 'previous' or 'none'; got {fill_empty!r}")
+
+    centroids = []
+    last_valid = None
+    for cf in range(nfs):
+        pts = np.asarray(femur_pts[cf])
+
+        if pts.size == 0:
+            if fill_empty == "previous" and last_valid is not None:
+                centroids.append([last_valid])
+            else:
+                centroids.append([])
+            continue
+
+        xs = pts[:, 0]
+        ys = pts[:, 1]
+
+        cx = np.quantile(xs, xw)
+        cy = np.quantile(ys, yw)
+
+        cntrd = np.array([int(np.rint(cx)), int(np.rint(cy))], dtype=int)
+        centroids.append([cntrd])
+        last_valid = cntrd
+
+    return np.array(centroids, dtype=object)
+
 def filter_outlier_points_centroid(points: np.ndarray, eps: float) -> np.ndarray:
     """Exclude points farther than `eps` from the centroid in each frame.
 
