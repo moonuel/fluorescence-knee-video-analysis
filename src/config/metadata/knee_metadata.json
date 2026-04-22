@@ -63,77 +63,6 @@
       ]
     },
     {
-      "video_id": "0308",
-      "n_segments": 64,
-      "condition": "normal",
-      "regions": {
-        "JC": {
-          "start_1": 1,
-          "end_1": 29
-        },
-        "OT": {
-          "start_1": 30,
-          "end_1": 47
-        },
-        "SB": {
-          "start_1": 48,
-          "end_1": 64
-        }
-      },
-      "cycles": [
-        {
-          "flex": {
-            "start_1": 71,
-            "end_1": 116
-          },
-          "ext": {
-            "start_1": 117,
-            "end_1": 155
-          }
-        },
-        {
-          "flex": {
-            "start_1": 253,
-            "end_1": 298
-          },
-          "ext": {
-            "start_1": 299,
-            "end_1": 335
-          }
-        },
-        {
-          "flex": {
-            "start_1": 585,
-            "end_1": 618
-          },
-          "ext": {
-            "start_1": 630,
-            "end_1": 669
-          }
-        },
-        {
-          "flex": {
-            "start_1": 156,
-            "end_1": 199
-          },
-          "ext": {
-            "start_1": 210,
-            "end_1": 250
-          }
-        },
-        {
-          "flex": {
-            "start_1": 342,
-            "end_1": 393
-          },
-          "ext": {
-            "start_1": 407,
-            "end_1": 439
-          }
-        }
-      ]
-    },
-    {
       "video_id": "1190",
       "n_segments": 16,
       "condition": "normal",
@@ -149,77 +78,6 @@
         "SB": {
           "start_1": 13,
           "end_1": 16
-        }
-      },
-      "cycles": [
-        {
-          "flex": {
-            "start_1": 66,
-            "end_1": 89
-          },
-          "ext": {
-            "start_1": 92,
-            "end_1": 109
-          }
-        },
-        {
-          "flex": {
-            "start_1": 421,
-            "end_1": 452
-          },
-          "ext": {
-            "start_1": 470,
-            "end_1": 492
-          }
-        },
-        {
-          "flex": {
-            "start_1": 503,
-            "end_1": 532
-          },
-          "ext": {
-            "start_1": 533,
-            "end_1": 569
-          }
-        },
-        {
-          "flex": {
-            "start_1": 737,
-            "end_1": 767
-          },
-          "ext": {
-            "start_1": 770,
-            "end_1": 793
-          }
-        },
-        {
-          "flex": {
-            "start_1": 794,
-            "end_1": 822
-          },
-          "ext": {
-            "start_1": 823,
-            "end_1": 860
-          }
-        }
-      ]
-    },
-    {
-      "video_id": "1190",
-      "n_segments": 64,
-      "condition": "normal",
-      "regions": {
-        "JC": {
-          "start_1": 1,
-          "end_1": 29
-        },
-        "OT": {
-          "start_1": 30,
-          "end_1": 47
-        },
-        "SB": {
-          "start_1": 48,
-          "end_1": 64
         }
       },
       "cycles": [
@@ -342,6 +200,482 @@
           "ext": {
             "start_1": 1881,
             "end_1": 1889
+          }
+        }
+      ]
+    },
+    {
+      "video_id": "1339",
+      "n_segments": 16,
+      "condition": "aging",
+      "regions": {
+        "JC": {
+          "start_1": 1,
+          "end_1": 7
+        },
+        "OT": {
+          "start_1": 8,
+          "end_1": 11
+        },
+        "SB": {
+          "start_1": 12,
+          "end_1": 16
+        }
+      },
+      "cycles": [
+        {
+          "flex": {
+            "start_1": 290,
+            "end_1": 309
+          },
+          "ext": {
+            "start_1": 312,
+            "end_1": 329
+          }
+        },
+        {
+          "flex": {
+            "start_1": 331,
+            "end_1": 352
+          },
+          "ext": {
+            "start_1": 355,
+            "end_1": 374
+          }
+        },
+        {
+          "flex": {
+            "start_1": 375,
+            "end_1": 394
+          },
+          "ext": {
+            "start_1": 398,
+            "end_1": 421
+          }
+        },
+        {
+          "flex": {
+            "start_1": 422,
+            "end_1": 439
+          },
+          "ext": {
+            "start_1": 441,
+            "end_1": 463
+          }
+        },
+        {
+          "flex": {
+            "start_1": 464,
+            "end_1": 488
+          },
+          "ext": {
+            "start_1": 490,
+            "end_1": 512
+          }
+        },
+        {
+          "flex": {
+            "start_1": 513,
+            "end_1": 530
+          },
+          "ext": {
+            "start_1": 532,
+            "end_1": 553
+          }
+        },
+        {
+          "flex": {
+            "start_1": 554,
+            "end_1": 576
+          },
+          "ext": {
+            "start_1": 579,
+            "end_1": 609
+          }
+        }
+      ]
+    },
+    {
+      "video_id": "1342",
+      "n_segments": 16,
+      "condition": "aging",
+      "regions": {
+        "JC": {
+          "start_1": 1,
+          "end_1": 7
+        },
+        "OT": {
+          "start_1": 8,
+          "end_1": 11
+        },
+        "SB": {
+          "start_1": 12,
+          "end_1": 16
+        }
+      },
+      "cycles": [
+        {
+          "flex": {
+            "start_1": 62,
+            "end_1": 81
+          },
+          "ext": {
+            "start_1": 82,
+            "end_1": 100
+          }
+        },
+        {
+          "flex": {
+            "start_1": 102,
+            "end_1": 119
+          },
+          "ext": {
+            "start_1": 123,
+            "end_1": 151
+          }
+        },
+        {
+          "flex": {
+            "start_1": 152,
+            "end_1": 171
+          },
+          "ext": {
+            "start_1": 178,
+            "end_1": 199
+          }
+        },
+        {
+          "flex": {
+            "start_1": 206,
+            "end_1": 222
+          },
+          "ext": {
+            "start_1": 223,
+            "end_1": 246
+          }
+        },
+        {
+          "flex": {
+            "start_1": 247,
+            "end_1": 272
+          },
+          "ext": {
+            "start_1": 273,
+            "end_1": 297
+          }
+        },
+        {
+          "flex": {
+            "start_1": 298,
+            "end_1": 320
+          },
+          "ext": {
+            "start_1": 321,
+            "end_1": 340
+          }
+        },
+        {
+          "flex": {
+            "start_1": 341,
+            "end_1": 364
+          },
+          "ext": {
+            "start_1": 365,
+            "end_1": 384
+          }
+        }
+      ]
+    },
+    {
+      "video_id": "0000",
+      "n_segments": 64,
+      "condition": "normal",
+      "regions": {
+        "JC": {
+          "start_1": 1,
+          "end_1": 29
+        },
+        "OT": {
+          "start_1": 30,
+          "end_1": 45
+        },
+        "SB": {
+          "start_1": 46,
+          "end_1": 64
+        }
+      },
+      "cycles": [
+        {
+          "flex": {
+            "start_1": 1097,
+            "end_1": 1116
+          },
+          "ext": {
+            "start_1": 1140,
+            "end_1": 1161
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1140,
+            "end_1": 1161
+          },
+          "ext": {
+            "start_1": 1162,
+            "end_1": 1185
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1186,
+            "end_1": 1210
+          },
+          "ext": {
+            "start_1": 1211,
+            "end_1": 1233
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1234,
+            "end_1": 1257
+          },
+          "ext": {
+            "start_1": 1259,
+            "end_1": 1282
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1285,
+            "end_1": 1306
+          },
+          "ext": {
+            "start_1": 1307,
+            "end_1": 1332
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1333,
+            "end_1": 1355
+          },
+          "ext": {
+            "start_1": 1356,
+            "end_1": 1382
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1383,
+            "end_1": 1405
+          },
+          "ext": {
+            "start_1": 1406,
+            "end_1": 1435
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1439,
+            "end_1": 1461
+          },
+          "ext": {
+            "start_1": 1462,
+            "end_1": 1487
+          }
+        },
+        {
+          "flex": {
+            "start_1": 1488,
+            "end_1": 1510
+          },
+          "ext": {
+            "start_1": 1511,
+            "end_1": 1537
+          }
+        }
+      ]
+    },
+    {
+      "video_id": "0001",
+      "n_segments": 64,
+      "condition": "normal",
+      "regions": {
+        "JC": {
+          "start_1": 1,
+          "end_1": 29
+        },
+        "OT": {
+          "start_1": 30,
+          "end_1": 47
+        },
+        "SB": {
+          "start_1": 48,
+          "end_1": 64
+        }
+      },
+      "cycles": [
+        {
+          "flex": {
+            "start_1": 604,
+            "end_1": 626
+          },
+          "ext": {
+            "start_1": 627,
+            "end_1": 655
+          }
+        },
+        {
+          "flex": {
+            "start_1": 999,
+            "end_1": 1019
+          },
+          "ext": {
+            "start_1": 1020,
+            "end_1": 1041
+          }
+        }
+      ]
+    },
+    {
+      "video_id": "0308",
+      "n_segments": 64,
+      "condition": "normal",
+      "regions": {
+        "JC": {
+          "start_1": 1,
+          "end_1": 29
+        },
+        "OT": {
+          "start_1": 30,
+          "end_1": 47
+        },
+        "SB": {
+          "start_1": 48,
+          "end_1": 64
+        }
+      },
+      "cycles": [
+        {
+          "flex": {
+            "start_1": 71,
+            "end_1": 116
+          },
+          "ext": {
+            "start_1": 117,
+            "end_1": 155
+          }
+        },
+        {
+          "flex": {
+            "start_1": 253,
+            "end_1": 298
+          },
+          "ext": {
+            "start_1": 299,
+            "end_1": 335
+          }
+        },
+        {
+          "flex": {
+            "start_1": 585,
+            "end_1": 618
+          },
+          "ext": {
+            "start_1": 630,
+            "end_1": 669
+          }
+        },
+        {
+          "flex": {
+            "start_1": 156,
+            "end_1": 199
+          },
+          "ext": {
+            "start_1": 210,
+            "end_1": 250
+          }
+        },
+        {
+          "flex": {
+            "start_1": 342,
+            "end_1": 393
+          },
+          "ext": {
+            "start_1": 407,
+            "end_1": 439
+          }
+        }
+      ]
+    },
+    {
+      "video_id": "1190",
+      "n_segments": 64,
+      "condition": "normal",
+      "regions": {
+        "JC": {
+          "start_1": 1,
+          "end_1": 29
+        },
+        "OT": {
+          "start_1": 30,
+          "end_1": 47
+        },
+        "SB": {
+          "start_1": 48,
+          "end_1": 64
+        }
+      },
+      "cycles": [
+        {
+          "flex": {
+            "start_1": 66,
+            "end_1": 89
+          },
+          "ext": {
+            "start_1": 92,
+            "end_1": 109
+          }
+        },
+        {
+          "flex": {
+            "start_1": 421,
+            "end_1": 452
+          },
+          "ext": {
+            "start_1": 470,
+            "end_1": 492
+          }
+        },
+        {
+          "flex": {
+            "start_1": 503,
+            "end_1": 532
+          },
+          "ext": {
+            "start_1": 533,
+            "end_1": 569
+          }
+        },
+        {
+          "flex": {
+            "start_1": 737,
+            "end_1": 767
+          },
+          "ext": {
+            "start_1": 770,
+            "end_1": 793
+          }
+        },
+        {
+          "flex": {
+            "start_1": 794,
+            "end_1": 822
+          },
+          "ext": {
+            "start_1": 823,
+            "end_1": 860
           }
         }
       ]
@@ -621,97 +955,6 @@
     },
     {
       "video_id": "1339",
-      "n_segments": 16,
-      "condition": "aging",
-      "regions": {
-        "JC": {
-          "start_1": 1,
-          "end_1": 7
-        },
-        "OT": {
-          "start_1": 8,
-          "end_1": 11
-        },
-        "SB": {
-          "start_1": 12,
-          "end_1": 16
-        }
-      },
-      "cycles": [
-        {
-          "flex": {
-            "start_1": 290,
-            "end_1": 309
-          },
-          "ext": {
-            "start_1": 312,
-            "end_1": 329
-          }
-        },
-        {
-          "flex": {
-            "start_1": 331,
-            "end_1": 352
-          },
-          "ext": {
-            "start_1": 355,
-            "end_1": 374
-          }
-        },
-        {
-          "flex": {
-            "start_1": 375,
-            "end_1": 394
-          },
-          "ext": {
-            "start_1": 398,
-            "end_1": 421
-          }
-        },
-        {
-          "flex": {
-            "start_1": 422,
-            "end_1": 439
-          },
-          "ext": {
-            "start_1": 441,
-            "end_1": 463
-          }
-        },
-        {
-          "flex": {
-            "start_1": 464,
-            "end_1": 488
-          },
-          "ext": {
-            "start_1": 490,
-            "end_1": 512
-          }
-        },
-        {
-          "flex": {
-            "start_1": 513,
-            "end_1": 530
-          },
-          "ext": {
-            "start_1": 532,
-            "end_1": 553
-          }
-        },
-        {
-          "flex": {
-            "start_1": 554,
-            "end_1": 576
-          },
-          "ext": {
-            "start_1": 579,
-            "end_1": 609
-          }
-        }
-      ]
-    },
-    {
-      "video_id": "1339",
       "n_segments": 64,
       "condition": "aging",
       "regions": {
@@ -827,97 +1070,6 @@
           "ext": {
             "start_1": 1366,
             "end_1": 1390
-          }
-        }
-      ]
-    },
-    {
-      "video_id": "1342",
-      "n_segments": 16,
-      "condition": "aging",
-      "regions": {
-        "JC": {
-          "start_1": 1,
-          "end_1": 7
-        },
-        "OT": {
-          "start_1": 8,
-          "end_1": 11
-        },
-        "SB": {
-          "start_1": 12,
-          "end_1": 16
-        }
-      },
-      "cycles": [
-        {
-          "flex": {
-            "start_1": 62,
-            "end_1": 81
-          },
-          "ext": {
-            "start_1": 82,
-            "end_1": 100
-          }
-        },
-        {
-          "flex": {
-            "start_1": 102,
-            "end_1": 119
-          },
-          "ext": {
-            "start_1": 123,
-            "end_1": 151
-          }
-        },
-        {
-          "flex": {
-            "start_1": 152,
-            "end_1": 171
-          },
-          "ext": {
-            "start_1": 178,
-            "end_1": 199
-          }
-        },
-        {
-          "flex": {
-            "start_1": 206,
-            "end_1": 222
-          },
-          "ext": {
-            "start_1": 223,
-            "end_1": 246
-          }
-        },
-        {
-          "flex": {
-            "start_1": 247,
-            "end_1": 272
-          },
-          "ext": {
-            "start_1": 273,
-            "end_1": 297
-          }
-        },
-        {
-          "flex": {
-            "start_1": 298,
-            "end_1": 320
-          },
-          "ext": {
-            "start_1": 321,
-            "end_1": 340
-          }
-        },
-        {
-          "flex": {
-            "start_1": 341,
-            "end_1": 364
-          },
-          "ext": {
-            "start_1": 365,
-            "end_1": 384
           }
         }
       ]
@@ -1261,158 +1413,6 @@
           "ext": {
             "start_1": 1697,
             "end_1": 1720
-          }
-        }
-      ]
-    },
-    {
-      "video_id": "0000",
-      "n_segments": 64,
-      "condition": "normal",
-      "regions": {
-        "JC": {
-          "start_1": 1,
-          "end_1": 29
-        },
-        "OT": {
-          "start_1": 30,
-          "end_1": 45
-        },
-        "SB": {
-          "start_1": 46,
-          "end_1": 64
-        }
-      },
-      "cycles": [
-        {
-          "flex": {
-            "start_1": 1097,
-            "end_1": 1116
-          },
-          "ext": {
-            "start_1": 1140,
-            "end_1": 1161
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1140,
-            "end_1": 1161
-          },
-          "ext": {
-            "start_1": 1162,
-            "end_1": 1185
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1186,
-            "end_1": 1210
-          },
-          "ext": {
-            "start_1": 1211,
-            "end_1": 1233
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1234,
-            "end_1": 1257
-          },
-          "ext": {
-            "start_1": 1259,
-            "end_1": 1282
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1285,
-            "end_1": 1306
-          },
-          "ext": {
-            "start_1": 1307,
-            "end_1": 1332
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1333,
-            "end_1": 1355
-          },
-          "ext": {
-            "start_1": 1356,
-            "end_1": 1382
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1383,
-            "end_1": 1405
-          },
-          "ext": {
-            "start_1": 1406,
-            "end_1": 1435
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1439,
-            "end_1": 1461
-          },
-          "ext": {
-            "start_1": 1462,
-            "end_1": 1487
-          }
-        },
-        {
-          "flex": {
-            "start_1": 1488,
-            "end_1": 1510
-          },
-          "ext": {
-            "start_1": 1511,
-            "end_1": 1537
-          }
-        }
-      ]
-    },
-    {
-      "video_id": "0001",
-      "n_segments": 64,
-      "condition": "normal",
-      "regions": {
-        "JC": {
-          "start_1": 1,
-          "end_1": 29
-        },
-        "OT": {
-          "start_1": 30,
-          "end_1": 47
-        },
-        "SB": {
-          "start_1": 48,
-          "end_1": 64
-        }
-      },
-      "cycles": [
-        {
-          "flex": {
-            "start_1": 604,
-            "end_1": 626
-          },
-          "ext": {
-            "start_1": 627,
-            "end_1": 655
-          }
-        },
-        {
-          "flex": {
-            "start_1": 999,
-            "end_1": 1019
-          },
-          "ext": {
-            "start_1": 1020,
-            "end_1": 1041
           }
         }
       ]

@@ -77,6 +77,10 @@ def create_worksheet_name(video_id, n_segments: int) -> str:
 def write_excel_from_json(input_path: Path, output_path: Path) -> None:
     """Convert JSON metadata to Excel workbook."""
     from openpyxl import Workbook
+    from openpyxl.styles import Font
+    
+    # Bold font for labels
+    bold_font = Font(bold=True)
     
     # Load JSON data
     data = load_knee_metadata_json(input_path)
@@ -92,10 +96,13 @@ def write_excel_from_json(input_path: Path, output_path: Path) -> None:
     
     # Write metadata sheet
     ws_metadata["A1"] = "schema_version"
+    ws_metadata["A1"].font = bold_font
     ws_metadata["B1"] = 1
     ws_metadata["A2"] = "last_modified"
+    ws_metadata["A2"].font = bold_font
     ws_metadata["B2"] = datetime.now().isoformat()
     ws_metadata["A3"] = "source"
+    ws_metadata["A3"].font = bold_font
     ws_metadata["B3"] = "Excel (source of truth)"
     
     # Create worksheets for each video group
@@ -117,32 +124,42 @@ def write_excel_from_json(input_path: Path, output_path: Path) -> None:
         # Write video metadata (row 1)
         entry = entries[0]  # All entries in a group should be identical
         
-        # ws["A1"] = "Field"
-        # ws["B1"] = "Value"
         ws["A1"] = "video_id"
+        ws["A1"].font = bold_font
         ws["B1"] = video_id
         ws["A2"] = "n_segments"
+        ws["A2"].font = bold_font
         ws["B2"] = n_segments
         ws["A3"] = "condition"
+        ws["A3"].font = bold_font
         ws["B3"] = entry["condition"]
         
         # Write regions (row 5)
         ws["A5"] = "Region"
+        ws["A5"].font = bold_font
         ws["B5"] = "start_1"
+        ws["B5"].font = bold_font
         ws["C5"] = "end_1"
+        ws["C5"].font = bold_font
         
         regions = entry["regions"]
         for row_idx, region_name in enumerate(["JC", "OT", "SB"], start=6):
             ws[f"A{row_idx}"] = region_name
+            ws[f"A{row_idx}"].font = bold_font
             ws[f"B{row_idx}"] = regions[region_name]["start_1"]
             ws[f"C{row_idx}"] = regions[region_name]["end_1"]
         
         # Write cycles (row 10)
         ws["A10"] = "cycle_index"
+        ws["A10"].font = bold_font
         ws["B10"] = "flex_start_1"
+        ws["B10"].font = bold_font
         ws["C10"] = "flex_end_1"
+        ws["C10"].font = bold_font
         ws["D10"] = "ext_start_1"
+        ws["D10"].font = bold_font
         ws["E10"] = "ext_end_1"
+        ws["E10"].font = bold_font
         
         for cycle_idx, cycle in enumerate(entry["cycles"], start=11):
             ws[f"A{cycle_idx}"] = cycle_idx - 10
