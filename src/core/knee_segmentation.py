@@ -13,7 +13,7 @@ from utils import utils
 from typing import Tuple, Dict, List
 import matplotlib.pyplot as plt
 
-VERBOSE = True
+VERBOSE = False
 DEBUG = True
 
 def centre_video(video: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

@@ -280,6 +280,7 @@ class KneeSegmentationPipeline:
             boundary_overlay, self.radial_mask)
 
         views.show_frames([
+            self.femur_mask,
             self.radial_mask * (255 // self.n_segments),
             boundary_overlay
         ], title)
@@ -426,9 +427,27 @@ class KneeSegmentationPipeline:
     # Radial Segmentation
     # ------------------------------------------------------------------
 
-    def radial_segmentation(self, mask=None, femur_mask=None, n_lines=128, n_segments=64, tip_range=(0.05, 0.5), midpoint_range=(0.6, 0.95), smooth_window=9, inplace=False):
+    def radial_segmentation(
+        self,
+        mask=None,
+        femur_mask=None,
+        n_lines=128,
+        n_segments=64,
+        tip_range=(0.05, 0.5),
+        midpoint_range=(0.6, 0.95),
+        smooth_window=9,
+        *,
+        tip_x_weight: float = 0.5,
+        tip_y_weight: float = 0.5,
+        midpoint_x_weight: float = 0.5,
+        midpoint_y_weight: float = 0.5,
+        centroid_mode: str = "mean",  # "mean" | "quantile"
+        inplace=False,
+    ):
         """
         Extract radial lines from the femur tip through joint space and label radial segments.
+        
+        Defaults: tip_range=(0.05, 0.5), midpoint_range=(0.6, 0.95)
         """
         if mask is None:
             mask = self.otsu_mask
@@ -442,14 +461,28 @@ class KneeSegmentationPipeline:
         s, e = tip_range
         tip_bndry = rdl.estimate_femur_midpoint_boundary(boundary_points, s, e)
         tip_bndry = rdl.forward_fill_jagged(tip_bndry)
-        femur_tip = rdl.get_centroid_pts(tip_bndry)
+        if centroid_mode == "mean":
+            femur_tip = rdl.get_centroid_pts(tip_bndry)
+        elif centroid_mode == "quantile":
+            femur_tip = rdl.get_quantile_centroid_pts(
+                tip_bndry, x_weight=tip_x_weight, y_weight=tip_y_weight
+            )
+        else:
+            raise ValueError(
+                f"centroid_mode must be 'mean' or 'quantile'; got {centroid_mode!r}"
+            )
         femur_tip = rdl.smooth_points(femur_tip, smooth_window)
 
         # Midpoint
         s, e = midpoint_range
         midpt_bndry = rdl.estimate_femur_midpoint_boundary(boundary_points, s, e)
         midpt_bndry = rdl.forward_fill_jagged(midpt_bndry)
-        femur_midpt = rdl.get_centroid_pts(midpt_bndry)
+        if centroid_mode == "mean":
+            femur_midpt = rdl.get_centroid_pts(midpt_bndry)
+        else:  # centroid_mode == "quantile" validated above
+            femur_midpt = rdl.get_quantile_centroid_pts(
+                midpt_bndry, x_weight=midpoint_x_weight, y_weight=midpoint_y_weight
+            )
         femur_midpt = rdl.smooth_points(femur_midpt, smooth_window)
 
         radial_labels = rdl.label_radial_masks(mask, femur_tip, femur_midpt, N=n_segments)
@@ -677,14 +710,17 @@ class KneeSegmentationPipeline:
         # Save results (ask for confirmation in debug mode, auto-save in production)
         if debug:
             save_response = input("Debug mode: Save results? (y/n): ").strip().lower()
-            if save_response == 'y':
-                self.save_results(self.processed_video, self.radial_mask, self.femur_mask,
-                                self.video_id, self.condition, self.n_segments)
-            else:
+            if not save_response == 'y':
                 print("Debug mode: Save cancelled.")
-        else:
-            # Production mode: always save
-            self.save_results(self.processed_video, self.radial_mask, self.femur_mask,
+                return None
+            
+        self.save_results(self.processed_video, self.radial_mask, self.femur_mask,
                             self.video_id, self.condition, self.n_segments)
+        
+        # Save intensity data into Excel
+        # from scripts.analysis import prepare_intensity_data
+
+        # prepare_intensity_data
+        
 
         return self.processed_video, self.radial_mask
