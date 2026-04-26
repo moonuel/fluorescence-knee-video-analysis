@@ -663,7 +663,7 @@ class KneeSegmentationPipeline:
         print("Step 2: Generating Otsu mask...")
         self.generate_otsu_mask(inplace=True)
         if debug:
-            views.show_frames(self.otsu_mask, "2. Otsu Mask (Outer Boundary)")
+            views.show_frames([self.video_hist, self.otsu_mask], "2. Otsu Mask (Outer Boundary)")
             if debug_pause: input("Press Enter to continue...")
 
         # Step 3: Refine Otsu Mask
