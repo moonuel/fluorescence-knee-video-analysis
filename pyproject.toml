@@ -29,4 +29,4 @@ json-to-excel = "scripts.utils.json_excel_sync.json_to_excel:main"
 excel-to-json = "scripts.utils.json_excel_sync.excel_to_json:main"
 
 [tool.setuptools.packages.find]
-where = ["src", "scripts"]
+where = ["src"]
