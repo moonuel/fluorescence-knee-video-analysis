@@ -216,7 +216,7 @@ def parse_arguments():
 def save_to_excel(total_sums, total_nonzero, flex, ext, meta):
     intensities_dir = PROJECT_ROOT / "data" / "intensities_total"
     intensities_dir.mkdir(exist_ok=True)  # Ensure directory exists
-    output_file = intensities_dir / f"{meta.video_id}N{meta.n_segments}intensities.xlsx"
+    output_file = intensities_dir / f"{meta.video_id:04d}N{meta.n_segments}intensities.xlsx"
 
     # Create region ranges DataFrame from metadata
     region_data = [{"Region": name, "Start": reg.s, "End": reg.e} for name, reg in meta.regions.items()]
