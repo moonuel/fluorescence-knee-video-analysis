@@ -610,6 +610,77 @@
       ]
     },
     {
+      "video_id": "0007",
+      "n_segments": 64,
+      "condition": "normal",
+      "regions": {
+        "JC": {
+          "start_1": 1,
+          "end_1": 31
+        },
+        "OT": {
+          "start_1": 32,
+          "end_1": 45
+        },
+        "SB": {
+          "start_1": 46,
+          "end_1": 64
+        }
+      },
+      "cycles": [
+        {
+          "flex": {
+            "start_1": 566,
+            "end_1": 592
+          },
+          "ext": {
+            "start_1": 593,
+            "end_1": 618
+          }
+        },
+        {
+          "flex": {
+            "start_1": 623,
+            "end_1": 647
+          },
+          "ext": {
+            "start_1": 650,
+            "end_1": 678
+          }
+        },
+        {
+          "flex": {
+            "start_1": 739,
+            "end_1": 760
+          },
+          "ext": {
+            "start_1": 773,
+            "end_1": 796
+          }
+        },
+        {
+          "flex": {
+            "start_1": 797,
+            "end_1": 820
+          },
+          "ext": {
+            "start_1": 821,
+            "end_1": 848
+          }
+        },
+        {
+          "flex": {
+            "start_1": 849,
+            "end_1": 872
+          },
+          "ext": {
+            "start_1": 876,
+            "end_1": 905
+          }
+        }
+      ]
+    },
+    {
       "video_id": "0308",
       "n_segments": 64,
       "condition": "normal",
