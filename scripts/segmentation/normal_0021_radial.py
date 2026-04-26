@@ -33,7 +33,11 @@ class Normal0021Pipeline(KneeSegmentationPipeline):
 
         return super().refine_femur_mask(mask, morph_open_kernel, morph_close_kernel, morph_erode_kernel, morph_dilate_kernel, inplace)
     
-    def radial_segmentation(self, mask=None, femur_mask=None, n_lines=128, n_segments=64, tip_range=(0.05, 0.45), midpoint_range=(0.55, 0.95), smooth_window=11, *, tip_x_weight = 0.505, tip_y_weight = 0.49, midpoint_x_weight = 0.5, midpoint_y_weight = 0.49, centroid_mode = "quantile", inplace=False):
+    def radial_segmentation(self, mask=None, femur_mask=None, n_lines=128, n_segments=64, 
+                            tip_range=(0.05, 0.45), midpoint_range=(0.55, 0.95), smooth_window=11, *, 
+                            tip_x_weight = 0.51, tip_y_weight = 0.485, 
+                            midpoint_x_weight = 0.5, midpoint_y_weight = 0.485,
+                            centroid_mode = "quantile", inplace=False):
         return super().radial_segmentation(mask, femur_mask, n_lines, n_segments, tip_range, midpoint_range, smooth_window, tip_x_weight=tip_x_weight, tip_y_weight=tip_y_weight, midpoint_x_weight=midpoint_x_weight, midpoint_y_weight=midpoint_y_weight, centroid_mode=centroid_mode, inplace=inplace)
 
     def run(self, debug=False, debug_pause=False):
