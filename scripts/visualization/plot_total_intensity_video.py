@@ -443,6 +443,7 @@ def plot_total_intensity(
     ax_main.set_xlabel("Frame index")
     ax_main.set_ylabel("Total intensity (sum over segments)")
     ax_main.grid(True, alpha=0.25)
+    ax_main.set_xlim(0, n_frames - 1)
 
     title = "Total intensity vs frame"
     subtitle = (
