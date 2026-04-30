@@ -22,11 +22,18 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ipykernel==7.1.0",
+    "pytest==8.3.5",
 ]
 
 [project.scripts]
 json-to-excel = "scripts.utils.json_excel_sync.json_to_excel:main"
 excel-to-json = "scripts.utils.json_excel_sync.excel_to_json:main"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests that use real workbook files from data/",
+]
+testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

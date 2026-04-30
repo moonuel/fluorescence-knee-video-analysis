@@ -167,4 +167,3 @@ def test_compute_metric_averaged_metric_shapes_total() -> None:
     )
     assert mf.shape == (20,)
     assert me.shape == (20,)
-
