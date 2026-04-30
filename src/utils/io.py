@@ -587,3 +587,182 @@ def load_video(filepath:str) -> np.ndarray:
         raise ValueError(f"File is not compatible with shape (nfs, h, w). Is it a grayscale video? Given: {video.shape=}")
     
     return video
+
+
+# =============================================================================
+# KNEE INTENSITY WORKBOOK LOADING
+# =============================================================================
+
+SHEET_SEGMENT_INTENSITIES = "Segment Intensities"
+SHEET_SEGMENT_INTENSITIES_BGSUB = "Segment Intensities (bgsub)"
+SHEET_NUM_PIXELS = "Number of Mask Pixels"
+SHEET_MERGED_CYCLES = "Flexion-Extension Frames"
+SHEET_FLEX_LEGACY = "Flexion Frames"
+SHEET_EXT_LEGACY = "Extension Frames"
+SHEET_ANATOMICAL_REGIONS = "Anatomical Regions"
+
+
+@dataclass
+class KneeIntensityWorkbook:
+    """Loaded data from a {VID}N{SEGS}intensities.xlsx workbook."""
+    path: Path
+    intensities: np.ndarray
+    flexion_cycles: pd.DataFrame
+    extension_cycles: pd.DataFrame
+    num_pixels: Optional[np.ndarray] = None
+    anatomical_regions: Optional[pd.DataFrame] = None
+
+
+def _clean_cycle_sheet(df_raw: pd.DataFrame, sheet: str, path: Path) -> pd.DataFrame:
+    """Clean a raw cycle sheet DataFrame into integer columns ['start','end'].
+
+    Handles legacy formats:
+    - optional header row containing 'start'/'end' substrings
+    - three columns: [cycle?], start, end
+    - extra blank rows/columns
+    """
+    if df_raw.empty:
+        raise ValueError(f"Sheet {sheet!r} in workbook {path} is empty")
+    df = df_raw.copy().dropna(how="all")
+    if df.empty:
+        raise ValueError(f"Sheet {sheet!r} in workbook {path} has no data")
+    first_row = df.iloc[0, :].astype(str).str.lower()
+    if ("start" in first_row.values) and ("end" in first_row.values):
+        df = df.iloc[1:, :]
+    df = df.iloc[:, 0:3]
+    start = pd.to_numeric(df.iloc[:, 1], errors="coerce")
+    end = pd.to_numeric(df.iloc[:, 2], errors="coerce")
+    out = pd.DataFrame({"start": start, "end": end}).dropna(how="any")
+    out["start"] = out["start"].astype(int)
+    out["end"] = out["end"].astype(int)
+    if out.empty:
+        raise ValueError(
+            f"Sheet {sheet!r} in workbook {path} has no valid (start,end) rows after cleaning"
+        )
+    return out.reset_index(drop=True)
+
+
+def _clean_anatomical_regions(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """Clean Anatomical Regions sheet to standard columns Region, Start, End (1-based int)."""
+    df = df_raw.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    colmap: Dict[str, str] = {}
+    for c in df.columns:
+        cl = c.lower()
+        if cl == "region":
+            colmap[c] = "Region"
+        elif cl == "start":
+            colmap[c] = "Start"
+        elif cl == "end":
+            colmap[c] = "End"
+    df = df.rename(columns=colmap)
+    required = ["Region", "Start", "End"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Malformed Anatomical Regions sheet: missing columns {missing}. Found: {list(df.columns)}"
+        )
+    df = df.dropna(subset=["Region", "Start", "End"]).copy()
+    df["Start"] = pd.to_numeric(df["Start"], errors="coerce")
+    df["End"] = pd.to_numeric(df["End"], errors="coerce")
+    df = df.dropna(subset=["Start", "End"]).copy()
+    df["Start"] = df["Start"].astype(int)
+    df["End"] = df["End"].astype(int)
+    return df.reset_index(drop=True)
+
+
+def load_knee_intensity_workbook(
+    path: Path,
+    source: str = "raw",
+    include_pixels: bool = False,
+    include_regions: bool = False,
+) -> KneeIntensityWorkbook:
+    """Load intensity, cycle, and optional pixel/region data from a knee workbook.
+
+    Parameters
+    ----------
+    path:
+        Path to the .xlsx workbook.
+    source: {"raw", "bgsub"}
+        Which intensity sheet to load.
+    include_pixels:
+        If True, also load the Number of Mask Pixels sheet.
+    include_regions:
+        If True, also load and clean the Anatomical Regions sheet.
+
+    Returns
+    -------
+    KneeIntensityWorkbook with populated fields.
+    """
+    intensity_sheet = (
+        SHEET_SEGMENT_INTENSITIES if source == "raw" else SHEET_SEGMENT_INTENSITIES_BGSUB
+    )
+    try:
+        xls = pd.ExcelFile(path)
+    except Exception as e:
+        raise ValueError(f"Failed to open workbook {path}: {e}") from e
+
+    sheet_names = xls.sheet_names
+
+    # --- 1. Intensities ---
+    if intensity_sheet not in sheet_names:
+        raise FileNotFoundError(
+            f"Workbook {path} is missing required sheet {intensity_sheet!r}. Available: {sheet_names}"
+        )
+    df_int = pd.read_excel(xls, sheet_name=intensity_sheet, header=0, index_col=0)
+    df_int = df_int.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    intensities = df_int.to_numpy(dtype=float)
+
+    # --- 2. Num pixels (optional) ---
+    num_pixels: Optional[np.ndarray] = None
+    if include_pixels:
+        if SHEET_NUM_PIXELS not in sheet_names:
+            raise FileNotFoundError(
+                f"Workbook {path} is missing required sheet {SHEET_NUM_PIXELS!r}. Available: {sheet_names}"
+            )
+        df_px = pd.read_excel(xls, sheet_name=SHEET_NUM_PIXELS, header=0, index_col=0)
+        df_px = df_px.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        num_pixels = df_px.to_numpy(dtype=float)
+
+    # --- 3. Cycles (new merged format first, legacy fallback) ---
+    if SHEET_MERGED_CYCLES in sheet_names:
+        df_merged = pd.read_excel(xls, sheet_name=SHEET_MERGED_CYCLES, header=None)
+        # Split merged sheet: cols 0-1 = flexion, cols 2-3 = extension
+        df_flex_raw = df_merged.iloc[:, 0:2].copy()
+        df_ext_raw = df_merged.iloc[:, 2:4].copy()
+        # _clean_cycle_sheet expects 3 columns [cycle?, start, end].
+        # Insert a dummy column 0 so that start/end are at cols 1/2.
+        df_flex_raw.insert(0, "_dummy", np.nan)
+        df_ext_raw.insert(0, "_dummy", np.nan)
+        flexion_cycles = _clean_cycle_sheet(df_flex_raw, SHEET_MERGED_CYCLES + " (flex cols)", path)
+        extension_cycles = _clean_cycle_sheet(df_ext_raw, SHEET_MERGED_CYCLES + " (ext cols)", path)
+    elif SHEET_FLEX_LEGACY in sheet_names and SHEET_EXT_LEGACY in sheet_names:
+        df_flex_raw = pd.read_excel(xls, sheet_name=SHEET_FLEX_LEGACY, header=None)
+        df_ext_raw = pd.read_excel(xls, sheet_name=SHEET_EXT_LEGACY, header=None)
+        flexion_cycles = _clean_cycle_sheet(df_flex_raw, SHEET_FLEX_LEGACY, path)
+        extension_cycles = _clean_cycle_sheet(df_ext_raw, SHEET_EXT_LEGACY, path)
+    else:
+        raise FileNotFoundError(
+            f"Workbook {path} has no cycle sheets. Tried {SHEET_MERGED_CYCLES!r} and "
+            f"({SHEET_FLEX_LEGACY!r}, {SHEET_EXT_LEGACY!r}). Available: {sheet_names}"
+        )
+
+    # --- 4. Anatomical regions (optional) ---
+    anatomical_regions: Optional[pd.DataFrame] = None
+    if include_regions:
+        if SHEET_ANATOMICAL_REGIONS not in sheet_names:
+            raise FileNotFoundError(
+                f"Workbook {path} is missing required sheet {SHEET_ANATOMICAL_REGIONS!r}. "
+                f"Available: {sheet_names}"
+            )
+        df_raw_regions = pd.read_excel(xls, sheet_name=SHEET_ANATOMICAL_REGIONS, header=0)
+        anatomical_regions = _clean_anatomical_regions(df_raw_regions)
+
+    return KneeIntensityWorkbook(
+        path=path,
+        intensities=intensities,
+        flexion_cycles=flexion_cycles,
+        extension_cycles=extension_cycles,
+        num_pixels=num_pixels,
+        anatomical_regions=anatomical_regions,
+    )

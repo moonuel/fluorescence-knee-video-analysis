@@ -37,6 +37,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import mplcursors
 
+from src.utils.io import load_knee_intensity_workbook, KneeIntensityWorkbook
+
 IntensityScaling = str  # Literal-like: {"raw","norm","rel"}
 
 
@@ -86,11 +88,6 @@ def apply_intensity_scaling(intensities: np.ndarray, scaling: IntensityScaling) 
 
 INTENSITIES_DIR = Path("data") / "intensities_total"
 DEFAULT_OUT_DIR = Path("figures")
-
-SHEET_SEGMENT_INTENSITIES = "Segment Intensities"
-SHEET_SEGMENT_INTENSITIES_BGSUB = "Segment Intensities (bgsub)"
-SHEET_FLEXION_FRAMES = "Flexion Frames"
-SHEET_EXTENSION_FRAMES = "Extension Frames"
 
 
 # =============================================================================
@@ -224,73 +221,6 @@ def resolve_video_spec_path(spec: VideoSpec) -> Path:
 
 
 # =============================================================================
-# EXCEL LOADING
-# =============================================================================
-
-
-@dataclass
-class WorkbookData:
-    path: Path
-    intensities: np.ndarray  # (n_frames, n_segments)
-    flexion_cycles: pd.DataFrame  # columns: start,end (int)
-    extension_cycles: pd.DataFrame  # columns: start,end (int)
-
-
-def _clean_cycle_sheet(df_raw: pd.DataFrame, sheet: str, path: Path) -> pd.DataFrame:
-    if df_raw.empty:
-        raise ValueError(f"Sheet {sheet!r} in workbook {path} is empty")
-    df = df_raw.copy().dropna(how="all")
-    if df.empty:
-        raise ValueError(f"Sheet {sheet!r} in workbook {path} has no data")
-
-    # If the first row looks like a header, drop it.
-    first_row = df.iloc[0, :].astype(str).str.lower()
-    if ("start" in first_row.values) and ("end" in first_row.values):
-        df = df.iloc[1:, :]
-
-    # Keep first 3 columns max: [cycle?], start, end
-    df = df.iloc[:, 0:3]
-    start = pd.to_numeric(df.iloc[:, 1], errors="coerce")
-    end = pd.to_numeric(df.iloc[:, 2], errors="coerce")
-    out = pd.DataFrame({"start": start, "end": end}).dropna(how="any")
-    out["start"] = out["start"].astype(int)
-    out["end"] = out["end"].astype(int)
-    if out.empty:
-        raise ValueError(
-            f"Sheet {sheet!r} in workbook {path} has no valid (start,end) rows after cleaning"
-        )
-    return out.reset_index(drop=True)
-
-
-def load_workbook(path: Path, source: str) -> WorkbookData:
-    intensity_sheet = (
-        SHEET_SEGMENT_INTENSITIES if source == "raw" else SHEET_SEGMENT_INTENSITIES_BGSUB
-    )
-    try:
-        xls = pd.ExcelFile(path)
-    except Exception as e:
-        raise ValueError(f"Failed to open workbook {path}: {e}") from e
-
-    required = [intensity_sheet, SHEET_FLEXION_FRAMES, SHEET_EXTENSION_FRAMES]
-    missing = [s for s in required if s not in xls.sheet_names]
-    if missing:
-        raise FileNotFoundError(
-            f"Workbook {path} is missing required sheets: {missing}. Available: {xls.sheet_names}"
-        )
-
-    df_int = pd.read_excel(xls, sheet_name=intensity_sheet, header=0, index_col=0)
-    df_int = df_int.apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    intensities = df_int.to_numpy(dtype=float)
-
-    df_flex_raw = pd.read_excel(xls, sheet_name=SHEET_FLEXION_FRAMES, header=None)
-    df_ext_raw = pd.read_excel(xls, sheet_name=SHEET_EXTENSION_FRAMES, header=None)
-    flex = _clean_cycle_sheet(df_flex_raw, SHEET_FLEXION_FRAMES, path)
-    ext = _clean_cycle_sheet(df_ext_raw, SHEET_EXTENSION_FRAMES, path)
-
-    return WorkbookData(path=path, intensities=intensities, flexion_cycles=flex, extension_cycles=ext)
-
-
-# =============================================================================
 # LIST MODE
 # =============================================================================
 
@@ -328,7 +258,7 @@ def _parse_subplot_dims(s: str) -> Tuple[int, int]:
     return r, c
 
 
-def _cycle_span_frames(workbook: WorkbookData, cycle_idx_1based: int) -> Tuple[int, int]:
+def _cycle_span_frames(workbook: KneeIntensityWorkbook, cycle_idx_1based: int) -> Tuple[int, int]:
     i = cycle_idx_1based - 1
     if i < 0 or i >= len(workbook.flexion_cycles) or i >= len(workbook.extension_cycles):
         raise IndexError(
@@ -376,7 +306,7 @@ def _compute_region_intensities(
 def plot_total_intensity(
     *,
     spec: VideoSpec,
-    workbook: WorkbookData,
+    workbook: KneeIntensityWorkbook,
     source: str,
     scaling: str,
     subplot_dims: Optional[Tuple[int, int]],
@@ -696,7 +626,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
 
     try:
-        wb = load_workbook(spec.resolved_path, args.source)
+        wb = load_knee_intensity_workbook(spec.resolved_path, args.source)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1

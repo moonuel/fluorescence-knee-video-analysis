@@ -16,6 +16,8 @@ from config.knee_metadata import KNEE_VIDEOS
 import scipy as sp
 from pathlib import Path
 
+from src.utils.io import load_knee_intensity_workbook
+
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
@@ -123,26 +125,6 @@ def validate_input_file(video_number: int, segment_count: int) -> str:
     return str(input_xlsx)
 
 
-def clean_intervals(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Clean and extract start/end intervals from an Excel sheet.
-    
-    Args:
-        df: Raw DataFrame from Excel sheet containing interval data
-        
-    Returns:
-        Tuple of (starts, ends) as numpy arrays
-    """
-    df = df.dropna(how="all")
-    first_row = df.iloc[0, :].astype(str).str.lower()
-    if ("start" in first_row.values) and ("end" in first_row.values):
-        df = df.iloc[1:, :]
-    df = df.iloc[:, 0:3]
-    starts = pd.to_numeric(df.iloc[:, 1], errors="coerce").dropna().astype(int).to_numpy()
-    ends = pd.to_numeric(df.iloc[:, 2], errors="coerce").dropna().astype(int).to_numpy()
-    return starts, ends
-
-
 def load_and_clean_data(input_xlsx: str, opt: str) -> tuple:
     """
     Load Excel file and clean data sheets.
@@ -154,28 +136,19 @@ def load_and_clean_data(input_xlsx: str, opt: str) -> tuple:
     Returns:
         Tuple of (df_intensity, starts_flex, ends_flex, starts_ext, ends_ext)
     """
-    # Load sheets
-    xls = pd.ExcelFile(input_xlsx)
-    df_intensity_raw = pd.read_excel(xls, sheet_name="Segment Intensities", header=None)
-    df_num_pixels_raw = pd.read_excel(xls, sheet_name="Number of Mask Pixels", header=None)
-    df_flex = pd.read_excel(xls, sheet_name="Flexion Frames", header=None)
-    df_ext = pd.read_excel(xls, sheet_name="Extension Frames", header=None)
+    wb = load_knee_intensity_workbook(Path(input_xlsx), source="raw", include_pixels=True)
 
-    # Clean intensity data
-    df_intensity = df_intensity_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
-    df_num_pixels = df_num_pixels_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
+    intensities = wb.intensities
+    if opt == "unit":
+        intensities = intensities / wb.num_pixels
+        intensities = np.nan_to_num(intensities, nan=0.0, posinf=0.0, neginf=0.0)
 
-    # Optional: take average intensity per pixel, per segment
-    if opt == "total": 
-        pass
-    elif opt == "unit":
-        df_intensity = df_intensity / df_num_pixels
-        df_intensity.fillna(0, inplace=True)
+    df_intensity = pd.DataFrame(intensities)
+    starts_flex = wb.flexion_cycles["start"].to_numpy()
+    ends_flex = wb.flexion_cycles["end"].to_numpy()
+    starts_ext = wb.extension_cycles["start"].to_numpy()
+    ends_ext = wb.extension_cycles["end"].to_numpy()
 
-    # Extract intervals
-    starts_flex, ends_flex = clean_intervals(df_flex)
-    starts_ext, ends_ext = clean_intervals(df_ext)
-    
     return df_intensity, starts_flex, ends_flex, starts_ext, ends_ext
 
 

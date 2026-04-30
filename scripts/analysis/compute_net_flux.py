@@ -50,13 +50,11 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from src.utils.io import load_knee_intensity_workbook
+
 DEFAULT_OUTPUT = Path("net_flux_results.xlsx")
 
 INTENSITIES_DIR = Path("data") / "intensities_total"
-SHEET_SEGMENT_INTENSITIES = "Segment Intensities"
-SHEET_SEGMENT_INTENSITIES_BGSUB = "Segment Intensities (bgsub)"
-SHEET_FLEXION_FRAMES = "Flexion Frames"
-SHEET_EXTENSION_FRAMES = "Extension Frames"
 
 
 def apply_intensity_scaling(intensities: np.ndarray, scaling: str) -> np.ndarray:
@@ -88,60 +86,6 @@ class VideoSpec:
     n_segments: Optional[int] = None
     cycles: Optional[object] = None
     resolved_path: Optional[Path] = None
-
-
-@dataclass
-class WorkbookData:
-    path: Path
-    intensities: np.ndarray
-    flexion_cycles: pd.DataFrame
-    extension_cycles: pd.DataFrame
-
-
-def _clean_cycle_sheet(df_raw: pd.DataFrame, sheet: str, path: Path) -> pd.DataFrame:
-    if df_raw.empty:
-        raise ValueError(f"Sheet {sheet!r} in workbook {path} is empty")
-    df = df_raw.copy().dropna(how="all")
-    if df.empty:
-        raise ValueError(f"Sheet {sheet!r} in workbook {path} has no data")
-    first_row = df.iloc[0, :].astype(str).str.lower()
-    if ("start" in first_row.values) and ("end" in first_row.values):
-        df = df.iloc[1:, :]
-    df = df.iloc[:, 0:3]
-    start = pd.to_numeric(df.iloc[:, 1], errors="coerce")
-    end = pd.to_numeric(df.iloc[:, 2], errors="coerce")
-    out = pd.DataFrame({"start": start, "end": end}).dropna(how="any")
-    out["start"] = out["start"].astype(int)
-    out["end"] = out["end"].astype(int)
-    if out.empty:
-        raise ValueError(
-            f"Sheet {sheet!r} in workbook {path} has no valid (start,end) rows after cleaning"
-        )
-    return out.reset_index(drop=True)
-
-
-def load_workbook(path: Path, source: str) -> WorkbookData:
-    intensity_sheet = (
-        SHEET_SEGMENT_INTENSITIES if source == "raw" else SHEET_SEGMENT_INTENSITIES_BGSUB
-    )
-    try:
-        xls = pd.ExcelFile(path)
-    except Exception as e:
-        raise ValueError(f"Failed to open workbook {path}: {e}") from e
-    required = [intensity_sheet, SHEET_FLEXION_FRAMES, SHEET_EXTENSION_FRAMES]
-    missing = [s for s in required if s not in xls.sheet_names]
-    if missing:
-        raise FileNotFoundError(
-            f"Workbook {path} is missing required sheets: {missing}. Available: {xls.sheet_names}"
-        )
-    df_int = pd.read_excel(xls, sheet_name=intensity_sheet, header=0, index_col=0)
-    df_int = df_int.apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    intensities = df_int.to_numpy(dtype=float)
-    df_flex_raw = pd.read_excel(xls, sheet_name=SHEET_FLEXION_FRAMES, header=None)
-    df_ext_raw = pd.read_excel(xls, sheet_name=SHEET_EXTENSION_FRAMES, header=None)
-    flex = _clean_cycle_sheet(df_flex_raw, SHEET_FLEXION_FRAMES, path)
-    ext = _clean_cycle_sheet(df_ext_raw, SHEET_EXTENSION_FRAMES, path)
-    return WorkbookData(path=path, intensities=intensities, flexion_cycles=flex, extension_cycles=ext)
 
 
 def resolve_video_spec_path(spec: VideoSpec) -> Path:
@@ -245,29 +189,18 @@ def _resolve_workbook_path(video_id: int, n_segments: int) -> Path:
     return resolve_video_spec_path(spec)
 
 
-def _load_region_ranges(path: Path) -> Dict[str, Tuple[int, int]]:
-    try:
-        df_regions = pd.read_excel(path, sheet_name="Anatomical Regions")
-    except Exception as e:
-        raise ValueError(f"Failed to load 'Anatomical Regions' sheet from {path}: {e}") from e
-    region_ranges: Dict[str, Tuple[int, int]] = {}
-    for _, row in df_regions.iterrows():
-        region_name = str(row["Region"]).strip()
-        start_excel = int(row["Start"])
-        end_excel = int(row["End"])
-        start_0based = start_excel - 1
-        end_exclusive = end_excel
-        region_ranges[region_name] = (start_0based, end_exclusive)
-    return region_ranges
-
-
 def compute_intensity_and_net_flux(config: dict, scaling: str, source: str) -> pd.DataFrame:
     video_id = config["video_id"]
     n_segments = config["n_segments"]
     path = _resolve_workbook_path(video_id, n_segments)
     logging.info("Loading workbook: %s", path)
-    wb = load_workbook(path, source=source)
-    region_ranges = _load_region_ranges(path)
+    wb = load_knee_intensity_workbook(path, source=source, include_regions=True)
+    region_ranges: Dict[str, Tuple[int, int]] = {}
+    for _, row in wb.anatomical_regions.iterrows():
+        region_name = str(row["Region"]).strip()
+        start_0based = int(row["Start"]) - 1
+        end_exclusive = int(row["End"])
+        region_ranges[region_name] = (start_0based, end_exclusive)
     if "SB" not in region_ranges or "JC" not in region_ranges:
         raise ValueError(
             f"Workbook must contain 'SB' and 'JC' regions. Found: {list(region_ranges.keys())}"

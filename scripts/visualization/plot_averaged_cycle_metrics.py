@@ -49,6 +49,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
+from src.utils.io import (
+    load_knee_intensity_workbook,
+    KneeIntensityWorkbook,
+    SHEET_FLEX_LEGACY,
+    SHEET_EXT_LEGACY,
+)
+
 plt.rcParams['font.size']=14
 
 def _parse_pair_of_floats(text: str, *, name: str) -> tuple[float, float]:
@@ -310,13 +317,6 @@ ScalingType = Literal["raw", "norm", "rel"]
 SourceType = Literal["raw", "bgsub"]
 XDomainType = Literal["angle", "frame"]
 AvgCycleModeType = Literal["averaged_data", "averaged_metric"]
-
-# Sheet names
-SHEET_SEGMENT_INTENSITIES = "Segment Intensities"
-SHEET_SEGMENT_INTENSITIES_BGSUB = "Segment Intensities BGSub"
-SHEET_FLEXION_FRAMES = "Flexion Frames"
-SHEET_EXTENSION_FRAMES = "Extension Frames"
-SHEET_ANATOMICAL_REGIONS = "Anatomical Regions"
 
 # Default directories
 INTENSITIES_DIR = Path("data") / "intensities_total"
@@ -906,181 +906,11 @@ def compute_metric_averaged_metric(
 
 # =============================================================================
 # DATA LOADING STUBS
+# (load_knee_intensity_workbook imported from src.utils.io)
 # =============================================================================
 
-@dataclass
-class WorkbookData:
-    """Loaded data from an intensity Excel workbook.
 
-    Attributes:
-        path: Path to the workbook.
-        video_id: Video identifier.
-        n_segments: Number of segments.
-        intensities: Per-segment intensity matrix (n_frames, n_segments).
-        flexion_cycles: Flexion cycle frame ranges.
-        extension_cycles: Extension cycle frame ranges.
-        anatomical_regions: Anatomical region definitions.
-    """
-    path: Path
-    video_id: int
-    n_segments: int
-    intensities: np.ndarray
-    flexion_cycles: pd.DataFrame
-    extension_cycles: pd.DataFrame
-    anatomical_regions: pd.DataFrame
-
-
-def load_workbook(spec: VideoSpec, source: SourceType) -> WorkbookData:
-    """Load data from an intensity Excel workbook.
-
-    Args:
-        spec: Resolved VideoSpec.
-        source: Data source ('raw' or 'bgsub').
-
-    Returns:
-        WorkbookData with loaded arrays.
-
-    Raises:
-        FileNotFoundError: If required sheets are missing.
-        ValueError: If data is malformed.
-    """
-    def _require_columns(df: pd.DataFrame, cols: List[str], sheet: str) -> None:
-        missing = [c for c in cols if c not in df.columns]
-        if missing:
-            raise ValueError(
-                f"Malformed sheet {sheet!r} in workbook {path}: missing columns {missing}. "
-                f"Found columns: {list(df.columns)}"
-            )
-
-    def _clean_cycle_sheet(df_raw: pd.DataFrame, sheet: str) -> pd.DataFrame:
-        """Return DataFrame with integer columns ['start','end'].
-
-        Handles legacy formats where the sheet may have:
-        - a header row with 'Start'/'End'
-        - three columns: cycle/index, start, end
-        - extra blank rows/columns
-        """
-        if df_raw.empty:
-            raise ValueError(f"Sheet {sheet!r} in workbook {path} is empty")
-
-        df = df_raw.copy()
-        df = df.dropna(how="all")
-        if df.empty:
-            raise ValueError(f"Sheet {sheet!r} in workbook {path} has no data")
-
-        # If the first row looks like a header, drop it.
-        first_row = df.iloc[0, :].astype(str).str.lower()
-        if ("start" in first_row.values) and ("end" in first_row.values):
-            df = df.iloc[1:, :]
-
-        # Keep first 3 columns max: [cycle?], start, end
-        df = df.iloc[:, 0:3]
-
-        # Coerce start/end from 2nd/3rd columns.
-        start = pd.to_numeric(df.iloc[:, 1], errors="coerce")
-        end = pd.to_numeric(df.iloc[:, 2], errors="coerce")
-        out = pd.DataFrame({"start": start, "end": end}).dropna(how="any")
-        out["start"] = out["start"].astype(int)
-        out["end"] = out["end"].astype(int)
-
-        if out.empty:
-            raise ValueError(
-                f"Sheet {sheet!r} in workbook {path} has no valid (start,end) rows after cleaning"
-            )
-        return out.reset_index(drop=True)
-
-    # Resolve workbook path
-    path = spec.resolved_path or resolve_video_spec_path(spec)
-    if not path.is_file():
-        raise FileNotFoundError(f"Workbook not found: {path}")
-
-    intensity_sheet = (
-        SHEET_SEGMENT_INTENSITIES if source == "raw" else SHEET_SEGMENT_INTENSITIES_BGSUB
-    )
-
-    try:
-        xls = pd.ExcelFile(path)
-    except Exception as e:
-        raise ValueError(f"Failed to open workbook {path}: {e}") from e
-
-    required_sheets = [
-        intensity_sheet,
-        SHEET_FLEXION_FRAMES,
-        SHEET_EXTENSION_FRAMES,
-        SHEET_ANATOMICAL_REGIONS,
-    ]
-    missing_sheets = [s for s in required_sheets if s not in xls.sheet_names]
-    if missing_sheets:
-        raise FileNotFoundError(
-            f"Workbook {path} is missing required sheets: {missing_sheets}. "
-            f"Available: {xls.sheet_names}"
-        )
-
-    # Intensities: written by prepare_intensity_data.py via DataFrame.to_excel(index=True)
-    # so we expect headers in row 1 and an index column.
-    df_int = pd.read_excel(xls, sheet_name=intensity_sheet, header=0, index_col=0)
-    # Some legacy workbooks may include non-numeric columns; coerce and fill.
-    df_int = df_int.apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    intensities = df_int.to_numpy(dtype=float)
-
-    # Cycles: read raw then clean to (start,end)
-    df_flex_raw = pd.read_excel(xls, sheet_name=SHEET_FLEXION_FRAMES, header=None)
-    df_ext_raw = pd.read_excel(xls, sheet_name=SHEET_EXTENSION_FRAMES, header=None)
-    flexion_cycles = _clean_cycle_sheet(df_flex_raw, SHEET_FLEXION_FRAMES)
-    extension_cycles = _clean_cycle_sheet(df_ext_raw, SHEET_EXTENSION_FRAMES)
-
-    # Anatomical regions: expected columns Region, Start, End
-    anatomical_regions = pd.read_excel(xls, sheet_name=SHEET_ANATOMICAL_REGIONS, header=0)
-    anatomical_regions.columns = [str(c).strip() for c in anatomical_regions.columns]
-    # Normalize likely variants.
-    colmap: Dict[str, str] = {}
-    for c in anatomical_regions.columns:
-        cl = c.lower()
-        if cl == "region":
-            colmap[c] = "Region"
-        elif cl == "start":
-            colmap[c] = "Start"
-        elif cl == "end":
-            colmap[c] = "End"
-    anatomical_regions = anatomical_regions.rename(columns=colmap)
-    _require_columns(anatomical_regions, ["Region", "Start", "End"], SHEET_ANATOMICAL_REGIONS)
-    anatomical_regions = anatomical_regions.dropna(subset=["Region", "Start", "End"]).copy()
-    anatomical_regions["Start"] = pd.to_numeric(anatomical_regions["Start"], errors="coerce")
-    anatomical_regions["End"] = pd.to_numeric(anatomical_regions["End"], errors="coerce")
-    anatomical_regions = anatomical_regions.dropna(subset=["Start", "End"]).copy()
-    anatomical_regions["Start"] = anatomical_regions["Start"].astype(int)
-    anatomical_regions["End"] = anatomical_regions["End"].astype(int)
-
-    # Infer identifiers / validate n_segments
-    n_segments = int(df_int.shape[1])
-    if spec.n_segments is not None and int(spec.n_segments) != n_segments:
-        raise ValueError(
-            f"Segment count mismatch for {path.name}: spec has N={spec.n_segments}, "
-            f"but sheet {intensity_sheet!r} has {n_segments} columns"
-        )
-
-    video_id = spec.video_id
-    if video_id is None:
-        m = re.search(r"(\d+)N(\d+)", path.name, re.IGNORECASE)
-        if m:
-            video_id = int(m.group(1))
-    if video_id is None:
-        raise ValueError(
-            f"Could not infer video_id from VIDEO_SPEC {spec.base!r} or workbook name {path.name!r}"
-        )
-
-    return WorkbookData(
-        path=path,
-        video_id=int(video_id),
-        n_segments=n_segments,
-        intensities=intensities,
-        flexion_cycles=flexion_cycles,
-        extension_cycles=extension_cycles,
-        anatomical_regions=anatomical_regions.reset_index(drop=True),
-    )
-
-
-def validate_cycles(spec: VideoSpec, workbook: WorkbookData, phase: PhaseType) -> None:
+def validate_cycles(spec: VideoSpec, workbook: KneeIntensityWorkbook, phase: PhaseType) -> None:
     """Validate that requested cycle indices are in range and frame intervals are valid.
 
     Cycle indices are interpreted as 1-based (matching the CLI and typical worksheet labeling).
@@ -1154,9 +984,9 @@ def validate_cycles(spec: VideoSpec, workbook: WorkbookData, phase: PhaseType) -
                 )
 
     if phase in ("flexion", "both"):
-        _check_intervals(workbook.flexion_cycles, SHEET_FLEXION_FRAMES, spec.cycles)
+        _check_intervals(workbook.flexion_cycles, SHEET_FLEX_LEGACY, spec.cycles)
     if phase in ("extension", "both"):
-        _check_intervals(workbook.extension_cycles, SHEET_EXTENSION_FRAMES, spec.cycles)
+        _check_intervals(workbook.extension_cycles, SHEET_EXT_LEGACY, spec.cycles)
 
 
 # =============================================================================
@@ -1855,7 +1685,7 @@ def main() -> int:
         # 7. Save TODO
 
         # 1. Load workbooks
-        workbook = load_workbook(spec, args.source)
+        workbook = load_knee_intensity_workbook(spec.resolved_path, args.source, include_regions=True)
         
         # 2. Validate cycles
         validate_cycles(spec, workbook, args.phase)

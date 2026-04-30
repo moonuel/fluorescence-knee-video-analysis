@@ -22,7 +22,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
 import os.path
+from pathlib import Path
 from config import TYPES
+from src.utils.io import load_knee_intensity_workbook
 
 
 # =============================================================================
@@ -83,80 +85,34 @@ def validate_cli_arguments(argv):
     return video_ids, segment_count, opt, multiple_videos
 
 
-def load_excel_data(video_number, segment_count):
-    """
-    Load and parse Excel data for a single video.
-    
-    Args:
-        video_number: Video identifier
-        segment_count: Number of segments
-        
+def load_knee_data(video_number, segment_count, opt):
+    """Load knee intensity workbook using the shared loader.
+
     Returns:
-        tuple: (df_intensity_raw, df_num_pixels_raw, df_flex, df_ext)
-        
-    Raises:
-        ValueError: If expected Excel file doesn't exist
+        tuple: (df_intensity, starts_flex, ends_flex, starts_ext, ends_ext)
     """
-    input_xlsx = fr"../data/intensities_total/{video_number}N{segment_count}intensities.xlsx"
-    
-    if not os.path.isfile(input_xlsx):
+    input_xlsx = Path(f"data/intensities_total/{video_number}N{segment_count}intensities.xlsx")
+
+    if not input_xlsx.is_file():
         raise ValueError(
             f"File '{video_number}N{segment_count}intensities.xlsx' doesn't exist. "
             f"Is {video_number=} and {segment_count=} correct?"
         )
-    
-    # Load sheets
-    xls = pd.ExcelFile(input_xlsx)
-    df_intensity_raw = pd.read_excel(xls, sheet_name="Segment Intensities", header=None)
-    df_num_pixels_raw = pd.read_excel(xls, sheet_name="Number of Mask Pixels", header=None)
-    df_flex = pd.read_excel(xls, sheet_name="Flexion Frames", header=None)
-    df_ext = pd.read_excel(xls, sheet_name="Extension Frames", header=None)
-    
-    return df_intensity_raw, df_num_pixels_raw, df_flex, df_ext
 
+    wb = load_knee_intensity_workbook(input_xlsx, source="raw", include_pixels=True)
 
-def clean_intensity_data(df_intensity_raw, df_num_pixels_raw, option):
-    """
-    Clean and optionally normalize intensity data.
-    
-    Args:
-        df_intensity_raw: Raw intensity DataFrame
-        df_num_pixels_raw: Raw pixel count DataFrame
-        option: "total" or "unit" for normalization
-        
-    Returns:
-        tuple: (df_intensity, df_num_pixels)
-    """
-    # Skip the first row (header: "Frame", "Segment 1", ..., "Segment 16")
-    df_intensity = df_intensity_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
-    df_num_pixels = df_num_pixels_raw.iloc[1:, 1:].apply(pd.to_numeric, errors="coerce").reset_index(drop=True)
-    
-    # Optional: take average intensity per pixel, per segment
-    if option == "unit":
-        df_intensity = df_intensity / df_num_pixels
-        df_intensity.fillna(0, inplace=True)
-    
-    return df_intensity, df_num_pixels
+    intensities = wb.intensities
+    if opt == "unit":
+        intensities = intensities / wb.num_pixels
+        intensities = np.nan_to_num(intensities, nan=0.0, posinf=0.0, neginf=0.0)
 
+    df_intensity = pd.DataFrame(intensities)
+    starts_flex = wb.flexion_cycles["start"].to_numpy()
+    ends_flex = wb.flexion_cycles["end"].to_numpy()
+    starts_ext = wb.extension_cycles["start"].to_numpy()
+    ends_ext = wb.extension_cycles["end"].to_numpy()
 
-def clean_interval_data(df):
-    """
-    Clean interval data from flexion/extension sheets.
-    
-    Args:
-        df: Raw interval DataFrame
-        
-    Returns:
-        tuple: (starts, ends) - arrays of interval boundaries
-    """
-    df = df.dropna(how="all")
-    first_row = df.iloc[0, :].astype(str).str.lower()
-    if ("start" in first_row.values) and ("end" in first_row.values):
-        df = df.iloc[1:, :]
-    df = df.iloc[:, 0:3]
-    starts = pd.to_numeric(df.iloc[:, 1], errors="coerce").dropna().astype(int).to_numpy()
-    ends = pd.to_numeric(df.iloc[:, 2], errors="coerce").dropna().astype(int).to_numpy()
-    return starts, ends
+    return df_intensity, starts_flex, ends_flex, starts_ext, ends_ext
 
 
 def normalize_intensity_per_frame(df_intensity):
@@ -376,15 +332,8 @@ def process_single_video(video_number: int, segment_count: int, opt: str) -> tup
         tuple: (average_cycle, video_id)
     """
     # Load data
-    df_intensity_raw, df_num_pixels_raw, df_flex, df_ext = load_excel_data(video_number, segment_count)
-    
-    # Clean intensity data
-    df_intensity, df_num_pixels = clean_intensity_data(df_intensity_raw, df_num_pixels_raw, opt)
-    
-    # Extract intervals
-    starts_flex, ends_flex = clean_interval_data(df_flex)
-    starts_ext, ends_ext = clean_interval_data(df_ext)
-    
+    df_intensity, starts_flex, ends_flex, starts_ext, ends_ext = load_knee_data(video_number, segment_count, opt)
+
     # Normalize intensity per frame
     norm_intensity = normalize_intensity_per_frame(df_intensity)
     
