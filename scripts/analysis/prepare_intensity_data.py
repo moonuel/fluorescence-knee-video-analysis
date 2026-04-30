@@ -213,7 +213,7 @@ def parse_arguments():
     return [(args.video_id, args.N, available[args.video_id]['type'])]
 
 
-def save_to_excel(total_sums, total_nonzero, flex, ext, meta):
+def save_to_excel(total_sums, total_nonzero, flex_ext_rows, meta):
     intensities_dir = PROJECT_ROOT / "data" / "intensities_total"
     intensities_dir.mkdir(exist_ok=True)  # Ensure directory exists
     output_file = intensities_dir / f"{meta.video_id:04d}N{meta.n_segments}intensities.xlsx"
@@ -225,8 +225,7 @@ def save_to_excel(total_sums, total_nonzero, flex, ext, meta):
     with pd.ExcelWriter(output_file) as writer:
         total_sums.to_excel(writer, sheet_name="Segment Intensities", index=True)
         total_nonzero.to_excel(writer, sheet_name="Number of Mask Pixels", index=True)
-        flex.to_excel(writer, sheet_name="Flexion Frames", index=True)
-        ext.to_excel(writer, sheet_name="Extension Frames", index=True)
+        flex_ext_rows.to_excel(writer, sheet_name="Flexion-Extension Frames", index=True)
         df_regions.to_excel(writer, sheet_name="Anatomical Regions", index=False)
 
     print(f"✅ Analysis results saved to {output_file}")
@@ -351,29 +350,27 @@ def main(tasks: List[Tuple[int, int, str]]):
         total_nonzero = pd.DataFrame(total_nonzero.T)
 
         # Build flexion/extension DataFrames from metadata (1-based for Excel)
-        flex_rows = [(c.flex.s + 1, c.flex.e + 1) for c in meta.cycles]
-        ext_rows = [(c.ext.s + 1, c.ext.e + 1) for c in meta.cycles]
-        flex = pd.DataFrame(flex_rows, columns=["Start", "End"])
-        ext = pd.DataFrame(ext_rows, columns=["Start", "End"])
+        flex_ext_rows = [(c.flex.s + 1, c.flex.e + 1, c.ext.s + 1, c.ext.e + 1) for c in meta.cycles]
+        flex_ext = pd.DataFrame(flex_ext_rows, columns=["Flx Start", "Flx End", "Ext Start", "Ext End"])
 
         total_sums.index = total_sums.index + 1; total_nonzero.index = total_nonzero.index + 1  # 1-indexing
-        flex.index = flex.index + 1; ext.index = ext.index + 1
+        flex_ext.index = flex_ext.index + 1
 
         total_sums.columns = total_sums.columns + 1; total_nonzero.columns = total_nonzero.columns + 1  # Formatting
         # flex.columns and ext.columns already set
 
         print("-----------------------------------------------------------")
         print(total_sums.head())
-        print(flex)
-        print(ext)
+        print(flex_ext)
+        # print(ext)
 
         if not batch_mode:
             if input("Save to file? (y/n)\n".lower()) == 'y':
-                save_to_excel(total_sums, total_nonzero, flex, ext, meta)
+                save_to_excel(total_sums, total_nonzero, flex_ext, meta)
             else:
                 print("File not saved.")
         else:
-            save_to_excel(total_sums, total_nonzero, flex, ext, meta)
+            save_to_excel(total_sums, total_nonzero, flex_ext, meta)
 
     return
 
