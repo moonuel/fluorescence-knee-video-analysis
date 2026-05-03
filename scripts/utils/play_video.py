@@ -3,6 +3,7 @@ from typing import Dict, Optional, Tuple
 from pathlib import Path
 import numpy as np
 import argparse
+import cv2
 import sys
 import re
 
@@ -10,6 +11,7 @@ from config.knee_metadata import get_knee_meta_by_condition
 
 # Get project root directory for robust path handling
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+DEFAULT_OUT_DIR = PROJECT_ROOT / "figures" / "video_previews"
 
 
 def discover_available_videos(segmented_dir: Path) -> Dict[int, Dict]:
@@ -94,6 +96,93 @@ def choose_preferred_raw_file(files: list[Path]) -> Path:
     return files_sorted[0]
 
 
+def get_region_boundary_segments(knee_type: str, video_id: int, N: int) -> Optional[Tuple[int, int]]:
+    """Get JC/OT and OT/SB boundary segment numbers from knee metadata."""
+    try:
+        meta = get_knee_meta_by_condition(knee_type, int(video_id), int(N))
+    except Exception as e:
+        print(f"Warning: no region metadata for {knee_type}_{video_id}_N{N}: {e}")
+        return None
+
+    regions = meta.regions
+    jc = regions.get("JC")
+    ot = regions.get("OT")
+    sb = regions.get("SB")
+    if not (jc and ot and sb):
+        print(f"Warning: incomplete region metadata for {knee_type}_{video_id}_N{N}")
+        return None
+
+    return ot.s, sb.s
+
+
+def ensure_uint8(video: np.ndarray) -> np.ndarray:
+    """Normalize preview data to uint8 for display and save parity."""
+    if video.dtype == np.uint8:
+        return video
+    if np.issubdtype(video.dtype, np.floating):
+        return np.clip(video * 255.0, 0, 255).astype(np.uint8)
+    return np.clip(video, 0, 255).astype(np.uint8)
+
+
+def stack_preview_panels(*panels: np.ndarray) -> np.ndarray:
+    """Horizontally concatenate one or more grayscale preview panels."""
+    if not panels:
+        raise ValueError("At least one preview panel is required")
+    if len(panels) == 1:
+        return ensure_uint8(panels[0])
+
+    base_shape = panels[0].shape
+    if any(panel.shape != base_shape for panel in panels[1:]):
+        raise ValueError("All preview panels must have the same shape")
+
+    return ensure_uint8(np.concatenate([ensure_uint8(panel) for panel in panels], axis=2))
+
+
+def burn_frame_numbers(video: np.ndarray, frame_offset: int = 0) -> np.ndarray:
+    """Render frame numbers using the same overlay style as views.show_frames()."""
+    rendered = ensure_uint8(video).copy()
+    if rendered.ndim == 2:
+        rendered = rendered.reshape(1, *rendered.shape)
+
+    _, h, _ = rendered.shape
+    btm_l_pos = (10, h - 10)
+
+    for frame_num in range(rendered.shape[0]):
+        frame = rendered[frame_num]
+        cv2.rectangle(frame, (0, h - 32), (75, h), color=0, thickness=-1)
+        cv2.putText(
+            frame,
+            str(frame_num + frame_offset),
+            btm_l_pos,
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=0.7,
+            color=255,
+            thickness=1,
+            lineType=cv2.LINE_AA,
+        )
+
+    return rendered
+
+
+def build_output_path(
+    video_id: int,
+    N: Optional[int],
+    knee_type: Optional[str],
+    raw_path: Optional[Path],
+    segmented_only: bool,
+) -> Path:
+    """Construct the default MP4 output path for the requested preview."""
+    if N is not None:
+        assert knee_type is not None
+        mode = "video-only" if segmented_only else "composite"
+        filename = f"segmentation_preview_{knee_type}_{video_id:04d}_N{N}_mode-{mode}.mp4"
+    else:
+        assert raw_path is not None
+        filename = f"raw_preview_{video_id:04d}_source-{raw_path.stem}.mp4"
+
+    return DEFAULT_OUT_DIR / filename
+
+
 def parse_arguments():
     """
     Parse command line arguments with dynamic validation based on available files.
@@ -105,6 +194,9 @@ def parse_arguments():
                "  python play_video.py --list\n"
                "  python play_video.py --list-raw\n"
                "  python play_video.py 1339N64\n"
+               "  python play_video.py 1339N64 -S\n"
+               "  python play_video.py 1339N64 --save\n"
+               "  python play_video.py 1339N64 -S --save\n"
                "  python play_video.py 1339\n"
                "  python play_video.py 1339 64  # legacy"
     )
@@ -132,6 +224,18 @@ def parse_arguments():
         type=int,
         nargs='?',
         help="Legacy segmented mode: play_video.py <id> <N>"
+    )
+
+    parser.add_argument(
+        '-S', '--segmented-only',
+        action='store_true',
+        help="For segmented inputs, show/save only the processed segmented video panel"
+    )
+
+    parser.add_argument(
+        '--save',
+        action='store_true',
+        help="Save the rendered preview as an MP4 under figures/video_previews/"
     )
 
     args = parser.parse_args()
@@ -187,7 +291,7 @@ def parse_arguments():
                 f"N={N} not available for video {video_id}.\n"
                 f"Available: {valid_n}"
             )
-        return video_id, N, available[video_id]['type'], None
+        return video_id, N, available[video_id]['type'], None, args.segmented_only, args.save
 
     # Raw validation
     if video_id not in raw_available:
@@ -198,13 +302,23 @@ def parse_arguments():
             f"Use --list-raw to see details."
         )
     raw_path = choose_preferred_raw_file(raw_available[video_id]["files"])
-    return video_id, None, None, raw_path
+    return video_id, None, None, raw_path, args.segmented_only, args.save
 
 
-def main(video_id: int, N: Optional[int], knee_type: Optional[str], raw_path: Optional[Path]):
+def main(
+    video_id: int,
+    N: Optional[int],
+    knee_type: Optional[str],
+    raw_path: Optional[Path],
+    segmented_only: bool = False,
+    save: bool = False,
+):
     """
     Display the radial segmentation mask alongside the processed video.
     """
+    preview_video: np.ndarray
+    preview_title: str
+
     if N is not None:
         segmented_dir = PROJECT_ROOT / "data" / "segmented"
         assert knee_type is not None
@@ -216,12 +330,17 @@ def main(video_id: int, N: Optional[int], knee_type: Optional[str], raw_path: Op
             raise FileNotFoundError(f"Missing radial mask: {radial_path}")
         if not video_path.exists():
             raise FileNotFoundError(f"Missing video: {video_path}")
+        if not femur_path.exists():
+            raise FileNotFoundError(f"Missing femur mask: {femur_path}")
 
         print(f"Loading radial mask: {radial_path}")
         radial_mask = io.load_nparray(radial_path)
 
         print(f"Loading video: {video_path}")
         video = io.load_nparray(video_path)
+
+        print(f"Loading femur mask: {femur_path}")
+        femur_mask = io.load_nparray(femur_path)
 
         max_label = np.max(radial_mask)
         if max_label > 0:
@@ -230,13 +349,55 @@ def main(video_id: int, N: Optional[int], knee_type: Optional[str], raw_path: Op
         else:
             radial_display = radial_mask
 
-        print(f"Displaying {knee_type} video {video_id} with {N} segments...")
-        print("Radial mask (left) and processed video (right)")
+        radial_display = ensure_uint8(radial_display)
 
-        # Default: fall back to current behavior if metadata is missing/incomplete.
+        print(f"Displaying {knee_type} video {video_id} with {N} segments...")
+        if segmented_only:
+            print("Processed segmented video only")
+        else:
+            print("Femur mask (left), radial mask (middle), and boundary overlay (right)")
+
         boundary_overlay = video.copy()
 
-        # Always draw the outer segmentation boundary (if possible)
+        try:
+            boundary_overlay = views.draw_boundary_line(
+                boundary_overlay,
+                radial_mask,
+                seg_num=1,
+                n_segments=N,
+                intensity=255,
+                thickness=1,
+                show_video=False,
+            )
+        except Exception as e:
+            print(f"Warning: failed to draw femur line (seg 1/N boundary) ({e})")
+
+        region_bounds = get_region_boundary_segments(knee_type, int(video_id), int(N))
+        if region_bounds is not None:
+            jc_ot_seg, ot_sb_seg = region_bounds
+
+            try:
+                boundary_overlay = views.draw_boundary_line(
+                    boundary_overlay,
+                    radial_mask,
+                    seg_num=jc_ot_seg,
+                    n_segments=N,
+                    intensity=200,
+                    thickness=1,
+                    show_video=False,
+                )
+                boundary_overlay = views.draw_boundary_line(
+                    boundary_overlay,
+                    radial_mask,
+                    seg_num=ot_sb_seg,
+                    n_segments=N,
+                    intensity=150,
+                    thickness=1,
+                    show_video=False,
+                )
+            except Exception as e:
+                print(f"Warning: failed to draw anatomical boundaries ({e})")
+
         try:
             boundary_overlay = views.draw_outer_radial_mask_boundary(
                 boundary_overlay,
@@ -248,84 +409,38 @@ def main(video_id: int, N: Optional[int], knee_type: Optional[str], raw_path: Op
         except Exception as e:
             print(f"Warning: failed to draw outer segmentation boundary ({e})")
 
-        # Femur line in this project = reference radial boundary between seg 1 and seg N.
-        # Draw it across the whole video (not cycle-limited) to match existing previews.
-        try:
-            views.draw_boundary_line(
-                boundary_overlay,
-                radial_mask,
-                seg_num=1,
-                n_segments=N,
-                intensity=255,
-                thickness=1,
-                show_video=False,
-                inplace=True,
-                dashed=False,
-            )
-        except Exception as e:
-            print(f"Warning: failed to draw femur line (seg 1/N boundary) ({e})")
-
-        try:
-            meta = get_knee_meta_by_condition(knee_type, int(video_id), int(N))
-            regions = meta.regions
-            ot = regions.get("OT")
-            sb = regions.get("SB")
-            if ot is None or sb is None or not meta.cycles:
-                raise KeyError("Incomplete region/cycle metadata")
-            for cycle in meta.cycles:
-                fr = cycle.full_cycle()
-                sl = fr.to_slice()  # 0-based inclusive -> python slice
-
-                # OT-JC boundary (between OT.s-1 and OT.s)
-                views.draw_boundary_line(
-                    boundary_overlay[sl],
-                    radial_mask[sl],
-                    seg_num=ot.s,
-                    n_segments=N,
-                    intensity=200,
-                    thickness=1,
-                    show_video=False,
-                    inplace=True,
-                    dashed=False,
-                )
-
-                # SB-OT boundary (between SB.s-1 and SB.s)
-                views.draw_boundary_line(
-                    boundary_overlay[sl],
-                    radial_mask[sl],
-                    seg_num=sb.s,
-                    n_segments=N,
-                    intensity=150,
-                    thickness=1,
-                    show_video=False,
-                    inplace=True,
-                    dashed=False,
-                )
-        except Exception as e:
-            print(
-                f"Warning: no usable knee metadata for {knee_type}_{video_id:04d}_N{N}; "
-                f"skipping anatomical boundaries ({e})"
-            )
-
-        views.show_frames([radial_display, boundary_overlay])
-        return
-
-    assert raw_path is not None
-    if not raw_path.exists():
-        raise FileNotFoundError(f"Missing raw file: {raw_path}")
-
-    print(f"Loading raw video: {raw_path}")
-    if raw_path.suffix.lower() == ".npy":
-        video = io.load_nparray(raw_path)
-    elif raw_path.suffix.lower() == ".avi":
-        video = io.load_avi(str(raw_path))
+        preview_title = f"Radial Segmentation Preview: {knee_type}_{video_id:04d}_N{N}"
+        if segmented_only:
+            preview_video = ensure_uint8(boundary_overlay)
+        else:
+            preview_video = stack_preview_panels(femur_mask, radial_display, boundary_overlay)
     else:
-        raise ValueError(f"Unsupported raw extension: {raw_path.suffix}")
+        assert raw_path is not None
+        if not raw_path.exists():
+            raise FileNotFoundError(f"Missing raw file: {raw_path}")
 
-    print(f"Displaying raw video {video_id} from {raw_path.name}...")
-    views.show_frames(video, title=f"raw_{video_id:04d}")
+        print(f"Loading raw video: {raw_path}")
+        if raw_path.suffix.lower() == ".npy":
+            video = io.load_nparray(raw_path)
+        elif raw_path.suffix.lower() == ".avi":
+            video = io.load_avi(str(raw_path))
+        else:
+            raise ValueError(f"Unsupported raw extension: {raw_path.suffix}")
+
+        print(f"Displaying raw video {video_id} from {raw_path.name}...")
+        preview_title = f"raw_{video_id:04d}"
+        preview_video = ensure_uint8(video)
+
+    rendered_preview = burn_frame_numbers(preview_video)
+
+    if save:
+        out_path = build_output_path(video_id, N, knee_type, raw_path, segmented_only)
+        print(f"Saving preview to {out_path}")
+        io.save_mp4(str(out_path), rendered_preview, fps=30)
+
+    views.show_frames(rendered_preview, title=preview_title, show_num=False)
 
 
 if __name__ == "__main__":
-    video_id, N, knee_type, raw_path = parse_arguments()
-    main(video_id, N, knee_type, raw_path)
+    video_id, N, knee_type, raw_path, segmented_only, save = parse_arguments()
+    main(video_id, N, knee_type, raw_path, segmented_only=segmented_only, save=save)

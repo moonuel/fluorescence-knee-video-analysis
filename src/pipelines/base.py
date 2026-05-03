@@ -697,15 +697,11 @@ class KneeSegmentationPipeline:
         # Step 7: Radial Segmentation
         print("Step 7: Performing radial segmentation...")
         self.radial_segmentation(inplace=True)
-        if debug:
-            self._show_radial_preview("7. Radial Segmentation with Boundary Line")
-            if debug_pause: input("Press Enter to continue...")
 
         print("\n=== Pipeline Complete ===\n")
 
-        # Always show final results unless in debug mode (to avoid duplication)
-        if not debug:
-            self._show_radial_preview("Final Results")
+        # Always show final results
+        self._show_radial_preview("Final Results")
 
         # Save results (ask for confirmation in debug mode, auto-save in production)
         if debug:
